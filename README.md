@@ -1,0 +1,62 @@
+# New Business · Cockpit
+
+Dashboard de acompanhamento semanal/mensal do funil de New Business (SDR → Closer →
+Onboarding), com KPIs vs. budget/reforecast, tendência de 4 semanas, ranking por pessoa
+e visão 1:1 gestor ↔ funcionário.
+
+## Estrutura do projeto
+
+```
+Querys/           queries Redshift (fonte oficial dos dados)
+Dados/             CSVs exportados das queries + planilhas de budget/reforecast — LOCAL, não versionado
+app/
+  build_data.js    lê Dados/*.csv e gera app/app_data.js (dado agregado)
+  app_data.js      dado agregado, gerado pelo build_data.js — este SIM é versionado
+  index.html       o dashboard (abre direto no navegador, sem servidor)
+Desgin System/     design system Hotmart (tokens de cor/tipografia usados no app/index.html)
+```
+
+`Dados/*.csv` nunca são versionados (contêm e-mail e receita linha a linha — ver `.gitignore`).
+`app/app_data.js` é a versão agregada e é o único artefato de dado que vai pro GitHub, porque
+é o que o dashboard publicado (GitHub Pages) precisa pra funcionar.
+
+## Como abrir localmente
+
+Sem instalação: abra `app/index.html` direto no navegador (duplo clique). Não precisa de
+servidor nem de Node — Node só é necessário para *gerar* `app/app_data.js` a partir dos CSVs.
+
+## Atualização semanal dos dados
+
+Pré-requisito: [Node.js](https://nodejs.org) instalado (versão LTS).
+
+1. Rode as queries em `Querys/*.sql` no Redshift e exporte substituindo os arquivos em
+   `Dados/` — mesmo nome, separador `;` (ver `Dados/README.md` para o contrato exato de
+   cada arquivo). Atualize `budget_oficial.csv`/`reforecast_oficial.csv` na planilha oficial
+   quando houver revisão de meta.
+2. Duplo clique em `update.bat` (ou rode `node app/build_data.js` no terminal, a partir da
+   raiz do projeto) — isso regenera `app/app_data.js`.
+3. Abra `app/index.html` e confira as 4 abas.
+4. Publique a atualização:
+   ```
+   git add app/app_data.js
+   git commit -m "data: atualização semanal"
+   git push
+   ```
+
+`05_produtividade.csv` é opcional — sem ele, o funil mensal/semanal por etapa (Contatado →
+Ativado 10k) na aba **Semanal Sales** fica marcado como parcial, mas o resto do dashboard
+(KPIs, Mensal Sales, Semanal Área, 1:1 Gestor) funciona normalmente.
+
+## Abas do dashboard
+
+- **Mensal Sales** — mês fechado vs. budget, MoM, fechamento por nível de cliente.
+- **Semanal Sales** — KPIs da semana vs. meta, funil, motor de aquisição, ciclo, segmentação
+  por nível, ranking de closers.
+- **Semanal Área** (SDR / Closers / Onboarding) — produtividade e ranking por pessoa
+  (`sdr_email`/`closer_email`/`onboarding_email` das bases).
+- **1:1 Gestor** — busca por pessoa, tendência individual de 4 semanas, comparação com a
+  mediana do squad, destaques/pontos de melhoria.
+
+Onde a base real ainda não tem uma métrica (ex.: pipeline aberto, Net Revenue por onboarder
+nomeado, meta individual por pessoa), o dashboard mostra "sem dado" em vez de inventar
+número — ver `METRICAS.md` para o mapeamento completo métrica → coluna de origem.

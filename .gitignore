@@ -1,0 +1,6 @@
+# Dados brutos (sensíveis: e-mails, receita linha a linha) — nunca versionar
+/Dados/*.csv
+!/Dados/.gitkeep
+
+# Config local do Claude Code
+.claude/settings.local.json

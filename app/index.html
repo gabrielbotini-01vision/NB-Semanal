@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>New Business · Cockpit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ===== TOKENS — Hotmart Design System ===== */
+  :root{
+    --orange:#FF4000; --black:#0D0D0D; --off-white:#F5F3EF;
+    --gray:#C3BFB8; --white:#FFFFFF; --yellow:#FFD450; --maroon:#3E0F1D;
+    --lemon:#6DFF96; --purple:#B48EFF; --blue:#44D0FF;
+
+    --bg:var(--off-white); --surface:var(--white); --surface-sunken:#EFECE6;
+    --surface-dark:var(--black); --on-dark:var(--white);
+    --border:#E2DED7; --border-strong:#D3CEC5;
+    --text:var(--black); --text-muted:rgba(13,13,13,.60); --text-faint:rgba(13,13,13,.42);
+    --accent:var(--orange); --accent-weak:rgba(255,64,0,.10);
+    --danger:var(--maroon); --danger-text:#B23A25; --success:#1E7A3D; --warn:#B8860B;
+    --track:#EFECE6;
+    --sh-sm:0 1px 2px rgba(13,13,13,.06); --sh-md:0 2px 10px rgba(13,13,13,.08); --sh-lg:0 8px 28px rgba(13,13,13,.10);
+
+    --font-sans:"DM Sans","Arial",sans-serif; --font-mono:"DM Mono",ui-monospace,monospace;
+    --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px; --sp-7:48px; --sp-8:64px;
+    --r-sm:6px; --r-md:10px; --r-lg:16px; --r-pill:999px;
+    --maxw:1320px;
+  }
+  /* ===== DARK — criado para este projeto (mantém laranja, base preta quente) ===== */
+  :root[data-theme="dark"]{
+    --bg:#0D0D0D; --surface:#17130F; --surface-sunken:#0A0908;
+    --surface-dark:#000000; --on-dark:var(--off-white);
+    --border:#2A241E; --border-strong:#3B332B;
+    --text:var(--off-white); --text-muted:rgba(245,243,239,.58); --text-faint:rgba(245,243,239,.38);
+    --accent:var(--orange); --accent-weak:rgba(255,64,0,.16);
+    --danger:#4A1421; --danger-text:#FF7A63; --success:#4ED47D; --warn:#FFD450;
+    --track:#241E18;
+    --sh-sm:0 1px 2px rgba(0,0,0,.4); --sh-md:0 2px 12px rgba(0,0,0,.5); --sh-lg:0 10px 30px rgba(0,0,0,.6);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:var(--font-sans);background:var(--bg);color:var(--text);line-height:1.5;-webkit-font-smoothing:antialiased;transition:background .2s,color .2s}
+  .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+  ::selection{background:var(--orange);color:#fff}
+
+  .eyebrow{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 var(--sp-5)}
+
+  /* topbar */
+  .topbar{position:sticky;top:0;z-index:50;background:var(--surface-dark);border-bottom:1px solid rgba(255,255,255,.08)}
+  .topbar .wrap{display:flex;align-items:center;gap:var(--sp-5);min-height:60px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px}
+  .brand{display:flex;align-items:center;gap:10px;color:#fff;font-weight:700;letter-spacing:-.01em;font-size:15px}
+  .brand .dot{width:13px;height:13px;background:var(--orange);border-radius:3px}
+  .brand small{display:block;color:rgba(255,255,255,.5);font-weight:500;font-size:10.5px;letter-spacing:.04em}
+  .tabs{display:flex;gap:4px;flex-wrap:wrap}
+  .tab{cursor:pointer;padding:9px 14px;border-radius:8px;font-weight:600;font-size:13px;color:rgba(255,255,255,.55);transition:.15s}
+  .tab:hover{color:#fff}
+  .tab.on{background:var(--accent);color:#fff}
+  .controls{display:flex;gap:10px;align-items:center;margin-left:auto;flex-wrap:wrap}
+  .ctl{display:flex;flex-direction:column;gap:3px}
+  .ctl label{font-size:9.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.45)}
+  select.sel{font-family:inherit;font-size:13px;font-weight:600;color:#fff;background:#1c1c1c;border:1.5px solid #333;border-radius:var(--r-sm);padding:6px 10px;cursor:pointer}
+  :root[data-theme="dark"] select.sel{background:#221c16;border-color:#3b332b}
+  .themebtn{background:transparent;border:1.5px solid rgba(255,255,255,.2);color:#fff;border-radius:var(--r-sm);padding:7px 12px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px;align-self:flex-end}
+  .themebtn:hover{border-color:var(--orange)}
+
+  /* subtabs (Semanal Área) */
+  .subbar{background:var(--surface-dark);border-bottom:1px solid rgba(255,255,255,.08)}
+  .subbar .wrap{display:flex;gap:6px;padding:8px var(--sp-5)}
+  .subtab{cursor:pointer;padding:6px 14px;border-radius:7px;font-weight:600;font-size:12.5px;color:rgba(255,255,255,.55);transition:.15s}
+  .subtab:hover{color:#fff}
+  .subtab.on{background:rgba(255,255,255,.14);color:#fff}
+
+  /* banner */
+  .banner{background:var(--accent-weak);border-bottom:1px solid var(--border)}
+  .banner .wrap{display:flex;gap:12px;align-items:center;padding:9px var(--sp-5);font-size:12.5px;color:var(--text-muted)}
+  .banner b{color:var(--text)}
+  .banner .rail{width:3px;height:20px;background:var(--orange);border-radius:2px;flex:none}
+
+  main{padding:var(--sp-6) 0 var(--sp-8)}
+  .sec{margin-bottom:var(--sp-7)}
+  .sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:var(--sp-4);flex-wrap:wrap}
+  .sec-head h2{font-size:18px;font-weight:700;letter-spacing:-.01em}
+  .sec-head .hint{font-size:12px;color:var(--text-faint)}
+
+  .grid{display:grid;gap:var(--sp-4)}
+  .g5{grid-template-columns:repeat(5,1fr)} .g4{grid-template-columns:repeat(4,1fr)}
+  .g3{grid-template-columns:repeat(3,1fr)} .g2{grid-template-columns:repeat(2,1fr)}
+  @media(max-width:1080px){.g5{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:860px){.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:1fr}}
+  @media(max-width:640px){.g5,.g4,.g2{grid-template-columns:1fr}}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--sp-5);position:relative;overflow:hidden}
+
+  /* KPI stat */
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--sp-5) var(--sp-5) var(--sp-4) var(--sp-6);position:relative}
+  .kpi .rail{position:absolute;left:0;top:16px;bottom:16px;width:4px;background:var(--orange);border-radius:0 3px 3px 0}
+  .kpi .lbl{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-faint);margin-bottom:10px}
+  .kpi .num{font-size:30px;font-weight:700;color:var(--accent);line-height:1;letter-spacing:-.02em}
+  .kpi .num.n{color:var(--text)}
+  .kpi .sub{font-size:12px;color:var(--text-muted);margin-top:8px;display:flex;justify-content:space-between;gap:8px}
+  .kpi .prog{height:6px;background:var(--track);border-radius:var(--r-pill);overflow:hidden;margin-top:10px}
+  .kpi .prog i{display:block;height:100%;background:var(--accent);border-radius:var(--r-pill)}
+  .att{font-weight:700;font-family:var(--font-mono)}
+  .att.hi{color:var(--success)} .att.mid{color:var(--warn)} .att.lo{color:var(--danger-text)}
+
+  /* funnel */
+  .funnel{display:flex;flex-direction:column;gap:3px}
+  .fstage{display:grid;grid-template-columns:120px 1fr;align-items:center;gap:14px}
+  .fstage .nm{text-align:right;font-size:13px;font-weight:600}
+  .fstage .track{height:34px;background:var(--track);border-radius:7px;position:relative;overflow:hidden}
+  .fstage .fill{height:100%;border-radius:7px;display:flex;align-items:center;padding-left:12px;color:#fff;font-weight:700;font-size:14px;min-width:44px}
+  .fstage .bud{position:absolute;top:-3px;bottom:-3px;width:2.5px;background:var(--text);opacity:.5}
+  .fstage .bud::after{content:attr(data-b);position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:9.5px;color:var(--text-muted);white-space:nowrap;font-family:var(--font-mono)}
+  .conv{grid-column:2;font-size:10.5px;font-weight:700;color:var(--text-faint);font-family:var(--font-mono);padding-left:2px}
+
+  /* bars (segmentação/estratégia) */
+  .barrow{margin-bottom:14px}
+  .barrow:last-child{margin-bottom:0}
+  .barrow .top{display:flex;justify-content:space-between;font-size:12.5px;font-weight:600;margin-bottom:5px}
+  .barrow .top .v{font-family:var(--font-mono)}
+  .barrow .bar{height:9px;background:var(--track);border-radius:var(--r-pill);overflow:hidden;position:relative}
+  .barrow .bar i{display:block;height:100%;border-radius:var(--r-pill)}
+  .barrow .bar .tgt{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--text);opacity:.45}
+
+  /* tiles (ciclo) */
+  .tile{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--sp-4);text-align:center}
+  .tile .v{font-size:26px;font-weight:700;color:var(--accent);line-height:1;font-family:var(--font-mono)}
+  .tile .k{font-size:11px;color:var(--text-muted);margin-top:6px}
+
+  /* weekly trend (mês fechado) */
+  .trend{display:flex;align-items:flex-end;gap:4px;height:150px;padding-top:20px}
+  .trend .col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
+  .trend .b{width:100%;max-width:26px;background:var(--accent);border-radius:3px 3px 0 0;position:relative;transition:height .2s}
+  .trend .b:hover{background:var(--text)}
+  .trend .cap{font-size:8.5px;color:var(--text-faint);font-family:var(--font-mono);white-space:nowrap;transform:rotate(-45deg);transform-origin:center;margin-top:6px}
+
+  /* WeekTrend — pequenos múltiplos de 4 semanas (Últ. em destaque) */
+  .wtgrid{display:grid;gap:18px}
+  .wt{min-width:0}
+  .wttop{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:8px;flex-wrap:wrap}
+  .wtlabel{font-size:12.5px;font-weight:600}
+  .wtsub{color:var(--text-faint);font-weight:500;font-size:11px}
+  .wtwow{font-family:var(--font-mono);font-size:11px;font-weight:600}
+  .wtwow.up{color:var(--success)} .wtwow.down{color:var(--danger-text)}
+  .wtchart{display:flex;align-items:flex-end;gap:7px;height:100px;border-bottom:1px solid var(--border)}
+  .wtcol{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100px;min-width:0}
+  .wtval{font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--text-muted);margin-bottom:3px;white-space:nowrap}
+  .wtval.cur{font-weight:700;color:var(--text)}
+  .wtbar{width:100%;max-width:28px;border-radius:4px 4px 0 0}
+  .wtlbl{font-size:9.5px;color:var(--text-faint);font-weight:500;margin-top:5px}
+  .wtlbl.cur{color:var(--text);font-weight:700}
+  .wtlegend{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--text-faint);margin-top:14px}
+  .wtlegend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
+
+  /* table */
+  table.tbl{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;font-size:13.5px}
+  table.tbl thead th{background:var(--surface-dark);color:#fff;text-align:left;font-weight:600;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:11px 14px;white-space:nowrap}
+  table.tbl th.r,table.tbl td.r{text-align:right}
+  table.tbl td{padding:10px 14px;border-top:1px solid var(--border)}
+  table.tbl tbody tr.rankrow{cursor:pointer}
+  table.tbl tbody tr.rankrow:hover{background:var(--accent-weak)}
+  table.tbl tbody tr.grouprow td{background:var(--surface-sunken);font-weight:700;font-size:12px}
+  .num-cell{font-family:var(--font-mono);color:var(--accent);font-weight:600}
+  .idx{color:var(--text-faint);margin-right:8px}
+  .rankbar{height:6px;background:var(--track);border-radius:var(--r-pill);overflow:hidden;min-width:60px}
+  .rankbar i{display:block;height:100%;background:var(--accent)}
+  .ministack{display:flex;height:14px;width:100px;border-radius:4px;overflow:hidden}
+
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--text-muted);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend .sw{width:12px;height:12px;border-radius:3px;flex:none}
+  .miss{color:var(--text-faint);font-style:italic}
+  footer{border-top:1px solid var(--border);padding:var(--sp-6) 0;color:var(--text-faint);font-size:12px}
+
+  /* 1:1 Gestor */
+  .oneone{display:grid;grid-template-columns:250px 1fr;gap:16px;align-items:start}
+  .oneone-side{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:12px;max-height:80vh;overflow-y:auto;position:sticky;top:120px}
+  .oneone-side input{width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;margin-bottom:8px;background:var(--surface)}
+  .oneone-item{padding:7px 9px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text)}
+  .oneone-item:hover{background:var(--accent-weak)}
+  .oneone-item.on{background:var(--accent-weak);color:var(--accent);font-weight:700}
+  @media(max-width:860px){.oneone{grid-template-columns:1fr}.oneone-side{position:static;max-height:none}}
+
+  .statrow{display:flex;gap:26px;flex-wrap:wrap}
+  .stat{text-align:right}
+  .stat .v{font-family:var(--font-mono);font-size:19px;font-weight:700;margin-top:2px}
+  .indic{display:flex;justify-content:space-between;padding:9px 0;border-top:1px solid var(--border);font-size:12.5px}
+  .indic:first-child{border-top:none}
+  .indic .k{color:var(--text-muted)}
+  .indic .v{font-family:var(--font-mono);font-weight:600}
+  .coachgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media(max-width:860px){.coachgrid{grid-template-columns:1fr}}
+  .coachbox{border-top:3px solid var(--accent)}
+  .coachbox ul{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:7px}
+  .coachbox li{font-size:12.5px;line-height:1.4}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <div class="brand"><span class="dot"></span><div>NEW BUSINESS · COCKPIT<small id="ctxLine">Semana · estoque do funil</small></div></div>
+    <div class="tabs" id="tabs"></div>
+    <div class="controls" id="wsalesControls">
+      <div class="ctl"><label>Mês</label><select id="selMes" class="sel"></select></div>
+      <div class="ctl"><label>Estratégia</label><select id="selEstr" class="sel"></select></div>
+      <div class="ctl"><label>Referência</label><select id="selRef" class="sel">
+        <option value="budget">Budget</option><option value="reforecast">Reforecast</option></select></div>
+      <button class="themebtn" id="themeBtn">🌙 Dark</button>
+    </div>
+    <div class="controls" id="otherControls" style="display:none"><button class="themebtn" id="themeBtn2">🌙 Dark</button></div>
+  </div>
+</div>
+
+<div class="subbar" id="subbar" style="display:none"><div class="wrap" id="subtabs"></div></div>
+
+<div class="banner"><div class="wrap"><span class="rail"></span>
+  <span id="bannerText"><b>Dados agregados</b> das bases NB + budget/reforecast.</span>
+</div></div>
+
+<main class="wrap">
+  <div id="viewMensal" style="display:none"></div>
+  <div id="viewSemanal" style="display:none"></div>
+  <div id="viewArea" style="display:none"></div>
+  <div id="viewOneOne" style="display:none"></div>
+</main>
+
+<footer class="wrap">
+  Cockpit New Business · agregação client-side sobre bases pré-tratadas (Redshift → CSV → build_data.js).
+  <span id="genAt"></span>
+</footer>
+
+<script src="app_data.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const D=window.DATA||{};
+const STR_ORDER=D.estrategias||['Outbound','Inbound','Hunting'];
+const NIV=D.niveis||['N2-N3','N4-N5','N6+'];
+const STR_COLOR={Outbound:'var(--orange)',Inbound:'var(--blue)',Hunting:'var(--purple)'};
+const NIV_COLOR={'N2-N3':'var(--orange)','N4-N5':'var(--blue)','N6+':'var(--purple)'};
+
+// ---- formatação ----
+const nf=new Intl.NumberFormat('pt-BR');
+const fN=n=>n==null?'—':nf.format(Math.round(n||0));
+const fBRL=n=>{if(n==null)return '—';n=n||0;const a=Math.abs(n);
+  if(a>=1e6)return 'R$ '+(n/1e6).toFixed(1).replace('.',',')+' mi';
+  if(a>=1e3)return 'R$ '+Math.round(n/1e3)+' mil';return 'R$ '+fN(n);};
+const pct=(a,b)=>(b>0&&a!=null)?Math.round(a/b*100):null;
+const pctR=r=>r==null?null:Math.round(r*100);
+const attClass=p=>p==null?'':p>=100?'hi':p>=80?'mid':'lo';
+const sum=(arr,f)=>arr.reduce((s,x)=>s+(f(x)||0),0);
+const shortEmail=e=>(e||'').replace('@hotmart.com','');
+function median(arr){const a=[...arr].filter(v=>v!=null).sort((x,y)=>x-y);const n=a.length;if(!n)return 0;return n%2?a[(n-1)/2]:(a[n/2-1]+a[n/2])/2;}
+
+// ---- estado ----
+let state={meeting:'wsales',area:'sdr',mes:null,estr:'all',ref:'budget',pessoa:null};
+
+const MEETINGS=[{k:'mensal',label:'Mensal Sales'},{k:'wsales',label:'Semanal Sales'},{k:'warea',label:'Semanal Área'},{k:'oneone',label:'1:1 Gestor'}];
+const AREA_TABS=[{k:'sdr',label:'SDR'},{k:'closers',label:'Closers'},{k:'onboarding',label:'Onboarding'}];
+
+function mesLabel(m){if(!m)return '—';const [y,mm]=m.split('-');const nomes=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];return nomes[+mm-1]+'/'+y;}
+
+// ---- WeekTrend: pequeno múltiplo de 4 semanas (Últ. em destaque) ----
+function weekTrendHTML({label,sub,color,series,fmt}){
+  fmt=fmt||fN;
+  const vals=(series||[]).map(s=>s.valor);
+  const max=(Math.max(...vals,1))*1.18;
+  const last=vals.length?vals[vals.length-1]:null;
+  const prior=vals.length>1?vals[vals.length-2]:null;
+  const wow=(prior!=null&&prior>0&&last!=null)?Math.round((last-prior)/prior*100):null;
+  const cols=(series||[]).map((s,i)=>{
+    const h=Math.max(2,(s.valor/max)*100);
+    const isLast=i===series.length-1;
+    return `<div class="wtcol" title="${s.semana}: ${fmt(s.valor)}">
+      <div class="wtval ${isLast?'cur':''}">${fmt(s.valor)}</div>
+      <div class="wtbar" style="height:${h}px;background:${color};opacity:${isLast?1:.45}"></div>
+      <div class="wtlbl ${isLast?'cur':''}">${s.semana.replace(/^\d{4}-/,'')}</div></div>`;
+  }).join('');
+  return `<div class="wt">
+    <div class="wttop"><span class="wtlabel">${label}${sub?` <span class="wtsub">· ${sub}</span>`:''}</span>
+    ${wow!=null?`<span class="wtwow ${wow>=0?'up':'down'}">${wow>=0?'▲':'▼'} ${Math.abs(wow)}% <span class="wtsub">WoW</span></span>`:''}</div>
+    <div class="wtchart">${cols||'<span class="miss">sem dado</span>'}</div>
+  </div>`;
+}
+function weeklyTotals(metricObj){
+  const weeks=Object.keys(metricObj||{}).sort();
+  return weeks.map(w=>({semana:w,valor:NIV.reduce((s,n)=>s+((metricObj[w]||{})[n]||0),0)}));
+}
+function weeklyByNivel(metricObj,nivel){
+  const weeks=Object.keys(metricObj||{}).sort();
+  return weeks.map(w=>({semana:w,valor:(metricObj[w]||{})[nivel]||0}));
+}
+
+// ---- tabela agrupada / ranking ----
+function groupedTable({rows,groupBy,groupOrder,groupLabel,cols,kind}){
+  if(!rows||!rows.length) return '<div class="card"><span class="miss">Sem pessoas com dado no período.</span></div>';
+  let body='';
+  if(groupBy){
+    const groups={};
+    rows.forEach(r=>{const g=groupBy(r);(groups[g]=groups[g]||[]).push(r);});
+    const order=(groupOrder||Object.keys(groups)).filter(g=>groups[g]&&groups[g].length);
+    order.forEach(g=>{
+      const items=groups[g];
+      body+=`<tr class="grouprow"><td>${groupLabel?groupLabel(g):g} <span class="miss">· ${items.length}</span></td>${cols.map(()=>'<td></td>').join('')}</tr>`;
+      body+=items.map((r,i)=>rowHTML(r,i,cols,kind)).join('');
+    });
+  } else {
+    body=rows.map((r,i)=>rowHTML(r,i,cols,kind)).join('');
+  }
+  return `<div class="card" style="padding:0;overflow-x:auto"><table class="tbl">
+    <thead><tr><th>Pessoa</th>${cols.map(c=>`<th class="${c.align==='r'?'r':''}">${c.label}</th>`).join('')}</tr></thead>
+    <tbody>${body}</tbody></table></div>`;
+}
+function rowHTML(r,i,cols,kind){
+  return `<tr class="rankrow" data-email="${r.email}" data-kind="${kind}">
+    <td><span class="mono idx">${String(i+1).padStart(2,'0')}</span>${shortEmail(r.email)}</td>
+    ${cols.map(c=>`<td class="${c.align==='r'?'r':''}">${c.render(r)}</td>`).join('')}
+  </tr>`;
+}
+function bindRowClicks(root){
+  root.querySelectorAll('tr.rankrow').forEach(tr=>{
+    tr.onclick=()=>{ state.meeting='oneone'; state.pessoa={email:tr.dataset.email,kind:tr.dataset.kind}; render(); };
+  });
+}
+function ministack(vals,colors){
+  const t=vals.reduce((a,b)=>a+b,0)||1;
+  return `<div class="ministack">${vals.map((v,i)=>`<div style="width:${v/t*100}%;background:${colors[i]}" title="${NIV[i]}: ${fN(v)}"></div>`).join('')}</div>`;
+}
+// ================= MENSAL SALES =================
+function renderMensal(){
+  const mf=D.mesFechado||{};
+  const mes=mf.mes, prev=mf.mesAnterior;
+  const act=D.actual?.mensal?.[mes]?.total, bud=D.budget?.mensal?.[mes]?.total, actPrev=D.actual?.mensal?.[prev]?.total;
+  if(!mes||!act){ $('viewMensal').innerHTML='<div class="card"><span class="miss">Sem mês fechado com dado suficiente ainda — rode build_data.js com os CSVs atualizados.</span></div>'; return; }
+  const attNR=pct(act.receita,bud?.receita), attCW=pct(act.cw,bud?.cw), attOpp=pct(act.opps,bud?.opps);
+  const momNR=actPrev?.receita?Math.round((act.receita-actPrev.receita)/actPrev.receita*100):null;
+  const momGMV=actPrev?.gmv?Math.round((act.gmv-actPrev.gmv)/actPrev.gmv*100):null;
+
+  const kpis=`<div class="grid g4">
+    <div class="kpi"><span class="rail"></span><div class="lbl">Net Revenue · ${mesLabel(mes)} (fechado)</div>
+      <div class="num">${fBRL(act.receita)}</div>
+      <div class="sub"><span>de ${fBRL(bud?.receita)} budget${attNR!=null?' · '+attNR+'%':''}</span>${momNR!=null?`<span class="att ${momNR>=0?'hi':'lo'}">${momNR>=0?'▲':'▼'} ${Math.abs(momNR)}% MoM</span>`:''}</div></div>
+    <div class="kpi"><span class="rail"></span><div class="lbl">GMV · fechado</div>
+      <div class="num">${fBRL(act.gmv)}</div>
+      <div class="sub"><span>vs ${mesLabel(prev)}</span>${momGMV!=null?`<span class="att ${momGMV>=0?'hi':'lo'}">${momGMV>=0?'▲':'▼'} ${Math.abs(momGMV)}% MoM</span>`:''}</div></div>
+    <div class="kpi"><span class="rail"></span><div class="lbl">CW · fechado</div>
+      <div class="num n">${fN(act.cw)}</div>
+      <div class="sub"><span>meta ${fN(bud?.cw)}</span>${attCW!=null?`<span class="att ${attClass(attCW)}">${attCW}%</span>`:''}</div></div>
+    <div class="kpi"><span class="rail"></span><div class="lbl">Opp · fechado</div>
+      <div class="num n">${fN(act.opps)}</div>
+      <div class="sub"><span>meta ${fN(bud?.opps)}</span>${attOpp!=null?`<span class="att ${attClass(attOpp)}">${attOpp}%</span>`:''}</div></div>
+  </div>`;
+
+  const idx=D.meses.indexOf(mes);
+  const last3=D.meses.slice(Math.max(0,idx-2),idx+1).filter(m=>D.actual.mensal[m]);
+  const maxv=Math.max(...last3.map(m=>D.actual.mensal[m].total.receita),1)*1.25;
+  const chart=`<div class="trend" style="padding-top:6px">${last3.map((m,i)=>{
+    const v=D.actual.mensal[m].total.receita, isLast=i===last3.length-1;
+    return `<div class="col"><div class="mono" style="font-size:11px;font-weight:${isLast?700:600};color:${isLast?'var(--text)':'var(--text-muted)'}">${fBRL(v)}</div>
+      <div class="b" style="height:${v/maxv*110}px;opacity:${isLast?1:.5}"></div>
+      <div class="cap" style="transform:none;font-size:10.5px;font-weight:${isLast?700:500};color:${isLast?'var(--text)':'var(--text-faint)'}">${mesLabel(m)}</div></div>`;
+  }).join('')}</div>`;
+
+  const leitura=`O mês fechou em <b>${attNR!=null?attNR+'%':'—'}</b> do budget de Net Revenue (${momNR!=null?(momNR>=0?'+':'')+momNR+'%':'—'} vs ${mesLabel(prev)}). CW a <b>${attCW!=null?attCW+'%':'—'}</b> e Opp a <b>${attOpp!=null?attOpp+'%':'—'}</b> da meta.`;
+
+  const rows=NIV.map(n=>{
+    const a=act && D.actual.mensal[mes].porNivel[n], b=bud && D.budget.mensal[mes].porNivel[n];
+    const na=a?pct(a.receita,b?.receita):null, ca=a?pct(a.cw,b?.cw):null;
+    return `<tr><td style="font-weight:600;white-space:nowrap"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${NIV_COLOR[n]};margin-right:7px"></span>${n}</td>
+      <td class="r mono">${fBRL(a?.receita)}</td><td class="r mono" style="color:var(--text-muted)">${fBRL(b?.receita)}</td>
+      <td class="r mono" style="font-weight:700" title="atingimento">${na!=null?na+'%':'—'}</td>
+      <td class="r mono">${fN(a?.cw)}</td><td class="r mono" style="color:var(--text-muted)">${fN(b?.cw)}</td>
+      <td class="r mono" style="font-weight:700">${ca!=null?ca+'%':'—'}</td></tr>`;
+  }).join('');
+
+  $('viewMensal').innerHTML=`
+    <div class="sec"><div class="sec-head"><h2>Realização vs meta · mês fechado</h2></div>${kpis}</div>
+    <div class="grid g2">
+      <div class="sec"><div class="sec-head"><h2>Net Revenue · 3 meses fechados</h2></div><div class="card">${chart}</div></div>
+      <div class="sec"><div class="sec-head"><h2>Leitura do mês</h2></div><div class="card" style="font-size:13px;line-height:1.6">${leitura}</div></div>
+    </div>
+    <div class="sec"><div class="sec-head"><h2>Fechamento por nível de cliente</h2><span class="hint">realizado vs meta</span></div>
+      <div class="card" style="padding:0;overflow-x:auto"><table class="tbl">
+        <thead><tr><th>Nível</th><th class="r">Net Rev real</th><th class="r">Net Rev meta</th><th class="r">Ating.</th><th class="r">CW real</th><th class="r">CW meta</th><th class="r">Ating.</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+    </div>`;
+}
+
+// ================= SEMANAL SALES =================
+function initWsalesControls(){
+  const mesesAtivos=D.meses.filter(m=>D.actual.mensal[m]||D.budget.mensal[m]);
+  $('selMes').innerHTML=mesesAtivos.map(m=>`<option value="${m}">${mesLabel(m)}</option>`).join('');
+  const comFunil=Object.keys(D.actual.mensal).filter(m=>D.actual.mensal[m].total.contacted>0).sort();
+  const def=comFunil.pop()||Object.keys(D.actual.mensal).sort().pop();
+  state.mes=def&&mesesAtivos.includes(def)?def:mesesAtivos[mesesAtivos.length-1];
+  $('selMes').value=state.mes;
+  $('selEstr').innerHTML=`<option value="all">Todas</option>`+STR_ORDER.map(s=>`<option value="${s}">${s}</option>`).join('');
+  $('selMes').onchange=e=>{state.mes=e.target.value;renderSemanal();};
+  $('selEstr').onchange=e=>{state.estr=e.target.value;renderSemanal();};
+  $('selRef').onchange=e=>{state.ref=e.target.value;renderSemanal();};
+}
+function metricsFor(src,mes,estr){
+  const m=D[src]?.mensal?.[mes]; if(!m)return null;
+  if(estr==='all')return m.total;
+  return m.porEstrategia?.[estr]||null;
+}
+const KPIS=[{k:'receita',lbl:'Net Revenue',cur:1},{k:'gmv',lbl:'GMV',cur:1},
+  {k:'cw',lbl:'Closed Won',cur:0},{k:'activation',lbl:'Ativações',cur:0},{k:'sap',lbl:'SAP',cur:0}];
+function kpisHTML(act,ref){
+  return KPIS.map(c=>{
+    const a=act?act[c.k]:0, b=ref?ref[c.k]:0;
+    const p=pct(a,b);
+    const val=a>0?(c.cur?fBRL(a):fN(a)):'<span class="miss">—</span>';
+    const budv=b>0?(c.cur?fBRL(b):fN(b)):'—';
+    const w=p==null?0:Math.min(100,p);
+    return `<div class="kpi"><span class="rail"></span>
+      <div class="lbl">${c.lbl}</div>
+      <div class="num ${c.cur?'':'n'}">${val}</div>
+      <div class="sub"><span>meta ${budv}</span>${p!=null?`<span class="att ${attClass(p)}">${p}%</span>`:''}</div>
+      <div class="prog"><i style="width:${w}%;background:${p!=null&&p<80?'var(--danger-text)':'var(--accent)'}"></i></div>
+    </div>`;
+  }).join('');
+}
+const FUNNEL=[['Contacted','contacted'],['Connected','connected'],['Opps','opps'],['SQL','sql'],['CW','cw'],['Activation','activation']];
+function funnelHTML(act,ref){
+  const vals=FUNNEL.map(([,k])=>act?act[k]:0);
+  const max=Math.max(...vals,1);
+  let h='';
+  FUNNEL.forEach(([nm,k],i)=>{
+    const v=act?act[k]:0, b=ref?ref[k]:0;
+    const w=25+(v/max)*75;
+    const bpos=b>0?Math.min(100,25+(b/max)*75):null;
+    h+=`<div class="fstage"><div class="nm">${nm}</div>
+      <div class="track"><div class="fill" style="width:${w}%;background:${i>=4?'var(--success)':'var(--orange)'}">${fN(v)}</div>
+      ${bpos!=null?`<div class="bud" style="left:${bpos}%" data-b="${fN(b)}"></div>`:''}</div></div>`;
+    if(i<FUNNEL.length-1){const nx=act?act[FUNNEL[i+1][1]]:0;const c=v>0?Math.round(nx/v*100):0;
+      h+=`<div class="conv">↓ ${c}%</div>`;}
+  });
+  return h;
+}
+function estrHTML(mes){
+  const m=D.actual.mensal[mes], mb=D[state.ref].mensal[mes];
+  const rows=STR_ORDER.map(s=>({s,cw:m?.porEstrategia?.[s]?.cw||0,bud:mb?.porEstrategia?.[s]?.cw||0}));
+  const max=Math.max(...rows.map(r=>Math.max(r.cw,r.bud)),1);
+  return rows.map(r=>`<div class="barrow">
+    <div class="top"><span>${r.s}</span><span class="v">${fN(r.cw)}${r.bud>0?` / <span style="color:var(--text-faint)">${fN(r.bud)}</span>`:''}</span></div>
+    <div class="bar"><i style="width:${r.cw/max*100}%;background:${STR_COLOR[r.s]}"></i>${r.bud>0?`<span class="tgt" style="left:${Math.min(100,r.bud/max*100)}%"></span>`:''}</div>
+  </div>`).join('');
+}
+const CIC=[['dias_contato_conectado','Contato→Conect.'],['dias_conectado_opp','Conect.→Opp'],['dias_opp_sql','Opp→SQL'],['dias_sql_won','SQL→CW'],['dias_won_ativacao','CW→Ativação']];
+function cicloHTML(){
+  return CIC.map(([k,l])=>`<div class="tile"><div class="v">${D.ciclo?.[k]??'—'}</div><div class="k">${l}</div></div>`).join('');
+}
+function segHTML(mes,key,cur){
+  const m=D.actual.mensal[mes], mb=D[state.ref].mensal[mes];
+  const rows=NIV.map(n=>({n,a:m?.porNivel?.[n]?.[key]||0,b:mb?.porNivel?.[n]?.[key]||0}));
+  const max=Math.max(...rows.map(r=>Math.max(r.a,r.b)),1);
+  return rows.map(r=>`<div class="barrow">
+    <div class="top"><span>${r.n}</span><span class="v">${cur?fBRL(r.a):fN(r.a)}${r.b>0?` <span style="color:var(--text-faint)">/ ${cur?fBRL(r.b):fN(r.b)}</span>`:''}</span></div>
+    <div class="bar"><i style="width:${r.a/max*100}%;background:${NIV_COLOR[r.n]}"></i>${r.b>0?`<span class="tgt" style="left:${Math.min(100,r.b/max*100)}%"></span>`:''}</div>
+  </div>`).join('');
+}
+function trendHTML(){
+  const ws=D.semanas.slice(-20);
+  const vals=ws.map(w=>D.actual.semanal[w]?.cw||0);
+  const max=Math.max(...vals,1);
+  return ws.map((w,i)=>`<div class="col" title="${w}: ${fN(vals[i])} CW">
+    <div class="b" style="height:${Math.max(2,vals[i]/max*120)}px"></div>
+    <div class="cap">${w.replace('2025-','25').replace('2026-','26')}</div></div>`).join('');
+}
+function rankingHTML(){
+  const rows=D.ranking?.closers||[]; if(!rows.length) return '<span class="miss">Sem dado de ranking.</span>';
+  const max=Math.max(...rows.map(r=>r.cw),1);
+  return rows.map((r,i)=>`<tr>
+    <td class="mono" style="color:var(--text-faint)">${i+1}</td>
+    <td>${shortEmail(r.email)}</td>
+    <td class="r num-cell">${fN(r.cw)}</td>
+    <td class="r mono">${fN(r.ativados)}</td>
+    <td><div class="rankbar"><i style="width:${r.cw/max*100}%"></i></div></td></tr>`).join('');
+}
+function entradasHTML(){
+  const defs=[
+    {key:'contacted',label:'Contatado',color:'var(--orange)',cap:'topo · hoje'},
+    {key:'opps',label:'Opp in',color:'var(--blue)',cap:'~2–3 sem depois'},
+    {key:'cw',label:'CW in',color:'var(--maroon)',cap:'~4–8 sem depois'},
+    {key:'activation',label:'Ativação in',color:'var(--success)',cap:'~6–12 sem depois'},
+  ];
+  return `<div class="grid g4">${defs.map(d=>{
+    const series=weeklyTotals(D.semanalPorNivel?.[d.key]).slice(-4);
+    return `<div>${weekTrendHTML({label:d.label,color:d.color,series})}<div class="eyebrow" style="color:var(--text-faint);margin-top:6px;letter-spacing:.04em">${d.cap}</div></div>`;
+  }).join('')}</div>`;
+}
+function renderSemanal(){
+  const act=metricsFor('actual',state.mes,state.estr);
+  const ref=metricsFor(state.ref,state.mes,state.estr);
+  $('viewSemanal').innerHTML=`
+    <div class="sec"><div class="sec-head"><h2>Realização vs meta</h2><span class="hint">${mesLabel(state.mes)} · ${state.estr==='all'?'todas estratégias':state.estr} · vs ${state.ref==='budget'?'Budget':'Reforecast'}</span></div>
+      <div class="grid g5">${kpisHTML(act,ref)}</div></div>
+    <div class="sec"><div class="sec-head"><h2>Entradas do funil · últimas 4 semanas</h2><span class="hint">coortes em janelas distintas — a semana forte de um estágio não é a mesma dos seguintes</span></div>
+      <div class="card">${entradasHTML()}</div></div>
+    <div class="grid g2">
+      <div class="sec"><div class="sec-head"><h2>Funil</h2><span class="hint">volume por etapa (mês) · marca = meta</span></div>
+        <div class="card"><div class="funnel">${funnelHTML(act,ref)}</div></div></div>
+      <div class="sec"><div class="sec-head"><h2>Motor de aquisição</h2><span class="hint">CW por estratégia</span></div>
+        <div class="card">${estrHTML(state.mes)}</div>
+        <div class="sec-head" style="margin-top:24px"><h2>Tempos de ciclo</h2><span class="hint">média em dias</span></div>
+        <div class="grid g5">${cicloHTML()}</div></div>
+    </div>
+    <div class="grid g2">
+      <div class="sec"><div class="sec-head"><h2>Net Revenue por nível</h2><span class="hint">todas as estratégias · marca = meta</span></div>
+        <div class="card">${segHTML(state.mes,'receita',1)}</div></div>
+      <div class="sec"><div class="sec-head"><h2>Closed Won por nível</h2><span class="hint">todas as estratégias · marca = meta</span></div>
+        <div class="card">${segHTML(state.mes,'cw',0)}</div></div>
+    </div>
+    <div class="sec"><div class="sec-head"><h2>Closed Won semanal</h2><span class="hint">deals ganhos por semana (2025-W01 → atual)</span></div>
+      <div class="card"><div class="trend">${trendHTML()}</div></div></div>
+    <div class="sec"><div class="sec-head"><h2>Ranking de closers</h2><span class="hint">por Closed Won acumulado (2025+)</span></div>
+      <table class="tbl"><thead><tr><th>#</th><th>Closer</th><th class="r">Closed Won</th><th class="r">Ativações</th><th style="width:220px">Volume</th></tr></thead>
+      <tbody>${rankingHTML()}</tbody></table></div>`;
+}
+
+// ================= SEMANAL ÁREA =================
+function fteRows(){
+  const rows=D.fte||[];
+  const tot={estrategia:'Total',fte:sum(rows,r=>r.fte),contacted:sum(rows,r=>r.contacted),opps:sum(rows,r=>r.opps)};
+  return [...rows,tot];
+}
+function renderAreaSdr(){
+  const list=D.porPessoa?.sdr||[];
+  const totContacted=sum(list,p=>p.contacted), totConnected=sum(list,p=>p.connected), totOpps=sum(list,p=>p.opps);
+  const kpis=[
+    ['Contatados',fN(totContacted),`${STR_ORDER.map(()=>'').join('')}${list.length} SDRs`],
+    ['Contact → Connected',`${pct(totConnected,totContacted)??'—'}%`,`${fN(totConnected)} conectados`],
+    ['Opp in',fN(totOpps),`${pct(totOpps,totConnected)??'—'}% dos conectados`],
+    ['Opp / FTE',(sum(D.fte||[],r=>r.opps)/Math.max(1,sum(D.fte||[],r=>r.fte))).toFixed(1),`${(totContacted/Math.max(1,list.length)).toFixed(0)} contatados/FTE · ${list.length} FTEs`],
+  ];
+  const wt=NIV.map((n,i)=>weekTrendHTML({label:n,color:NIV_COLOR[n],series:weeklyByNivel(D.semanalPorNivel?.opps,n).slice(-4)})).join('');
+  const totWt=weekTrendHTML({label:'Total',color:'var(--accent)',series:weeklyTotals(D.semanalPorNivel?.opps).slice(-4)});
+  const fteT=fteRows();
+  const fteTable=fteT.map(f=>`<tr style="${f.estrategia==='Total'?'background:var(--surface-sunken)':''}">
+    <td style="font-weight:${f.estrategia==='Total'?700:600}">${f.estrategia}</td>
+    <td class="r mono">${f.fte}</td>
+    <td class="r mono" style="font-weight:600">${f.fte?Math.round(f.contacted/f.fte):0}</td>
+    <td class="r mono" style="font-weight:600">${f.fte?(f.opps/f.fte).toFixed(1):'0.0'}</td></tr>`).join('');
+  const cols=[
+    {key:'contacted',label:'Contatados',render:r=>`<span class="mono">${fN(r.contacted)}</span>`},
+    {key:'contactRate',label:'Contact→Conn.',align:'r',render:r=>`<span class="mono">${r.contactRate!=null?pctR(r.contactRate)+'%':'—'}</span>`},
+    {key:'opps',label:'Opp in',render:r=>`<span class="mono num-cell">${fN(r.opps)}</span>`},
+    {key:'oppNivel',label:'Opp por nível',render:r=>ministack(r.oppNivel,NIV.map(n=>NIV_COLOR[n]))},
+    {key:'dias',label:'Ciclo contato→conect.',align:'r',render:r=>`<span class="mono">${r.diasContatoConectado!=null?r.diasContatoConectado+'d':'—'}</span>`},
+  ];
+  const table=groupedTable({rows:list,groupBy:r=>r.estrategia||'—',groupOrder:STR_ORDER,cols,kind:'sdr'});
+  $('viewArea').innerHTML=`
+    <div class="grid g4">${kpis.map(([l,v,s])=>`<div class="kpi"><span class="rail"></span><div class="lbl">${l}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div>
+    <div class="sec" style="margin-top:24px"><div class="sec-head"><h2>Opps por nível de cliente · últimas 4 semanas</h2></div>
+      <div class="card"><div class="wtgrid g3">${wt}</div></div></div>
+    <div class="grid g2">
+      <div class="sec"><div class="sec-head"><h2>Opp in total · últimas 4 semanas</h2></div><div class="card">${totWt}</div></div>
+      <div class="sec"><div class="sec-head"><h2>Produtividade por FTE</h2></div><div class="card" style="padding:0;overflow-x:auto"><table class="tbl">
+        <thead><tr><th>Motor</th><th class="r">FTEs</th><th class="r">Contatados/FTE</th><th class="r">Opp/FTE</th></tr></thead><tbody>${fteTable}</tbody></table></div></div>
+    </div>
+    <div class="sec"><div class="sec-head"><h2>SDR · funil de entrada + opp por nível</h2></div>${table}</div>`;
+  bindRowClicks($('viewArea'));
+}
+function renderAreaClosers(){
+  const list=D.porPessoa?.closer||[];
+  const totOpps=sum(list,p=>p.opps), totSql=sum(list,p=>p.sql), totCw=sum(list,p=>p.cw);
+  const kpis=[
+    ['Opp in',fN(totOpps),'entrada no closer'],
+    ['Opp → SQL',`${pct(totSql,totOpps)??'—'}%`,`${fN(totSql)} SQL`],
+    ['Win rate (#)',`${pct(totCw,totSql)??'—'}%`,`${fN(totCw)} CW`],
+    ['CW in',fN(totCw),`${list.length} closers`],
+  ];
+  const wt=NIV.map(n=>weekTrendHTML({label:n,color:NIV_COLOR[n],series:weeklyByNivel(D.semanalPorNivel?.cw,n).slice(-4)})).join('');
+  const totWt=weekTrendHTML({label:'Total',color:'var(--accent)',series:weeklyTotals(D.semanalPorNivel?.cw).slice(-4)});
+  const cols=[
+    {key:'opps',label:'Opp in',render:r=>`<span class="mono">${fN(r.opps)}</span>`},
+    {key:'sqlRate',label:'Opp→SQL',align:'r',render:r=>`<span class="mono">${r.sqlRate!=null?pctR(r.sqlRate)+'%':'—'}</span>`},
+    {key:'winRate',label:'Win rate',align:'r',render:r=>`<span class="mono" style="color:${r.winRate!=null&&r.winRate<0.2?'var(--danger-text)':'inherit'}">${r.winRate!=null?pctR(r.winRate)+'%':'—'}</span>`},
+    {key:'cw',label:'CW in',render:r=>`<span class="mono num-cell">${fN(r.cw)}</span>`},
+    {key:'cwNivel',label:'CW por nível',render:r=>ministack(r.cwNivel,NIV.map(n=>NIV_COLOR[n]))},
+    {key:'diasOppSql',label:'Ciclo Opp→SQL',align:'r',render:r=>`<span class="mono">${r.diasOppSql!=null?r.diasOppSql+'d':'—'}</span>`},
+    {key:'diasSqlWon',label:'Ciclo SQL→CW',align:'r',render:r=>`<span class="mono">${r.diasSqlWon!=null?r.diasSqlWon+'d':'—'}</span>`},
+  ];
+  const table=groupedTable({rows:list,cols,kind:'closer'});
+  $('viewArea').innerHTML=`
+    <div class="grid g4">${kpis.map(([l,v,s])=>`<div class="kpi"><span class="rail"></span><div class="lbl">${l}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div>
+    <div class="sec" style="margin-top:24px"><div class="sec-head"><h2>CW por nível de cliente · últimas 4 semanas</h2></div>
+      <div class="card"><div class="wtgrid g3">${wt}</div></div></div>
+    <div class="sec"><div class="sec-head"><h2>CW total · últimas 4 semanas</h2></div><div class="card">${totWt}</div></div>
+    <div class="sec"><div class="sec-head"><h2>Closers · entrada, conversão e CW por nível</h2><span class="hint">sem agrupamento fixo por squad — cada closer atende níveis variados; ver coluna "CW por nível". Pipeline aberto e aging de opp não existem na base hoje.</span></div>${table}</div>`;
+  bindRowClicks($('viewArea'));
+}
+function renderAreaOnboarding(){
+  const list=D.porPessoa?.onboarding||[];
+  const totCwIn=sum(list,p=>p.cwIn), totAct=sum(list,p=>p.activated);
+  const mesAtual=state.mes||Object.keys(D.actual.mensal).sort().pop();
+  const port=D.actual?.mensal?.[mesAtual]?.total;
+  const kpis=[
+    ['Net Revenue · mês',fBRL(port?.receita),'portfólio (sem quebra por pessoa)'],
+    ['GMV · mês',fBRL(port?.gmv),'portfólio (sem quebra por pessoa)'],
+    ['CW in / Ativados',`${fN(totCwIn)} / ${fN(totAct)}`,`${list.length} onboarders`],
+    ['Taxa de ativação',`${pct(totAct,totCwIn)??'—'}%`,'ativados 10k ÷ CW recebido'],
+  ];
+  const wt=NIV.map(n=>weekTrendHTML({label:n,color:NIV_COLOR[n],series:weeklyByNivel(D.semanalPorNivel?.activation,n).slice(-4)})).join('');
+  const totWt=weekTrendHTML({label:'Total',color:'var(--success)',series:weeklyTotals(D.semanalPorNivel?.activation).slice(-4)});
+  const cols=[
+    {key:'cwIn',label:'CW in',render:r=>`<span class="mono">${fN(r.cwIn)}</span>`},
+    {key:'activated',label:'Ativados 10k',render:r=>`<span class="mono num-cell">${fN(r.activated)}</span>`},
+    {key:'actRate',label:'Taxa ativação',align:'r',render:r=>`<span class="mono">${r.actRate!=null?pctR(r.actRate)+'%':'—'}</span>`},
+    {key:'actNivel',label:'Ativação por nível',render:r=>ministack(r.actNivel,NIV.map(n=>NIV_COLOR[n]))},
+    {key:'diasWonAtivacao',label:'Ciclo CW→Ativação',align:'r',render:r=>`<span class="mono">${r.diasWonAtivacao!=null?r.diasWonAtivacao+'d':'—'}</span>`},
+    {key:'nr',label:'Net Revenue',align:'r',render:()=>'<span class="miss">sem dado por pessoa</span>'},
+  ];
+  const table=groupedTable({rows:list,cols,kind:'onb'});
+  $('viewArea').innerHTML=`
+    <div class="grid g4">${kpis.map(([l,v,s])=>`<div class="kpi"><span class="rail"></span><div class="lbl">${l}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div>
+    <div class="sec" style="margin-top:24px"><div class="sec-head"><h2>Ativações (10k GMV) por nível · últimas 4 semanas</h2></div>
+      <div class="card"><div class="wtgrid g3">${wt}</div></div></div>
+    <div class="sec"><div class="sec-head"><h2>Ativações total · últimas 4 semanas</h2></div><div class="card">${totWt}</div></div>
+    <div class="sec"><div class="sec-head"><h2>Onboarding · CW recebido, ativação e ciclo</h2><span class="hint">Net Revenue/GMV por onboarder nomeado não existem na base hoje (só agregado por nível/semana)</span></div>${table}</div>`;
+  bindRowClicks($('viewArea'));
+}
+function renderArea(){
+  if(state.area==='sdr') renderAreaSdr();
+  else if(state.area==='closers') renderAreaClosers();
+  else renderAreaOnboarding();
+}
+
+// ================= 1:1 GESTOR =================
+const ROLE_CFG={
+  sdr:{label:'SDR',color:'var(--blue)',metricKey:'opps',metricLabel:'Opps / semana'},
+  closer:{label:'Closer',color:'var(--orange)',metricKey:'cw',metricLabel:'CW / semana'},
+  onb:{label:'Onboarding',color:'var(--success)',metricKey:'activated',metricLabel:'Ativações / semana'},
+};
+function allPeople(){
+  return [
+    ...(D.porPessoa?.sdr||[]).map(p=>({p,kind:'sdr'})),
+    ...(D.porPessoa?.closer||[]).map(p=>({p,kind:'closer'})),
+    ...(D.porPessoa?.onboarding||[]).map(p=>({p,kind:'onb'})),
+  ];
+}
+function indicadores(p,kind){
+  if(kind==='sdr') return [['Contatados',fN(p.contacted)],['Contact → Connected',p.contactRate!=null?pctR(p.contactRate)+'%':'—'],['Opp in',fN(p.opps)],['Opp por nível (N2-N3/N4-N5/N6+)',p.oppNivel.map(fN).join(' · ')],['Ciclo contato→conectado',p.diasContatoConectado!=null?p.diasContatoConectado+'d':'—']];
+  if(kind==='closer') return [['Opp in',fN(p.opps)],['Opp → SQL',p.sqlRate!=null?pctR(p.sqlRate)+'%':'—'],['SQL',fN(p.sql)],['Win rate',p.winRate!=null?pctR(p.winRate)+'%':'—'],['CW in',fN(p.cw)],['CW por nível (N2-N3/N4-N5/N6+)',p.cwNivel.map(fN).join(' · ')],['Ciclo Opp→SQL',p.diasOppSql!=null?p.diasOppSql+'d':'—'],['Ciclo SQL→CW',p.diasSqlWon!=null?p.diasSqlWon+'d':'—']];
+  return [['CW in',fN(p.cwIn)],['Ativados 10k',fN(p.activated)],['Taxa de ativação',p.actRate!=null?pctR(p.actRate)+'%':'—'],['Ativação por nível (N2-N3/N4-N5/N6+)',p.actNivel.map(fN).join(' · ')],['Ciclo CW→Ativação',p.diasWonAtivacao!=null?p.diasWonAtivacao+'d':'—']];
+}
+function coaching(p,kind,squadArr,squadKey){
+  const med=median(squadArr.map(x=>x[squadKey]));
+  const mine=p[squadKey]||0;
+  const d=[],m=[];let acao='';
+  if(kind==='sdr'){
+    if(p.contactRate!=null&&p.contactRate>=0.6)d.push(`Boa cobertura de contatos (${pctR(p.contactRate)}%)`);
+    if(mine>=med)d.push('Opps acima da mediana do squad');
+    if(p.contactRate!=null&&p.contactRate<0.45)m.push(`Cobertura de contatos baixa (${pctR(p.contactRate)}%)`);
+    if(mine<med)m.push(`Opps abaixo da mediana do squad (${fN(mine)} vs ${fN(med)})`);
+    acao=mine<med?'Priorizar geração de opps essa semana para recuperar o pacing do squad.':'Manter cadência e reforçar qualificação para melhorar a taxa de conexão.';
+  } else if(kind==='closer'){
+    if(p.winRate!=null&&p.winRate>=0.3)d.push(`Win rate forte (${pctR(p.winRate)}%)`);
+    if(mine>=med)d.push('CW acima da mediana do squad');
+    if(p.winRate!=null&&p.winRate<0.2)m.push(`Win rate abaixo do esperado (${pctR(p.winRate)}%)`);
+    if(mine<med)m.push(`CW abaixo da mediana do squad (${fN(mine)} vs ${fN(med)})`);
+    acao=(p.winRate!=null&&p.winRate<0.2)?'Revisar critério de qualificação dos deals com o gestor.':(mine<med?'Priorizar avanço das opps em aberto para recuperar o pacing.':'Manter ritmo e repassar abordagem para os pares do squad.');
+  } else {
+    if(p.actRate!=null&&p.actRate>=0.5)d.push(`Ativação alta (${pctR(p.actRate)}%)`);
+    if(mine>=med)d.push('Ativações acima da mediana do squad');
+    if(p.actRate!=null&&p.actRate<0.35)m.push(`Ativação baixa (${pctR(p.actRate)}%)`);
+    if(mine<med)m.push(`Ativações abaixo da mediana do squad (${fN(mine)} vs ${fN(med)})`);
+    acao=(p.actRate!=null&&p.actRate<0.35)?'Revisar contas paradas com o gestor antes que virem churn.':(mine<med?'Focar nas contas mais próximas de bater 10k GMV essa semana.':'Documentar o que está funcionando e replicar com o squad.');
+  }
+  if(!d.length)d.push('Desempenho dentro do esperado no período.');
+  if(!m.length)m.push('Sem gargalo relevante identificado no período.');
+  return {destaques:d,melhorar:m,acao,med,mine};
+}
+function renderOneOne(){
+  const people=allPeople();
+  if(!people.length){ $('viewOneOne').innerHTML='<div class="card"><span class="miss">Sem pessoas com dado — rode build_data.js com os CSVs atualizados.</span></div>'; return; }
+  if(!state.pessoa||!people.find(x=>x.p.email===state.pessoa.email&&x.kind===state.pessoa.kind)){
+    state.pessoa={email:people[0].p.email,kind:people[0].kind};
+  }
+  const sel=people.find(x=>x.p.email===state.pessoa.email&&x.kind===state.pessoa.kind);
+  const q=(state.q||'').toLowerCase();
+  const groups=[['sdr','SDR'],['closer','Closers'],['onb','Onboarding']];
+  const sideHTML=groups.map(([kind,label])=>{
+    const items=people.filter(x=>x.kind===kind&&shortEmail(x.p.email).toLowerCase().includes(q));
+    if(!items.length)return '';
+    return `<div class="eyebrow" style="margin:10px 4px 4px">${label} · ${items.length}</div>`+
+      items.map(x=>`<div class="oneone-item ${state.pessoa.email===x.p.email&&state.pessoa.kind===x.kind?'on':''}" data-email="${x.p.email}" data-kind="${x.kind}">${shortEmail(x.p.email)}</div>`).join('');
+  }).join('');
+
+  const cfg=ROLE_CFG[sel.kind];
+  const squadArr=sel.kind==='sdr'?D.porPessoa.sdr:sel.kind==='closer'?D.porPessoa.closer:D.porPessoa.onboarding;
+  const co=coaching(sel.p,sel.kind,squadArr,cfg.metricKey);
+  const vsMed=co.med?Math.round((co.mine-co.med)/co.med*100):null;
+  const wt=weekTrendHTML({label:shortEmail(sel.p.email).split('.')[0],color:cfg.color,series:sel.p.semanal||[]});
+
+  $('viewOneOne').innerHTML=`<div class="oneone">
+    <div class="oneone-side">
+      <input id="oneoneSearch" placeholder="Buscar pessoa…" value="${state.q||''}"/>
+      ${sideHTML}
+    </div>
+    <div>
+      <div class="card" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:16px">
+        <div><div class="eyebrow">${cfg.label} · ${sel.p.email}</div><div style="font-size:22px;font-weight:700;margin-top:2px">${shortEmail(sel.p.email)}</div></div>
+        <div class="statrow">
+          <div class="stat"><div class="eyebrow" style="color:var(--text-faint)">Resultado (período)</div><div class="v">${fN(co.mine)}</div></div>
+          <div class="stat"><div class="eyebrow" style="color:var(--text-faint)">Mediana do squad</div><div class="v">${fN(Math.round(co.med))}</div></div>
+          <div class="stat"><div class="eyebrow" style="color:var(--text-faint)">vs mediana</div><div class="v" style="color:${vsMed==null?'inherit':vsMed>=0?'var(--success)':'var(--danger-text)'}">${vsMed==null?'—':(vsMed>=0?'+':'')+vsMed+'%'}</div></div>
+        </div>
+      </div>
+      <div class="grid g2">
+        <div class="card"><div class="eyebrow" style="margin-bottom:14px">${cfg.metricLabel} · últimas 4 semanas</div>${wt}</div>
+        <div class="card"><div class="eyebrow" style="margin-bottom:8px">Indicadores do período</div>
+          ${indicadores(sel.p,sel.kind).map(([k,v])=>`<div class="indic"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('')}</div>
+      </div>
+      <div class="coachgrid" style="margin-top:16px">
+        <div class="card coachbox" style="border-color:var(--success)"><div class="eyebrow" style="color:var(--success);margin-bottom:10px">Destaques</div><ul>${co.destaques.map(t=>`<li>${t}</li>`).join('')}</ul></div>
+        <div class="card coachbox" style="border-color:var(--warn)"><div class="eyebrow" style="color:var(--warn);margin-bottom:10px">A melhorar</div><ul>${co.melhorar.map(t=>`<li>${t}</li>`).join('')}</ul></div>
+        <div class="card coachbox" style="border-color:var(--accent)"><div class="eyebrow" style="color:var(--accent);margin-bottom:10px">Ação da semana</div><ul><li>${co.acao}</li></ul></div>
+      </div>
+    </div>
+  </div>`;
+  $('oneoneSearch').oninput=e=>{state.q=e.target.value;renderOneOne();};
+  $('viewOneOne').querySelectorAll('.oneone-item').forEach(el=>{
+    el.onclick=()=>{state.pessoa={email:el.dataset.email,kind:el.dataset.kind};renderOneOne();};
+  });
+}
+
+// ================= NAV / RENDER =================
+const CTX={mensal:'Mês fechado',wsales:'Semana · estoque do funil + produtividade por nível',warea:'Semana · detalhe por FTE',oneone:'Semana · 1:1 gestor ↔ funcionário'};
+function renderTabs(){
+  $('tabs').innerHTML=MEETINGS.map(t=>`<div class="tab ${state.meeting===t.k?'on':''}" data-k="${t.k}">${t.label}</div>`).join('');
+  $('tabs').querySelectorAll('.tab').forEach(el=>el.onclick=()=>{state.meeting=el.dataset.k;render();});
+  $('subtabs').innerHTML=AREA_TABS.map(t=>`<div class="subtab ${state.area===t.k?'on':''}" data-k="${t.k}">${t.label}</div>`).join('');
+  $('subtabs').querySelectorAll('.subtab').forEach(el=>el.onclick=()=>{state.area=el.dataset.k;render();});
+}
+function updateBanner(){
+  if(D.funilCompleto===false){
+    $('bannerText').innerHTML=`<b>Dados agregados</b> das bases NB + budget/reforecast. <b class="miss" style="color:var(--danger-text);font-style:normal">Funil completo (Contatado/Conectado/SQL por mês) parcial</b> — falta reexportar <code>Dados/05_produtividade.csv</code> (ver Dados/README.md).`;
+  } else {
+    $('bannerText').innerHTML=`<b>Dados agregados</b> das bases NB + budget/reforecast. Gerado em <b>${D.geradoEm||'—'}</b>.`;
+  }
+}
+function render(){
+  renderTabs();
+  $('ctxLine').textContent=CTX[state.meeting]+(state.meeting==='mensal'&&D.mesFechado?.mes?(' · '+mesLabel(D.mesFechado.mes)):'');
+  $('wsalesControls').style.display=state.meeting==='wsales'?'flex':'none';
+  $('otherControls').style.display=state.meeting==='wsales'?'none':'flex';
+  $('subbar').style.display=state.meeting==='warea'?'block':'none';
+  $('viewMensal').style.display=state.meeting==='mensal'?'block':'none';
+  $('viewSemanal').style.display=state.meeting==='wsales'?'block':'none';
+  $('viewArea').style.display=state.meeting==='warea'?'block':'none';
+  $('viewOneOne').style.display=state.meeting==='oneone'?'block':'none';
+  if(state.meeting==='mensal') renderMensal();
+  else if(state.meeting==='wsales') renderSemanal();
+  else if(state.meeting==='warea') renderArea();
+  else renderOneOne();
+}
+
+// ---- tema ----
+function initTheme(){
+  const saved=localStorage.getItem('nb-theme');
+  const dark=saved?saved==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;
+  setTheme(dark);
+  const toggle=()=>setTheme(document.documentElement.dataset.theme!=='dark');
+  $('themeBtn').onclick=toggle; $('themeBtn2').onclick=toggle;
+}
+function setTheme(dark){
+  document.documentElement.dataset.theme=dark?'dark':'light';
+  const label=dark?'☀️ Light':'🌙 Dark';
+  $('themeBtn').textContent=label; $('themeBtn2').textContent=label;
+  localStorage.setItem('nb-theme',dark?'dark':'light');
+}
+
+$('genAt').textContent='· dados de '+(D.geradoEm||'—');
+updateBanner();
+initTheme();
+initWsalesControls();
+render();
+</script>
+</body>
+</html>

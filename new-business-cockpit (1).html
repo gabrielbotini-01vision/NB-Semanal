@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>New Business · Cockpit</title>
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/prop-types/prop-types.js"></script>
+<script src="https://unpkg.com/recharts@2/umd/Recharts.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/plain" id="app-source">
+const { useState, useMemo } = React;
+const { ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, ScatterChart, Scatter, ZAxis, ReferenceLine, Cell } = Recharts;
+
+/* =========================================================================
+   NEW BUSINESS · COCKPIT  — protótipo com dados sintéticos (placeholders)
+   Funil: Lead → Contatado → Conectado → Opp → SQL → CW → Ativado (10k GMV)
+   Times: 20 SDR (16 out / 4 in) · 16 Closers · 20 Onboarders
+   Regras: Net Revenue + GMV vivem no Onboarding (realização).
+           CW mede contagem + nível de cliente. Leads dentro de SDR.
+           Lead in / Opp in / CW in / Ativação in = coortes temporais distintas.
+   ========================================================================= */
+
+const T = {
+  paper: "#EBEEF1", panel: "#FFFFFF", ink: "#0E1620", ink2: "#18222E",
+  text: "#141C25", muted: "#67727E", faint: "#98A2AD", hair: "#E1E6EB",
+  brand: "#0C6E6E", brandSoft: "#E3F1F0",
+  good: "#1E9C6B", warn: "#D08A0A", bad: "#D24436",
+  seg1: "#9CC9C6", seg2: "#3E9A96", seg3: "#0B5150",
+};
+const SEG = [
+  { key: "N2/N3", label: "N2/N3", range: "120k–1MM", color: T.seg1 },
+  { key: "N4/N5", label: "N4/N5", range: "1MM–5MM", color: T.seg2 },
+  { key: "N6+",  label: "N6+",   range: "5MM+",     color: T.seg3 },
+];
+
+function rng(seed){let a=seed>>>0;return()=>{a|=0;a=(a+0x6D2B79F5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;};}
+const R = rng(20260705);
+const rand = (lo,hi)=>lo+R()*(hi-lo);
+const randi = (lo,hi)=>Math.round(rand(lo,hi));
+const pick = (arr)=>arr[Math.floor(R()*arr.length)];
+function splitInt(total, weights){
+  const s=weights.reduce((a,b)=>a+b,0);
+  const raw=weights.map(w=>total*w/s);
+  const fl=raw.map(Math.floor);
+  let rem=total-fl.reduce((a,b)=>a+b,0);
+  const order=raw.map((v,i)=>[v-fl[i],i]).sort((a,b)=>b[0]-a[0]);
+  for(let k=0;k<rem;k++) fl[order[k%fl.length][1]]++;
+  return fl;
+}
+
+const DAYS_IN_MONTH = 30, DAY = 18, DAYFRAC = DAY/DAYS_IN_MONTH;
+
+const FIRST = ["Ana","Bruno","Carla","Diego","Enzo","Fernanda","Gustavo","Helena","Igor","Júlia",
+"Kléber","Larissa","Marcos","Natália","Otávio","Paula","Rafael","Sofia","Thiago","Vanessa",
+"Yuri","Bianca","Caio","Débora","Eduardo","Flávia","Gabriel","Isabela","Karina","Lucas",
+"Marina","Nathan","Olívia","Pedro","Renata","Samuel","Tainá","Vitor","Yasmin","Aline",
+"Breno","Camila","Daniel","Elisa","Felipe","Giovana","Heitor","Ingrid","Joana","Kaique",
+"Letícia","Murilo","Nina","Osvaldo","Priscila","Ricardo"];
+const LAST = "ABCDFGHLMNOPRSTV".split("");
+let NI=0; const nextName=()=>`${FIRST[NI++ % FIRST.length]} ${pick(LAST)}.`;
+
+/* ---------- SDR (leads + opps) ---------- */
+const SDRS = Array.from({length:20},(_,i)=>{
+  const inbound=i>=16, skew=R();
+  const leads=inbound?randi(160,230):randi(70,105);
+  const contacted=Math.round(leads*rand(0.55,0.72));
+  const connected=Math.round(contacted*rand(0.38,0.55));
+  const opps=Math.round(connected*rand(0.18,0.30));
+  const w=inbound?[0.55,0.33,0.12]:[0.34+skew*0.2,0.42,0.24-skew*0.1].map(x=>Math.max(0.05,x));
+  const oppSeg=splitInt(opps,w);
+  const opp2sql=rand(0.42,0.68);
+  const sql=Math.round(opps*opp2sql);
+  const slaHrs=inbound?rand(0.5,6):rand(2,30);
+  const target=inbound?30:22;
+  const mtdOpps=Math.round(opps*DAYFRAC*rand(0.82,1.12));
+  return { id:`S${String(i+1).padStart(2,"0")}`, name:nextName(), type:inbound?"Inbound":"Outbound",
+    leads, contacted, connected, opps, oppSeg, sql, opp2sql, slaHrs, target, mtdOpps,
+    forecast:Math.round(mtdOpps/DAYFRAC), connRate:connected/contacted, contactRate:contacted/leads };
+});
+
+/* ---------- Closers (contagem + nível; squad por tier de cliente) ---------- */
+const CLOSER_TIERS=[0,0,0,0,0,0,0,1,1,1,1,1,1,2,2,2]; // 7 N2/N3 · 6 N4/N5 · 3 N6+
+const CLOSERS = CLOSER_TIERS.map((tier,i)=>{
+  const oppsIn = tier===0?randi(38,54):tier===1?randi(26,40):randi(12,24);
+  const sqlRate=rand(0.48,0.72), sql=Math.round(oppsIn*sqlRate);
+  const winRate=rand(0.18,0.40), cw=Math.max(2,Math.round(sql*winRate));
+  const w=[0.08,0.08,0.08]; w[tier]=0.78; if(tier>0)w[tier-1]+=0.1; if(tier<2)w[tier+1]+=0.1;
+  const cwSeg=splitInt(cw,w);
+  const cwTarget = tier===0?randi(14,20):tier===1?randi(9,14):randi(4,8);
+  const mtdCW=Math.round(cw*DAYFRAC*rand(0.75,1.18));
+  const pipeOpps = tier===0?randi(26,46):tier===1?randi(16,32):randi(8,18);
+  const aging=randi(6,41);
+  return { id:`C${String(i+1).padStart(2,"0")}`, name:nextName(), tier,
+    oppsIn, sql, sqlRate, cw, cwSeg, winRate, cwTarget, mtdCW,
+    forecastCW:Math.round(mtdCW/DAYFRAC), pipeOpps, aging,
+    coverage: pipeOpps/Math.max(1,cwTarget-mtdCW), carteiraContas:cw+randi(2,8) };
+});
+
+/* ---------- Onboarders (Net Revenue + GMV realizam AQUI; squad por tier) ---------- */
+const ONB_TIERS=[0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,2,2,2,2]; // 9 N2/N3 · 7 N4/N5 · 4 N6+
+const ONBS = ONB_TIERS.map((tier,i)=>{
+  const carteira = tier===0?randi(40,62):tier===1?randi(24,40):randi(10,20);
+  const activated=Math.round(carteira*rand(0.42,0.68));
+  const rest=carteira-activated;
+  const carrinho=Math.round(rest*rand(0.35,0.6));
+  const atrasado=rest-carrinho, ontrack=activated, ttv=rand(9,28);
+  const targetAct=Math.round(carteira*0.6);
+  const mtdAct=Math.round(activated*DAYFRAC*rand(0.8,1.15));
+  const ticket = tier===0?rand(6000,14000):tier===1?rand(16000,34000):rand(45000,95000);
+  const netRevMonth=Math.round(activated*ticket);
+  const netRevMTD=Math.round(netRevMonth*DAYFRAC*rand(0.75,1.15));
+  const gmvMonth=Math.round(netRevMonth*rand(3.2,5.5));
+  const gmvMTD=Math.round(gmvMonth*DAYFRAC*rand(0.8,1.12));
+  const budget=Math.round(netRevMonth*rand(0.9,1.15));
+  const cwIn = tier===0?randi(9,16):tier===1?randi(5,11):randi(2,6);
+  return { id:`O${String(i+1).padStart(2,"0")}`, name:nextName(), tier,
+    cwIn, carteira, activated, carrinho, atrasado, ontrack, ttv, targetAct, mtdAct,
+    forecastAct:Math.round(mtdAct/DAYFRAC), actRate:activated/carteira,
+    netRevMTD, netRevForecast:Math.round(netRevMTD/DAYFRAC), gmvMTD,
+    gmvForecast:Math.round(gmvMTD/DAYFRAC), budget };
+});
+
+/* ---------- agregados ---------- */
+const sum=(arr,f)=>arr.reduce((a,x)=>a+f(x),0);
+const AGG = {
+  leads:sum(SDRS,s=>s.leads), contacted:sum(SDRS,s=>s.contacted),
+  connected:sum(SDRS,s=>s.connected), opps:sum(SDRS,s=>s.opps), sql:sum(CLOSERS,c=>c.sql),
+  cw:sum(CLOSERS,c=>c.cw), activated:sum(ONBS,o=>o.activated),
+  oppSeg:SEG.map((_,i)=>sum(SDRS,x=>x.oppSeg[i])),
+  cwSeg:SEG.map((_,i)=>sum(CLOSERS,x=>x.cwSeg[i])),
+  netRevMTD:sum(ONBS,o=>o.netRevMTD), netRevForecast:sum(ONBS,o=>o.netRevForecast),
+  gmvMTD:sum(ONBS,o=>o.gmvMTD), gmvForecast:sum(ONBS,o=>o.gmvForecast),
+  onbBudget:sum(ONBS,o=>o.budget), pipeOpps:sum(CLOSERS,c=>c.pipeOpps),
+  cwTarget:sum(CLOSERS,c=>c.cwTarget), mtdCW:sum(CLOSERS,c=>c.mtdCW),
+};
+
+
+/* opps por nível · MTD vs meta (mês) */
+const OPP_SEG = SEG.map((s,i)=>({
+  label:s.label, range:s.range, color:s.color,
+  mtd: Math.round(AGG.oppSeg[i]*DAYFRAC*rand(0.9,1.08)),
+  targetMonth: Math.round(AGG.oppSeg[i]*[1.05,0.92,1.15][i]),
+}));
+
+/* opps por nível · série semanal (4 semanas fechadas; Últ. = mais recente) */
+const OPP_SEG_WK = SEG.map((s,i)=>{
+  const base=AGG.oppSeg[i]/4;
+  const prior=[base*rand(0.8,1.0), base*rand(0.9,1.08), base*rand(0.96,1.14)].map(Math.round);
+  const fullCur=Math.round(base*rand(0.98,1.2));
+  return { label:s.label, range:s.range, color:s.color, prior, fullCur,
+    metaWk:Math.round(OPP_SEG[i].targetMonth/4) };
+});
+const OPP_WK = {
+  prior:[0,1,2].map(k=>OPP_SEG_WK.reduce((a,s)=>a+s.prior[k],0)),
+  fullCur:OPP_SEG_WK.reduce((a,s)=>a+s.fullCur,0),
+  metaWk:OPP_SEG_WK.reduce((a,s)=>a+s.metaWk,0),
+};
+
+/* CW por squad (4 semanas fechadas) */
+const wkSeries=(base,meta,color,label,range)=>({label,range,color,
+  prior:[base*rand(0.8,1.02),base*rand(0.9,1.08),base*rand(0.95,1.12)].map(Math.round),
+  fullCur:Math.round(base*rand(0.96,1.2)), metaWk:Math.round(meta)});
+const wkTotal=(arr)=>({prior:[0,1,2].map(k=>arr.reduce((a,s)=>a+s.prior[k],0)),
+  fullCur:arr.reduce((a,s)=>a+s.fullCur,0), metaWk:arr.reduce((a,s)=>a+s.metaWk,0)});
+
+const CW_WK = [0,1,2].map(t=>{const sq=CLOSERS.filter(c=>c.tier===t);
+  return wkSeries(sq.reduce((a,c)=>a+c.cw,0)/4, sq.reduce((a,c)=>a+c.cwTarget,0)/4, SEG[t].color, SEG[t].label, SEG[t].range);});
+const CW_WK_T = wkTotal(CW_WK);
+
+/* Ativações (10k) por squad (4 semanas fechadas) */
+const ACT_WK = [0,1,2].map(t=>{const sq=ONBS.filter(o=>o.tier===t);
+  return wkSeries(sq.reduce((a,o)=>a+o.activated,0)/4, sq.reduce((a,o)=>a+o.targetAct,0)/4, SEG[t].color, SEG[t].label, SEG[t].range);});
+const ACT_WK_T = wkTotal(ACT_WK);
+
+/* Net Revenue total (4 semanas fechadas) */
+const NR_MONTH = ONBS.reduce((a,o)=>a+o.netRevForecast,0);
+const NR_WK = wkSeries(NR_MONTH/4, AGG.onbBudget/4, T.brand, "Total", "");
+
+/* entradas do funil · série semanal (Visão Geral) — sem meta, só pulso */
+const LEAD_WK = wkSeries(AGG.leads/4, 0, T.brand, "Lead in", "");
+const ENTRADAS_WK = [
+  {label:"Lead in", color:T.brand, cap:"topo · hoje", prior:LEAD_WK.prior, fullCur:LEAD_WK.fullCur, metaWk:0},
+  {label:"Opp in", color:T.seg2, cap:"~2–3 sem depois", prior:OPP_WK.prior, fullCur:OPP_WK.fullCur, metaWk:0},
+  {label:"CW in", color:T.seg3, cap:"~4–8 sem depois", prior:CW_WK_T.prior, fullCur:CW_WK_T.fullCur, metaWk:0},
+  {label:"Ativação in", color:T.good, cap:"~6–12 sem depois", prior:ACT_WK_T.prior, fullCur:ACT_WK_T.fullCur, metaWk:0},
+];
+
+/* ===== 1:1 · série pessoal estável (sem rand, p/ não oscilar entre renders) + mediana ===== */
+function seededWeeks(base,seed){
+  let h=2166136261;for(let i=0;i<seed.length;i++){h=Math.imul(h^seed.charCodeAt(i),16777619);}
+  const r=(k)=>{const x=Math.sin((h>>>0)/1e6+k*131.7)*10000;return x-Math.floor(x);};
+  return { prior:[base*(0.82+r(1)*0.22),base*(0.9+r(2)*0.2),base*(0.94+r(3)*0.2)].map(Math.round),
+           fullCur:Math.round(base*(0.9+r(4)*0.28)) };
+}
+const median=(arr)=>{const a=[...arr].sort((x,y)=>x-y),n=a.length;return n?(n%2?a[(n-1)/2]:(a[n/2-1]+a[n/2])/2):0;};
+
+/* ===== Reunião Mensal · mês fechado vs budget + MoM ===== */
+const _mNR=AGG.netRevForecast,_mGMV=AGG.gmvForecast,_mCW=AGG.cw,_mOPP=AGG.opps;
+const CLOSED = {
+  month:"Jun/26", prevM:"Mai/26",
+  netRev:{act:Math.round(_mNR*rand(0.9,1.04)), bud:AGG.onbBudget, prev:Math.round(_mNR*rand(0.8,0.94))},
+  gmv:{act:Math.round(_mGMV*rand(0.9,1.04)), prev:Math.round(_mGMV*rand(0.82,0.95))},
+  cw:{act:Math.round(_mCW*rand(0.92,1.05)), bud:AGG.cwTarget, prev:Math.round(_mCW*rand(0.85,0.97))},
+  opp:{act:Math.round(_mOPP*rand(0.92,1.05)), bud:SDRS.reduce((a,s)=>a+s.target,0), prev:Math.round(_mOPP*rand(0.86,0.98))},
+  bySeg: SEG.map((s,i)=>({label:s.label,range:s.range,color:s.color,
+    nrAct:Math.round(ONBS.filter(o=>o.tier===i).reduce((a,o)=>a+o.netRevForecast,0)*rand(0.9,1.05)),
+    nrBud:Math.round(ONBS.filter(o=>o.tier===i).reduce((a,o)=>a+o.budget,0)),
+    cwAct:Math.round(AGG.cwSeg[i]*rand(0.9,1.06)),
+    cwBud:CLOSERS.filter(c=>c.tier===i).reduce((a,c)=>a+c.cwTarget,0)})),
+};
+const NR_3M = ["Abr/26","Mai/26","Jun/26"].map((m,i)=>({m,v:Math.round(CLOSED.netRev.act*[0.8,0.9,1][i]*rand(0.95,1.04))}));
+
+const FUNNEL = [
+  { key:"Leads", n:AGG.leads, tab:"sdr" }, { key:"Contatado", n:AGG.contacted, tab:"sdr" },
+  { key:"Conectado", n:AGG.connected, tab:"sdr" }, { key:"Opp", n:AGG.opps, tab:"sdr" },
+  { key:"SQL", n:AGG.sql, tab:"closers" }, { key:"CW", n:AGG.cw, tab:"closers" },
+  { key:"Ativado 10k", n:AGG.activated, tab:"onboarding" },
+];
+
+
+const ALERTS = (()=>{ const a=[];
+  SDRS.filter(s=>s.mtdOpps<s.target*DAYFRAC*0.8).slice(0,2).forEach(s=>a.push({sev:"bad",who:s.name,tag:"Opp pacing",msg:`${s.mtdOpps} opps MTD vs ${Math.round(s.target*DAYFRAC)} esperadas — abaixo do ritmo`,layer:"SDR"}));
+  SDRS.filter(s=>s.connRate<0.42).slice(0,1).forEach(s=>a.push({sev:"warn",who:s.name,tag:"Connected rate",msg:`${(s.connRate*100).toFixed(0)}% de conexão — lista/abordagem fraca`,layer:"SDR"}));
+  SDRS.filter(s=>s.opp2sql<0.5).slice(0,1).forEach(s=>a.push({sev:"warn",who:s.name,tag:"Qualificação",msg:`só ${(s.opp2sql*100).toFixed(0)}% das opps viram SQL — volume que não paga`,layer:"SDR"}));
+  CLOSERS.filter(c=>c.aging>32).slice(0,2).forEach(c=>a.push({sev:"bad",who:c.name,tag:"Opp envelhecendo",msg:`opp aberta há ${c.aging}d — SLA de avanço furado`,layer:"Closer"}));
+  CLOSERS.filter(c=>c.coverage<2.2).slice(0,1).forEach(c=>a.push({sev:"warn",who:c.name,tag:"Cobertura baixa",msg:`pipe ${c.coverage.toFixed(1)}x da meta de CW restante`,layer:"Closer"}));
+  ONBS.filter(o=>o.atrasado>=6).slice(0,2).forEach(o=>a.push({sev:"bad",who:o.name,tag:"Carteira atrasada",msg:`${o.atrasado} contas atrasadas — risco de churn precoce`,layer:"Onboarding"}));
+  ONBS.filter(o=>o.carrinho>=10).slice(0,1).forEach(o=>a.push({sev:"warn",who:o.name,tag:"Carrinho aberto",msg:`${o.carrinho} contas vendendo mas travadas <10k GMV`,layer:"Onboarding"}));
+  return a.sort((x,y)=>(x.sev==="bad"?-1:1)-(y.sev==="bad"?-1:1)).slice(0,7);
+})();
+
+const nf=new Intl.NumberFormat("pt-BR");
+const fmtN=(n)=>nf.format(Math.round(n));
+const fmtBRL=(n)=>{const v=Math.abs(n);if(v>=1e6)return`R$ ${(n/1e6).toFixed(1).replace(".",",")} mi`;if(v>=1e3)return`R$ ${Math.round(n/1e3)} mil`;return`R$ ${fmtN(n)}`;};
+const pct=(n)=>`${(n*100).toFixed(0)}%`;
+const pct1=(n)=>`${(n*100).toFixed(1).replace(".",",")}%`;
+
+const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+*{box-sizing:border-box}
+.ck{font-family:'IBM Plex Sans',system-ui,sans-serif;color:${T.text};background:${T.paper};min-height:100vh;-webkit-font-smoothing:antialiased}
+.mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+.disp{font-family:'Archivo',sans-serif}
+.eyebrow{font-size:10.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:${T.faint}}
+.cmdbar{background:${T.ink};color:#EAF0F2}
+.tab{cursor:pointer;padding:9px 15px;border-radius:8px;font-weight:600;font-size:13.5px;color:#93A0AC;transition:.15s}
+.tab:hover{color:#E7EEF0}.tab.on{background:${T.brand};color:#EAFBFA}
+.panel{background:${T.panel};border:1px solid ${T.hair};border-radius:14px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px}
+.bar{height:7px;border-radius:4px;background:${T.hair};overflow:hidden}
+.barfill{height:100%;border-radius:4px}
+.kpi-big{font-size:28px;line-height:1;font-weight:600;letter-spacing:-.01em}
+.stagebtn{cursor:pointer;transition:.15s}.stagebtn:hover{filter:brightness(1.06)}
+table{border-collapse:collapse;width:100%}
+th{text-align:left;font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:${T.faint};padding:8px 10px;border-bottom:1px solid ${T.hair}}
+td{font-size:13px;padding:9px 10px;border-bottom:1px solid ${T.hair}}
+.rankrow:hover{background:${T.brandSoft};cursor:pointer}
+.drawer{position:fixed;top:0;right:0;height:100vh;width:min(440px,94vw);background:${T.panel};box-shadow:-16px 0 48px rgba(10,20,30,.22);z-index:50;border-left:1px solid ${T.hair};overflow-y:auto;animation:slide .22s ease}
+@keyframes slide{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
+.scrim{position:fixed;inset:0;background:rgba(12,18,26,.34);z-index:40}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:#C7CFD7;border-radius:6px;border:2px solid ${T.paper}}
+`;
+
+const statusColor=(s)=>s==="bad"?T.bad:s==="warn"?T.warn:T.good;
+function Pill({children,color,bg}){return <span className="chip" style={{color,background:bg||(color+"1A")}}>{children}</span>;}
+function Bar({value,max,color}){return <div className="bar"><div className="barfill" style={{width:`${Math.min(100,(value/max)*100)}%`,background:color}}/></div>;}
+function Pacing({mtd,budget}){const btd=budget*DAYFRAC;const r=mtd/btd;const c=r>=1?T.good:r>=0.85?T.warn:T.bad;
+  return <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{flex:1}}><Bar value={mtd} max={budget} color={c}/></div>
+    <span className="mono" style={{fontSize:12,fontWeight:600,color:c,minWidth:44,textAlign:"right"}}>{pct(r)}</span></div>;}
+
+function KPI({label,value,sub,foot,accent}){
+  return <div className="panel" style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:6}}>
+    <div className="eyebrow">{label}</div>
+    <div className="kpi-big mono" style={{color:accent||T.text}}>{value}</div>
+    {sub&&<div style={{fontSize:12.5,color:T.muted,fontWeight:500}}>{sub}</div>}
+    {foot&&<div style={{marginTop:2}}>{foot}</div>}
+  </div>;
+}
+
+/* entradas temporais — responde ao ponto do offset temporal */
+function Entradas(){
+  return <div className="panel" style={{padding:16}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:14,flexWrap:"wrap",gap:8}}>
+      <div className="eyebrow">Entradas do funil · últimas 4 semanas</div>
+      <span style={{fontSize:11,color:T.faint}}>coortes em janelas distintas — a semana forte de lead não é a mesma de CW nem de ativação</span>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:18}}>
+      {ENTRADAS_WK.map(e=>(
+        <div key={e.label}>
+          <WeekTrend label={e.label} range="" color={e.color} prior={e.prior} fullCur={e.fullCur} metaWk={e.metaWk}/>
+          <div className="eyebrow" style={{color:T.faint,marginTop:6,letterSpacing:".04em"}}>{e.cap}</div>
+        </div>
+      ))}
+    </div>
+  </div>;
+}
+
+function FunnelSpine({onStage}){
+  const max=FUNNEL[0].n;
+  return <div className="panel" style={{padding:"18px 18px 20px"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:6}}>
+      <div className="eyebrow">Funil · volume por estágio (mês)</div>
+      <div className="eyebrow" style={{color:T.faint}}>taxa de passagem (proxy)</div>
+    </div>
+    <div style={{fontSize:11,color:T.faint,marginBottom:14}}>Estágios são estoques em momentos distintos — leia a conversão como tendência, não como coorte fechada.</div>
+    <div style={{display:"flex",flexDirection:"column",gap:3}}>
+      {FUNNEL.map((f,i)=>{const w=30+(f.n/max)*70;const next=FUNNEL[i+1];const conv=next?next.n/f.n:null;const shade=i<4?T.brand:i<6?T.seg2:T.seg3;
+        return <div key={f.key}>
+          <div className="stagebtn" onClick={()=>onStage(f.tab)} style={{display:"flex",alignItems:"center",gap:14}}>
+            <div style={{width:96,textAlign:"right",fontSize:12.5,fontWeight:600}}>{f.key}</div>
+            <div style={{flex:1,height:32,display:"flex",alignItems:"center"}}>
+              <div className="mono" style={{width:`${w}%`,height:"100%",background:shade,borderRadius:7,display:"flex",alignItems:"center",paddingLeft:12,color:"#fff",fontWeight:600}}>{fmtN(f.n)}</div>
+            </div>
+          </div>
+          {conv!=null&&<div style={{paddingLeft:110,margin:"1px 0"}}><span className="mono" style={{fontSize:10.5,color:conv<0.35?T.warn:T.faint,fontWeight:600}}>↓ {pct1(conv)}</span></div>}
+        </div>;})}
+    </div>
+  </div>;
+}
+
+/* ---------- WeekTrend: colunas de 4 semanas fechadas (Últ. em destaque) ---------- */
+function WeekTrend({label,range,color,prior,fullCur,metaWk,fmt=fmtN}){
+  const max=(Math.max(...prior,fullCur,metaWk)||1)*1.3, H=108;
+  const wow=prior[2]?(fullCur-prior[2])/prior[2]:0;
+  const cols=[{l:"S-3",v:prior[0]},{l:"S-2",v:prior[1]},{l:"S-1",v:prior[2]},{l:"Últ.",v:fullCur,latest:true}];
+  return <div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
+      <span style={{fontSize:12.5,fontWeight:600}}>{label}{range?<span style={{color:T.faint,fontWeight:500,fontSize:11}}> · {range}</span>:null}</span>
+      <span className="mono" style={{fontSize:11,fontWeight:600,color:wow>=0?T.good:T.bad}}>{wow>=0?"▲":"▼"} {Math.abs(wow*100).toFixed(0)}% <span style={{color:T.faint,fontWeight:500}}>WoW</span></span>
+    </div>
+    <div style={{position:"relative",height:H,display:"flex",alignItems:"flex-end",gap:7,borderBottom:`1px solid ${T.hair}`}}>
+      {metaWk>0&&<div style={{position:"absolute",left:0,right:0,bottom:metaWk/max*H,borderTop:`1px dashed ${T.muted}`,opacity:.55}}/>}
+      {cols.map(c=>{const bh=c.v/max*H;return <div key={c.l} title={`${c.l}: ${fmt(c.v)}`} style={{flex:1,height:H,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
+        <div className="mono" style={{fontSize:10.5,fontWeight:c.latest?700:600,textAlign:"center",marginBottom:3,color:c.latest?T.text:T.muted}}>{fmt(c.v)}</div>
+        <div style={{height:bh,background:color,opacity:c.latest?1:.5,borderRadius:"4px 4px 0 0"}}/>
+      </div>;})}
+    </div>
+    <div style={{display:"flex",gap:7,marginTop:5}}>
+      {cols.map(c=><div key={c.l} style={{flex:1,textAlign:"center",fontSize:10,color:c.latest?T.text:T.faint,fontWeight:c.latest?700:500}}>{c.l}</div>)}
+    </div>
+  </div>;
+}
+
+function WeekMultiples({title,note,series,fmt=fmtN}){
+  return <div className="panel" style={{padding:16}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:14,flexWrap:"wrap",gap:8}}>
+      <div className="eyebrow">{title}</div>
+      {note&&<span style={{fontSize:11,color:T.faint}}>{note}</span>}
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:18}}>
+      {series.map(s=><WeekTrend key={s.label} {...s} fmt={fmt}/>)}
+    </div>
+    <div style={{display:"flex",gap:16,marginTop:14,flexWrap:"wrap",fontSize:11,color:T.faint}}>
+      <span><span style={{display:"inline-block",width:10,height:10,background:T.seg2,borderRadius:2,marginRight:5,verticalAlign:"middle"}}/>semana mais recente</span>
+      <span><span style={{display:"inline-block",width:10,height:10,background:T.seg2,opacity:.5,borderRadius:2,marginRight:5,verticalAlign:"middle"}}/>semanas anteriores</span>
+      <span style={{letterSpacing:"-1px"}}>– – <span style={{letterSpacing:0}}>meta semanal do squad</span></span>
+    </div>
+  </div>;
+}
+
+function SegBars({data,title}){
+  const max=Math.max(...data.map(d=>d.value),1);
+  return <div className="panel" style={{padding:16}}>
+    <div className="eyebrow" style={{marginBottom:12}}>{title}</div>
+    <div style={{display:"flex",flexDirection:"column",gap:11}}>
+      {data.map((d,i)=>(<div key={i}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+          <span style={{fontSize:12.5,fontWeight:600}}>{d.label} <span style={{color:T.faint,fontWeight:500,fontSize:11}}>· {d.range}</span></span>
+          <span className="mono" style={{fontSize:12.5,fontWeight:600}}>{d.display}</span>
+        </div>
+        <Bar value={d.value} max={max} color={d.color}/>
+      </div>))}
+    </div>
+  </div>;
+}
+
+function Alerts({items}){
+  return <div className="panel" style={{padding:16}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+      <div className="eyebrow">Ações do dia</div><span className="mono" style={{fontSize:11,color:T.faint}}>{items.length} sinais</span>
+    </div>
+    {items.map((a,i)=>(<div key={i} style={{display:"flex",gap:11,padding:"10px 0",borderTop:i?`1px solid ${T.hair}`:"none"}}>
+      <div style={{width:4,borderRadius:3,background:statusColor(a.sev),flexShrink:0}}/>
+      <div style={{flex:1}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2,flexWrap:"wrap"}}>
+          <span style={{fontWeight:700,fontSize:12.5}}>{a.who}</span><Pill color={statusColor(a.sev)}>{a.tag}</Pill>
+          <span className="eyebrow" style={{color:T.faint}}>{a.layer}</span>
+        </div>
+        <div style={{fontSize:12.5,color:T.muted,lineHeight:1.35}}>{a.msg}</div>
+      </div>
+    </div>))}
+  </div>;
+}
+
+/* ---------- Visão Geral ---------- */
+function Overview({onStage}){
+  const revBTD=AGG.onbBudget*DAYFRAC, pacing=AGG.netRevMTD/revBTD;
+  const gap=AGG.netRevForecast-AGG.onbBudget;
+  const coverage=AGG.pipeOpps/Math.max(1,AGG.cwTarget-AGG.mtdCW);
+  const ht=ONBS.reduce((a,o)=>({on:a.on+o.ontrack,ca:a.ca+o.carrinho,at:a.at+o.atrasado}),{on:0,ca:0,at:0});
+  const htot=ht.on+ht.ca+ht.at;
+  return <div style={{display:"flex",flexDirection:"column",gap:16}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+      <KPI label="Net Revenue realizado · MTD" value={fmtBRL(AGG.netRevMTD)} sub={`de ${fmtBRL(AGG.onbBudget)} budget (onboarding)`} foot={<Pacing mtd={AGG.netRevMTD} budget={AGG.onbBudget}/>}/>
+      <KPI label="Net Revenue projetado" value={fmtBRL(AGG.netRevForecast)} accent={gap>=0?T.good:T.bad} sub="run-rate linear até fim do mês" foot={<span className="mono" style={{fontSize:12.5,fontWeight:600,color:gap>=0?T.good:T.bad}}>{gap>=0?"+":""}{fmtBRL(gap)} vs budget</span>}/>
+      <KPI label="GMV realizado · MTD" value={fmtBRL(AGG.gmvMTD)} sub={`fcast ${fmtBRL(AGG.gmvForecast)}`}/>
+      <KPI label="Cobertura de pipeline (CW)" value={`${coverage.toFixed(1)}x`} accent={coverage>=3?T.good:coverage>=2.2?T.warn:T.bad} sub={`${fmtN(AGG.pipeOpps)} opps abertas`} foot={<span style={{fontSize:11.5,color:T.muted}}>{coverage>=3?"saudável (≥3x)":"abaixo do alvo de 3x"}</span>}/>
+    </div>
+
+    <Entradas/>
+
+    <div className="panel" style={{padding:"14px 18px",display:"flex",alignItems:"center",gap:18,flexWrap:"wrap"}}>
+      <div className="eyebrow" style={{minWidth:120}}>Saúde da carteira<br/><span style={{color:T.faint}}>onboarding</span></div>
+      <div style={{flex:1,minWidth:220}}><div style={{display:"flex",height:20,borderRadius:6,overflow:"hidden"}}>
+        <div style={{width:`${ht.on/htot*100}%`,background:T.good}}/><div style={{width:`${ht.ca/htot*100}%`,background:T.warn}}/><div style={{width:`${ht.at/htot*100}%`,background:T.bad}}/>
+      </div></div>
+      <div style={{display:"flex",gap:20}}>
+        {[["Ontrack (10k+)",ht.on,T.good],["Carrinho aberto",ht.ca,T.warn],["Atrasado",ht.at,T.bad]].map(([l,v,c])=>(
+          <div key={l} style={{textAlign:"center"}}><div className="mono" style={{fontSize:19,fontWeight:600,color:c}}>{v}</div><div style={{fontSize:11,color:T.muted,fontWeight:500}}>{l}</div></div>))}
+      </div>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:"1.35fr 1fr",gap:16}}>
+      <FunnelSpine onStage={onStage}/><Alerts items={ALERTS}/>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:"1.35fr 1fr",gap:16}}>
+      <div className="panel" style={{padding:16}}>
+        <div className="eyebrow" style={{marginBottom:14}}>Net Revenue · últimas 4 semanas</div>
+        <WeekTrend label="Total" range="" color={T.brand} prior={NR_WK.prior} fullCur={NR_WK.fullCur} metaWk={NR_WK.metaWk} fmt={fmtBRL}/>
+        <div style={{fontSize:11,color:T.faint,marginTop:12,lineHeight:1.4}}>Pulso da métrica-mãe. A entrada (leads/opps) desta semana só vira Net Revenue algumas semanas à frente.</div>
+      </div>
+      <SegBars title="CW por nível de cliente" data={SEG.map((s,i)=>({label:s.label,range:s.range,color:s.color,value:AGG.cwSeg[i],display:fmtN(AGG.cwSeg[i])}))}/>
+    </div>
+  </div>;
+}
+
+/* ---------- Ranking (com agrupamento + subtotais) ---------- */
+const st=(x,c)=><span className="mono" style={{fontSize:12,fontWeight:700,color:c||T.text}}>{x}</span>;
+function miniStack(parts){ // [[valor,cor],...]
+  const t=parts.reduce((a,p)=>a+p[0],0)||1;
+  return <div style={{display:"flex",height:12,width:100,borderRadius:4,overflow:"hidden"}}>
+    {parts.map((p,i)=><div key={i} style={{width:`${p[0]/t*100}%`,background:p[1]}}/>)}</div>;
+}
+function Ranking({title,cols,rows,onRow,sortKey,groupBy,groupOrder,groupLabel}){
+  const [sk,setSk]=useState(sortKey);
+  const [grouped,setGrouped]=useState(!!groupBy);
+  const maxes={};cols.forEach(c=>{if(c.bar)maxes[c.key]=Math.max(...rows.map(r=>r[c.key]||0));});
+  const cellFor=(c,r)=>c.render?c.render(r):c.bar
+    ?<div style={{display:"flex",alignItems:"center",gap:8,minWidth:120}}><div style={{flex:1}}><Bar value={r[c.key]} max={maxes[c.key]} color={c.color||T.brand}/></div><span className="mono" style={{fontSize:12,minWidth:34,textAlign:"right"}}>{c.fmt?c.fmt(r[c.key]):fmtN(r[c.key])}</span></div>
+    :<span className="mono">{c.fmt?c.fmt(r[c.key]):fmtN(r[c.key])}</span>;
+  let blocks;
+  if(grouped&&groupBy){
+    const map={};rows.forEach(r=>{const g=groupBy(r);(map[g]=map[g]||[]).push(r);});
+    const order=(groupOrder||Object.keys(map)).filter(g=>map[g]);
+    blocks=order.map(g=>({g,label:groupLabel?groupLabel(g):String(g),items:[...map[g]].sort((a,b)=>(b[sk]??0)-(a[sk]??0))}));
+  }else{
+    blocks=[{g:"__all",label:null,items:[...rows].sort((a,b)=>(b[sk]??0)-(a[sk]??0))}];
+  }
+  return <div className="panel" style={{overflow:"hidden"}}>
+    <div style={{padding:"13px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:`1px solid ${T.hair}`}}>
+      <div className="eyebrow">{title}</div>
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        {groupBy&&<div style={{display:"flex",gap:2,background:T.paper,padding:2,borderRadius:7}}>
+          {[["Agrupado",true],["Lista",false]].map(([l,v])=>(<div key={l} onClick={()=>setGrouped(v)} style={{padding:"4px 10px",borderRadius:5,fontSize:11.5,fontWeight:600,cursor:"pointer",color:grouped===v?"#fff":T.muted,background:grouped===v?T.brand:"transparent"}}>{l}</div>))}
+        </div>}
+        <span style={{fontSize:11,color:T.faint}}>{rows.length} pessoas</span>
+      </div>
+    </div>
+    <div style={{overflowX:"auto"}}><table>
+      <thead><tr><th style={{position:"sticky",left:0,background:T.panel}}>Pessoa</th>
+        {cols.map(c=>(<th key={c.key} onClick={()=>c.sortable!==false&&setSk(c.key)} style={{cursor:c.sortable!==false?"pointer":"default",color:sk===c.key?T.brand:T.faint,textAlign:c.align||"left",whiteSpace:"nowrap"}}>{c.label}{sk===c.key?" ↓":""}</th>))}
+      </tr></thead>
+      <tbody>
+      {blocks.map(bl=>(<React.Fragment key={bl.g}>
+        {bl.label&&<tr style={{background:T.brandSoft}}>
+          <td style={{position:"sticky",left:0,background:T.brandSoft,fontWeight:700,fontSize:12,whiteSpace:"nowrap"}}>{bl.label} <span style={{color:T.muted,fontWeight:500}}>· {bl.items.length}</span></td>
+          {cols.map(c=>(<td key={c.key} style={{textAlign:c.align||"left",background:T.brandSoft}}>{c.agg?c.agg(bl.items):""}</td>))}
+        </tr>}
+        {bl.items.map((r,i)=>(<tr key={r.id} className="rankrow" onClick={()=>onRow(r)}>
+          <td style={{position:"sticky",left:0,background:"inherit",fontWeight:600,whiteSpace:"nowrap"}}>
+            <span className="mono" style={{color:T.faint,fontSize:11,marginRight:8}}>{String(i+1).padStart(2,"0")}</span>{r.name}
+            {r.type&&<span className="eyebrow" style={{marginLeft:8,color:T.faint}}>{r.type}</span>}
+          </td>
+          {cols.map(c=>(<td key={c.key} style={{textAlign:c.align||"left"}}>{cellFor(c,r)}</td>))}
+        </tr>))}
+      </React.Fragment>))}
+      </tbody>
+    </table></div>
+  </div>;
+}
+const tierLabel=(g)=>{const s=SEG[Number(g)];return `${s.label} · ${s.range}`;};
+
+/* ---------- SDR (com Leads embutido) ---------- */
+function SDRView({onRow}){
+  const inb=SDRS.filter(s=>s.type==="Inbound"), out=SDRS.filter(s=>s.type==="Outbound");
+  const sf=(a,f)=>a.reduce((x,s)=>x+f(s),0);
+  const fte=[
+    {grp:"Outbound", fte:out.length, leads:sf(out,s=>s.leads), opps:sf(out,s=>s.opps)},
+    {grp:"Inbound", fte:inb.length, leads:sf(inb,s=>s.leads), opps:sf(inb,s=>s.opps)},
+    {grp:"Total", fte:SDRS.length, leads:AGG.leads, opps:AGG.opps},
+  ];
+  const kpis=[
+    ["Lead in", fmtN(AGG.leads), `${fmtN(sf(inb,s=>s.leads))} in · ${fmtN(sf(out,s=>s.leads))} out`],
+    ["Contact → Connected", `${pct(AGG.contacted/AGG.leads)} → ${pct(AGG.connected/AGG.contacted)}`, `${fmtN(AGG.connected)} conectados`],
+    ["Opp in", fmtN(AGG.opps), `${pct(AGG.opps/AGG.connected)} dos conectados`],
+    ["Opp / FTE", (AGG.opps/SDRS.length).toFixed(1), `${(AGG.leads/SDRS.length).toFixed(0)} lead/FTE · ${SDRS.length} FTEs`],
+  ];
+  return <div style={{display:"flex",flexDirection:"column",gap:16}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>{kpis.map(([l,v,s])=><KPI key={l} label={l} value={v} sub={s}/>)}</div>
+    <div className="panel" style={{padding:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:14,flexWrap:"wrap",gap:8}}>
+        <div className="eyebrow">Opps por nível de cliente · últimas 4 semanas</div>
+        <span style={{fontSize:11,color:T.faint}}>colunas p/ comparar semana a semana — a linha de momentum fica na Visão Geral</span>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:18}}>
+        {OPP_SEG_WK.map(s=><WeekTrend key={s.label} {...s}/>)}
+      </div>
+      <div style={{display:"flex",gap:16,marginTop:14,flexWrap:"wrap",fontSize:11,color:T.faint}}>
+        <span><span style={{display:"inline-block",width:10,height:10,background:T.seg2,borderRadius:2,marginRight:5,verticalAlign:"middle"}}/>semana mais recente</span>
+        <span><span style={{display:"inline-block",width:10,height:10,background:T.seg2,opacity:.5,borderRadius:2,marginRight:5,verticalAlign:"middle"}}/>semanas anteriores</span>
+        <span style={{letterSpacing:"-1px"}}>– – <span style={{letterSpacing:0}}>meta semanal do nível</span></span>
+      </div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+      <div className="panel" style={{padding:16}}>
+        <div className="eyebrow" style={{marginBottom:14}}>Opp in total · últimas 4 semanas</div>
+        <WeekTrend label="Total" range="" color={T.brand} prior={OPP_WK.prior} fullCur={OPP_WK.fullCur} metaWk={OPP_WK.metaWk}/>
+      </div>
+      <div className="panel" style={{padding:16}}>
+        <div className="eyebrow" style={{marginBottom:12}}>Produtividade por FTE</div>
+        <table>
+          <thead><tr><th>Motor</th><th style={{textAlign:"right"}}>FTEs</th><th style={{textAlign:"right"}}>Lead / FTE</th><th style={{textAlign:"right"}}>Opp / FTE</th></tr></thead>
+          <tbody>
+            {fte.map(f=>(<tr key={f.grp} style={f.grp==="Total"?{background:T.brandSoft}:{}}>
+              <td style={{fontWeight:f.grp==="Total"?700:600}}>{f.grp}</td>
+              <td className="mono" style={{textAlign:"right"}}>{f.fte}</td>
+              <td className="mono" style={{textAlign:"right",fontWeight:600}}>{(f.leads/f.fte).toFixed(0)}</td>
+              <td className="mono" style={{textAlign:"right",fontWeight:600}}>{(f.opps/f.fte).toFixed(1)}</td>
+            </tr>))}
+          </tbody>
+        </table>
+        <div style={{fontSize:11,color:T.faint,marginTop:12,lineHeight:1.4}}>Inbound processa muito mais lead por cabeça; outbound gera opp a partir de menos volume. Produtividade só é comparável dentro do mesmo motor.</div>
+      </div>
+    </div>
+    <Ranking title="SDR · funil de entrada + opp por nível" onRow={onRow} sortKey="opps" rows={SDRS}
+      groupBy={(r)=>r.type} groupOrder={["Outbound","Inbound"]} groupLabel={(g)=>g} cols={[
+      {key:"leads",label:"Lead in",bar:true, agg:(it)=>st(fmtN(sum(it,r=>r.leads)))},
+      {key:"contactRate",label:"Contact",align:"right",render:(r)=><span className="mono">{pct(r.contactRate)}</span>, agg:(it)=>st(pct(sum(it,r=>r.contacted)/sum(it,r=>r.leads)))},
+      {key:"connRate",label:"Connected",align:"right",render:(r)=><span className="mono" style={{color:r.connRate<0.42?T.warn:T.text}}>{pct(r.connRate)}</span>, agg:(it)=>st(pct(sum(it,r=>r.connected)/sum(it,r=>r.contacted)))},
+      {key:"opps",label:"Opp in",bar:true,color:T.seg2, agg:(it)=>st(fmtN(sum(it,r=>r.opps)))},
+      {key:"oppSeg",label:"Opp por nível",sortable:false,align:"left",render:(r)=>{const t=r.opps||1;return <div style={{display:"flex",height:16,width:120,borderRadius:5,overflow:"hidden"}}><div style={{width:`${r.oppSeg[0]/t*100}%`,background:T.seg1}} title={`N2/N3: ${r.oppSeg[0]}`}/><div style={{width:`${r.oppSeg[1]/t*100}%`,background:T.seg2}} title={`N4/N5: ${r.oppSeg[1]}`}/><div style={{width:`${r.oppSeg[2]/t*100}%`,background:T.seg3}} title={`N6+: ${r.oppSeg[2]}`}/></div>;}, agg:(it)=>miniStack([[sum(it,r=>r.oppSeg[0]),T.seg1],[sum(it,r=>r.oppSeg[1]),T.seg2],[sum(it,r=>r.oppSeg[2]),T.seg3]])},
+      {key:"mtdOpps",label:"Opp MTD vs meta",align:"left",render:(r)=><div style={{minWidth:110}}><Pacing mtd={r.mtdOpps} budget={r.target}/></div>, agg:(it)=>{const v=sum(it,r=>r.mtdOpps)/(sum(it,r=>r.target)*DAYFRAC);return st(pct(v),v>=1?T.good:v>=0.85?T.warn:T.bad);}},
+    ]}/>
+  </div>;
+}
+
+/* ---------- Closers (contagem + nível de cliente) ---------- */
+function ClosersView({onRow}){
+  const scatter=CLOSERS.map(c=>({x:c.pipeOpps,y:c.winRate*100,z:c.cw,name:c.name,color:c.winRate<0.22?T.bad:c.coverage<2.2?T.warn:T.good}));
+  const kpis=[
+    ["Opp in", fmtN(AGG.opps), "entrada no closer"],
+    ["Opp → SQL", pct(AGG.sql/AGG.opps), `${fmtN(AGG.sql)} SQL`],
+    ["Win rate (#)", pct(AGG.cw/AGG.sql), `${fmtN(AGG.cw)} CW`],
+    ["CW in · MTD", fmtN(AGG.mtdCW), `meta ${fmtN(AGG.cwTarget)} · fcast ${fmtN(Math.round(AGG.mtdCW/DAYFRAC))}`],
+  ];
+  return <div style={{display:"flex",flexDirection:"column",gap:16}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>{kpis.map(([l,v,s])=><KPI key={l} label={l} value={v} sub={s}/>)}</div>
+    <WeekMultiples title="CW por squad · últimas 4 semanas" note="colunas p/ comparar semana a semana — momentum na Visão Geral" series={CW_WK}/>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+      <div className="panel" style={{padding:16}}>
+        <div className="eyebrow" style={{marginBottom:14}}>CW total · últimas 4 semanas</div>
+        <WeekTrend label="Total" range="" color={T.brand} prior={CW_WK_T.prior} fullCur={CW_WK_T.fullCur} metaWk={CW_WK_T.metaWk}/>
+      </div>
+      <div className="panel" style={{padding:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+          <div className="eyebrow">Pipe (opps abertas) × win rate · bolha = CW</div>
+          <div style={{display:"flex",gap:8}}><Pill color={T.good}>ok</Pill><Pill color={T.warn}>cobertura</Pill><Pill color={T.bad}>win baixa</Pill></div>
+        </div>
+        <ResponsiveContainer width="100%" height={210}>
+          <ScatterChart margin={{top:10,right:16,left:-6,bottom:6}}>
+            <CartesianGrid stroke={T.hair}/>
+            <XAxis type="number" dataKey="x" name="Pipe" tick={{fontSize:11,fill:T.muted}} axisLine={false} tickLine={false} label={{value:"opps abertas (#)",position:"insideBottom",offset:-2,fontSize:10,fill:T.faint}}/>
+            <YAxis type="number" dataKey="y" name="Win%" unit="%" tick={{fontSize:11,fill:T.muted}} axisLine={false} tickLine={false}/>
+            <ZAxis type="number" dataKey="z" range={[60,420]}/>
+            <ReferenceLine y={22} stroke={T.bad} strokeDasharray="4 3"/>
+            <Tooltip cursor={{strokeDasharray:"3 3"}} contentStyle={{fontSize:12,borderRadius:8,border:`1px solid ${T.hair}`}} formatter={(v,n)=>[Math.round(v),n]} labelFormatter={()=>""}/>
+            <Scatter data={scatter}>{scatter.map((d,i)=><Cell key={i} fill={d.color} fillOpacity={0.78}/>)}</Scatter>
+          </ScatterChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+    <Ranking title="Closers · entrada, conversão, CW por nível e carteira" onRow={onRow} sortKey="mtdCW" rows={CLOSERS}
+      groupBy={(r)=>r.tier} groupOrder={[0,1,2]} groupLabel={tierLabel} cols={[
+      {key:"oppsIn",label:"Opp in", agg:(it)=>st(fmtN(sum(it,r=>r.oppsIn)))},
+      {key:"sqlRate",label:"Opp→SQL",align:"right",render:(r)=><span className="mono">{pct(r.sqlRate)}</span>, agg:(it)=>st(pct(sum(it,r=>r.sql)/sum(it,r=>r.oppsIn)))},
+      {key:"winRate",label:"Win rate",align:"right",render:(r)=><span className="mono" style={{color:r.winRate<0.22?T.bad:T.text}}>{pct(r.winRate)}</span>, agg:(it)=>{const v=sum(it,r=>r.cw)/sum(it,r=>r.sql);return st(pct(v),v<0.22?T.bad:T.text);}},
+      {key:"cw",label:"CW in",bar:true,color:T.seg2, agg:(it)=>st(fmtN(sum(it,r=>r.cw)))},
+      {key:"cwSeg",label:"CW por nível",sortable:false,align:"left",render:(r)=>{const t=r.cw||1;return <div style={{display:"flex",height:16,width:120,borderRadius:5,overflow:"hidden"}}><div style={{width:`${r.cwSeg[0]/t*100}%`,background:T.seg1}} title={`N2/N3: ${r.cwSeg[0]}`}/><div style={{width:`${r.cwSeg[1]/t*100}%`,background:T.seg2}} title={`N4/N5: ${r.cwSeg[1]}`}/><div style={{width:`${r.cwSeg[2]/t*100}%`,background:T.seg3}} title={`N6+: ${r.cwSeg[2]}`}/></div>;}, agg:(it)=>miniStack([[sum(it,r=>r.cwSeg[0]),T.seg1],[sum(it,r=>r.cwSeg[1]),T.seg2],[sum(it,r=>r.cwSeg[2]),T.seg3]])},
+      {key:"cwTarget",label:"vs meta CW",align:"left",render:(r)=><div style={{minWidth:110}}><Pacing mtd={r.mtdCW} budget={r.cwTarget}/></div>, agg:(it)=>{const v=sum(it,r=>r.mtdCW)/(sum(it,r=>r.cwTarget)*DAYFRAC);return st(pct(v),v>=1?T.good:v>=0.85?T.warn:T.bad);}},
+      {key:"aging",label:"Aging",align:"right",render:(r)=><Pill color={r.aging>32?T.bad:r.aging>20?T.warn:T.good}>{r.aging}d</Pill>, agg:(it)=>st(`${(sum(it,r=>r.aging)/it.length).toFixed(0)}d`)},
+      {key:"coverage",label:"Cobertura",align:"right",render:(r)=><span className="mono" style={{color:r.coverage<2.2?T.warn:T.good}}>{r.coverage.toFixed(1)}x</span>, agg:(it)=>{const v=sum(it,r=>r.pipeOpps)/Math.max(1,sum(it,r=>r.cwTarget)-sum(it,r=>r.mtdCW));return st(`${v.toFixed(1)}x`,v<2.2?T.warn:T.good);}},
+    ]}/>
+  </div>;
+}
+
+/* ---------- Onboarding (Net Revenue + GMV vivem aqui) ---------- */
+function OnboardingView({onRow}){
+  const tot=ONBS.reduce((a,o)=>({on:a.on+o.ontrack,ca:a.ca+o.carrinho,at:a.at+o.atrasado,cw:a.cw+o.cwIn}),{on:0,ca:0,at:0,cw:0});
+  const cart=tot.on+tot.ca+tot.at;
+  const gap=AGG.netRevForecast-AGG.onbBudget;
+  const kpis=[
+    ["Net Revenue · MTD", fmtBRL(AGG.netRevMTD), `proj ${fmtBRL(AGG.netRevForecast)}`, undefined, <Pacing mtd={AGG.netRevMTD} budget={AGG.onbBudget}/>],
+    ["GMV · MTD", fmtBRL(AGG.gmvMTD), `proj ${fmtBRL(AGG.gmvForecast)}`],
+    ["CW in / Ativação", `${fmtN(tot.cw)} / ${pct(tot.on/cart)}`, `${tot.on} de ${cart} contas`],
+    ["Em risco", fmtN(tot.at), "contas atrasadas", T.bad],
+  ];
+  return <div style={{display:"flex",flexDirection:"column",gap:16}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+      {kpis.map(([l,v,s,acc,foot])=><KPI key={l} label={l} value={v} sub={s} accent={acc} foot={foot}/>)}
+    </div>
+    <WeekMultiples title="Ativações (10k GMV) por squad · últimas 4 semanas" note="preditor mais direto de quando o Net Revenue realiza" series={ACT_WK}/>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+      <div className="panel" style={{padding:16}}>
+        <div className="eyebrow" style={{marginBottom:14}}>Ativações total · últimas 4 semanas</div>
+        <WeekTrend label="Total" range="" color={T.good} prior={ACT_WK_T.prior} fullCur={ACT_WK_T.fullCur} metaWk={ACT_WK_T.metaWk}/>
+      </div>
+      <div className="panel" style={{padding:16}}>
+        <div className="eyebrow" style={{marginBottom:14}}>Net Revenue total · últimas 4 semanas</div>
+        <WeekTrend label="Total" range="" color={T.brand} prior={NR_WK.prior} fullCur={NR_WK.fullCur} metaWk={NR_WK.metaWk} fmt={fmtBRL}/>
+      </div>
+    </div>
+    <Ranking title="Onboarding · Net Revenue, GMV, ativação e saúde" onRow={onRow} sortKey="netRevMTD" rows={ONBS}
+      groupBy={(r)=>r.tier} groupOrder={[0,1,2]} groupLabel={tierLabel} cols={[
+      {key:"cwIn",label:"CW in", agg:(it)=>st(fmtN(sum(it,r=>r.cwIn)))},
+      {key:"carteira",label:"Carteira", agg:(it)=>st(fmtN(sum(it,r=>r.carteira)))},
+      {key:"netRevMTD",label:"Net Rev MTD",align:"right",render:(r)=><span className="mono">{fmtBRL(r.netRevMTD)}</span>, agg:(it)=>st(fmtBRL(sum(it,r=>r.netRevMTD)))},
+      {key:"budget",label:"vs Budget",align:"left",render:(r)=><div style={{minWidth:110}}><Pacing mtd={r.netRevMTD} budget={r.budget}/></div>, agg:(it)=>{const v=sum(it,r=>r.netRevMTD)/(sum(it,r=>r.budget)*DAYFRAC);return st(pct(v),v>=1?T.good:v>=0.85?T.warn:T.bad);}},
+      {key:"gmvMTD",label:"GMV MTD",align:"right",render:(r)=><span className="mono">{fmtBRL(r.gmvMTD)}</span>, agg:(it)=>st(fmtBRL(sum(it,r=>r.gmvMTD)))},
+      {key:"activated",label:"Ativados 10k",bar:true,color:T.good, agg:(it)=>st(fmtN(sum(it,r=>r.activated)))},
+      {key:"health",label:"Saúde",sortable:false,align:"left",render:(r)=>{const t=r.ontrack+r.carrinho+r.atrasado||1;return <div style={{display:"flex",height:16,width:120,borderRadius:5,overflow:"hidden"}}><div style={{width:`${r.ontrack/t*100}%`,background:T.good}}/><div style={{width:`${r.carrinho/t*100}%`,background:T.warn}}/><div style={{width:`${r.atrasado/t*100}%`,background:T.bad}}/></div>;}, agg:(it)=>miniStack([[sum(it,r=>r.ontrack),T.good],[sum(it,r=>r.carrinho),T.warn],[sum(it,r=>r.atrasado),T.bad]])},
+      {key:"ttv",label:"T-to-10k",align:"right",render:(r)=><span className="mono">{r.ttv.toFixed(0)}d</span>, agg:(it)=>st(`${(sum(it,r=>r.ttv)/it.length).toFixed(0)}d`)},
+    ]}/>
+  </div>;
+}
+
+/* ---------- Drawer ---------- */
+function drawerRows(person,kind){
+  if(kind==="sdr")return [["Tipo",person.type],["Lead in",fmtN(person.leads)],["Contact rate",pct(person.contactRate)],["Connected rate",pct(person.connRate)],["Opp in",fmtN(person.opps)],["Opp N2/N3 · N4/N5 · N6+",`${person.oppSeg[0]} · ${person.oppSeg[1]} · ${person.oppSeg[2]}`],["Opp in MTD / meta btd",`${person.mtdOpps} / ${Math.round(person.target*DAYFRAC)}`]];
+  if(kind==="closer")return [["Squad (nível)",tierLabel(person.tier)],["Opp in",fmtN(person.oppsIn)],["Opp → SQL",pct(person.sqlRate)],["SQL",fmtN(person.sql)],["Win rate",pct(person.winRate)],["CW in",fmtN(person.cw)],["CW N2/N3 · N4/N5 · N6+",`${person.cwSeg[0]} · ${person.cwSeg[1]} · ${person.cwSeg[2]}`],["CW MTD / meta",`${person.mtdCW} / ${person.cwTarget}`],["Pipe (opps abertas)",fmtN(person.pipeOpps)],["Cobertura",`${person.coverage.toFixed(1)}x`],["Aging opp",`${person.aging}d`]];
+  return [["Squad (nível)",tierLabel(person.tier)],["CW in",fmtN(person.cwIn)],["Carteira",fmtN(person.carteira)],["Net Revenue MTD",fmtBRL(person.netRevMTD)],["Net Rev projetado",fmtBRL(person.netRevForecast)],["Budget net rev",fmtBRL(person.budget)],["GMV MTD",fmtBRL(person.gmvMTD)],["Ativados (10k)",fmtN(person.activated)],["Taxa de ativação",pct(person.actRate)],["Ontrack · Carrinho · Atrasado",`${person.ontrack} · ${person.carrinho} · ${person.atrasado}`],["Time-to-10k",`${person.ttv.toFixed(0)}d`]];
+}
+function coaching(person,kind){
+  const d=[],m=[];let acao="";
+  if(kind==="sdr"){
+    if(person.connRate>=0.48)d.push(`Conexão forte (${pct(person.connRate)})`);
+    if(person.mtdOpps>=person.target*DAYFRAC)d.push("No ritmo de opps do mês");
+    if(person.contactRate>=0.66)d.push(`Boa cobertura de contatos (${pct(person.contactRate)})`);
+    if(person.connRate<0.42)m.push(`Connected rate baixo (${pct(person.connRate)}) — lista/abordagem`);
+    if(person.mtdOpps<person.target*DAYFRAC)m.push(`Pacing de opps abaixo (${person.mtdOpps} vs ${Math.round(person.target*DAYFRAC)} btd)`);
+    if(person.contactRate<0.55)m.push(`Cobertura de contatos baixa (${pct(person.contactRate)})`);
+    acao=person.connRate<0.42?"Revisar 20 contas da lista e o roteiro de abordagem antes de pedir mais volume.":person.mtdOpps<person.target*DAYFRAC?"Blocar 2h/dia de prospecção ativa para recuperar o pacing de opps.":"Manter cadência e priorizar contas N4/N5 na geração de opps.";
+  } else if(kind==="closer"){
+    if(person.winRate>=0.3)d.push(`Win rate forte (${pct(person.winRate)})`);
+    if(person.coverage>=3)d.push(`Cobertura saudável (${person.coverage.toFixed(1)}x)`);
+    if(person.aging<=20)d.push("Pipe sem envelhecimento");
+    if(person.winRate<0.22)m.push(`Win rate abaixo do piso (${pct(person.winRate)})`);
+    if(person.coverage<2.2)m.push(`Cobertura fraca (${person.coverage.toFixed(1)}x)`);
+    if(person.aging>32)m.push(`Opp envelhecendo (${person.aging}d)`);
+    acao=person.winRate<0.22?"Revisar os 3 deals mais quentes e o critério de SQL aceito com o gestor.":person.aging>32?"Forçar avanço ou descarte das opps acima de 32 dias nesta semana.":person.coverage<2.2?"Priorizar geração — cobertura abaixo de 2,2x compromete o mês seguinte.":"Puxar 1 deal N4/N5–N6+ para subir o ticket médio.";
+  } else {
+    if(person.actRate>=0.55)d.push(`Ativação alta (${pct(person.actRate)})`);
+    if(person.atrasado<=2)d.push("Carteira sem atrasos relevantes");
+    if(person.ttv<=15)d.push(`Time-to-10k rápido (${person.ttv.toFixed(0)}d)`);
+    if(person.actRate<0.45)m.push(`Ativação baixa (${pct(person.actRate)})`);
+    if(person.atrasado>=6)m.push(`${person.atrasado} contas atrasadas`);
+    if(person.carrinho>=10)m.push(`${person.carrinho} carrinhos abertos travados <10k`);
+    acao=person.atrasado>=6?"Montar plano de resgate das contas atrasadas antes que virem churn.":person.carrinho>=10?"Empurrar os carrinhos abertos para cruzar 10k GMV nesta semana.":person.actRate<0.45?"Revisar o onboarding das contas paradas com o gestor.":"Documentar o playbook e replicar com os pares do squad.";
+  }
+  if(!d.length)d.push("Desempenho dentro do esperado no período.");
+  if(!m.length)m.push("Sem gargalo relevante nesta semana.");
+  return {destaques:d,melhorar:m,acao};
+}
+
+function PersonDrawer({person,kind,onClose}){
+  if(!person)return null;
+  const rows=drawerRows(person,kind);
+  const co=coaching(person,kind);
+  const label=kind==="sdr"?"SDR":kind==="closer"?"Closer":"Onboarder";
+  return <><div className="scrim" onClick={onClose}/><div className="drawer">
+    <div style={{padding:"20px 22px",borderBottom:`1px solid ${T.hair}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+      <div><div className="eyebrow" style={{color:T.brand}}>{label} · {person.id}</div><div className="disp" style={{fontSize:24,fontWeight:700,marginTop:4}}>{person.name}</div></div>
+      <button onClick={onClose} style={{border:"none",background:T.paper,borderRadius:8,width:32,height:32,cursor:"pointer",fontSize:16,color:T.muted}}>✕</button>
+    </div>
+    <div style={{padding:22}}>
+      {rows.map(([k,v],i)=>(<div key={i} style={{display:"flex",justifyContent:"space-between",padding:"11px 0",borderBottom:`1px solid ${T.hair}`}}><span style={{fontSize:13,color:T.muted}}>{k}</span><span className="mono" style={{fontSize:13.5,fontWeight:600}}>{v}</span></div>))}
+      <div style={{marginTop:16,padding:14,background:T.brandSoft,borderRadius:10}}>
+        <div className="eyebrow" style={{color:T.brand,marginBottom:6}}>Ação da semana</div>
+        <div style={{fontSize:12.5,color:T.text,lineHeight:1.5}}>{co.acao}</div>
+      </div>
+    </div>
+  </div></>;
+}
+
+/* ===== Reunião Mensal (mês fechado) ===== */
+const attColor=(r)=>r>=1?T.good:r>=0.9?T.warn:T.bad;
+function MonthlyView(){
+  const nrAtt=CLOSED.netRev.act/CLOSED.netRev.bud, nrMoM=(CLOSED.netRev.act-CLOSED.netRev.prev)/CLOSED.netRev.prev;
+  const gmvMoM=(CLOSED.gmv.act-CLOSED.gmv.prev)/CLOSED.gmv.prev;
+  const cwAtt=CLOSED.cw.act/CLOSED.cw.bud, oppAtt=CLOSED.opp.act/CLOSED.opp.bud;
+  const max=Math.max(...NR_3M.map(x=>x.v))*1.28;
+  return <div style={{display:"flex",flexDirection:"column",gap:16}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+      <KPI label={`Net Revenue · ${CLOSED.month} (fechado)`} value={fmtBRL(CLOSED.netRev.act)} accent={attColor(nrAtt)} sub={`de ${fmtBRL(CLOSED.netRev.bud)} budget · ${pct(nrAtt)}`} foot={<span className="mono" style={{fontSize:12.5,fontWeight:600,color:nrMoM>=0?T.good:T.bad}}>{nrMoM>=0?"▲":"▼"} {Math.abs(nrMoM*100).toFixed(0)}% MoM</span>}/>
+      <KPI label="GMV · fechado" value={fmtBRL(CLOSED.gmv.act)} sub={`vs ${CLOSED.prevM}`} foot={<span className="mono" style={{fontSize:12.5,fontWeight:600,color:gmvMoM>=0?T.good:T.bad}}>{gmvMoM>=0?"▲":"▼"} {Math.abs(gmvMoM*100).toFixed(0)}% MoM</span>}/>
+      <KPI label="CW · fechado" value={fmtN(CLOSED.cw.act)} accent={attColor(cwAtt)} sub={`meta ${fmtN(CLOSED.cw.bud)} · ${pct(cwAtt)}`}/>
+      <KPI label="Opp · fechado" value={fmtN(CLOSED.opp.act)} accent={attColor(oppAtt)} sub={`meta ${fmtN(CLOSED.opp.bud)} · ${pct(oppAtt)}`}/>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1.3fr 1fr",gap:16}}>
+      <div className="panel" style={{padding:16}}>
+        <div className="eyebrow" style={{marginBottom:14}}>Net Revenue · 3 meses fechados</div>
+        <div style={{display:"flex",alignItems:"flex-end",gap:18,height:130,borderBottom:`1px solid ${T.hair}`}}>
+          {NR_3M.map((x,i)=><div key={x.m} style={{flex:1,height:130,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
+            <div className="mono" style={{fontSize:11.5,fontWeight:i===2?700:600,textAlign:"center",marginBottom:4,color:i===2?T.text:T.muted}}>{fmtBRL(x.v)}</div>
+            <div style={{height:x.v/max*130,background:T.brand,opacity:i===2?1:.5,borderRadius:"5px 5px 0 0"}}/>
+          </div>)}
+        </div>
+        <div style={{display:"flex",gap:18,marginTop:5}}>{NR_3M.map((x,i)=><div key={x.m} style={{flex:1,textAlign:"center",fontSize:10.5,color:i===2?T.text:T.faint,fontWeight:i===2?700:500}}>{x.m}</div>)}</div>
+      </div>
+      <div className="panel" style={{padding:16}}>
+        <div className="eyebrow" style={{marginBottom:10}}>Leitura do mês</div>
+        <div style={{fontSize:12.5,color:T.text,lineHeight:1.55}}>
+          O mês fechou em <b>{pct(nrAtt)}</b> do budget de Net Revenue ({nrMoM>=0?"+":""}{(nrMoM*100).toFixed(0)}% vs {CLOSED.prevM}). CW a <b>{pct(cwAtt)}</b> e Opp a <b>{pct(oppAtt)}</b> da meta — a análise de gap deve começar pelo nível de cliente abaixo, onde o atingimento está concentrado.
+        </div>
+      </div>
+    </div>
+    <div className="panel" style={{overflow:"hidden"}}>
+      <div style={{padding:"13px 16px",borderBottom:`1px solid ${T.hair}`}}><div className="eyebrow">Fechamento por nível de cliente · realizado vs meta</div></div>
+      <div style={{overflowX:"auto"}}><table>
+        <thead><tr><th>Nível</th><th style={{textAlign:"right"}}>Net Rev real</th><th style={{textAlign:"right"}}>Net Rev meta</th><th style={{textAlign:"right"}}>Ating.</th><th style={{textAlign:"right"}}>CW real</th><th style={{textAlign:"right"}}>CW meta</th><th style={{textAlign:"right"}}>Ating.</th></tr></thead>
+        <tbody>
+          {CLOSED.bySeg.map(s=>{const na=s.nrAct/s.nrBud,ca=s.cwAct/s.cwBud;return <tr key={s.label}>
+            <td style={{fontWeight:600,whiteSpace:"nowrap"}}><span style={{display:"inline-block",width:9,height:9,borderRadius:2,background:s.color,marginRight:7}}/>{s.label} <span style={{color:T.faint,fontSize:11,fontWeight:500}}>· {s.range}</span></td>
+            <td className="mono" style={{textAlign:"right"}}>{fmtBRL(s.nrAct)}</td>
+            <td className="mono" style={{textAlign:"right",color:T.muted}}>{fmtBRL(s.nrBud)}</td>
+            <td className="mono" style={{textAlign:"right",fontWeight:700,color:attColor(na)}}>{pct(na)}</td>
+            <td className="mono" style={{textAlign:"right"}}>{fmtN(s.cwAct)}</td>
+            <td className="mono" style={{textAlign:"right",color:T.muted}}>{fmtN(s.cwBud)}</td>
+            <td className="mono" style={{textAlign:"right",fontWeight:700,color:attColor(ca)}}>{pct(ca)}</td>
+          </tr>;})}
+        </tbody>
+      </table></div>
+    </div>
+  </div>;
+}
+
+/* ===== Reunião 1:1 (por funcionário) ===== */
+const stat=(label,val,color)=><div style={{textAlign:"right"}}><div className="eyebrow" style={{color:T.faint}}>{label}</div><div className="mono" style={{fontSize:19,fontWeight:700,color:color||T.text,marginTop:2}}>{val}</div></div>;
+function coachBox(title,items,color){return <div className="panel" style={{padding:16,borderTop:`3px solid ${color}`}}>
+  <div className="eyebrow" style={{color,marginBottom:10}}>{title}</div>
+  <ul style={{margin:0,paddingLeft:16,display:"flex",flexDirection:"column",gap:7}}>
+    {items.map((t,i)=><li key={i} style={{fontSize:12.5,color:T.text,lineHeight:1.4}}>{t}</li>)}
+  </ul>
+</div>;}
+function OneOnOneCard({person,kind}){
+  const cfg = kind==="sdr"
+    ? {area:"SDR",squad:person.type,metric:"Opps / semana",base:person.opps/4,meta:person.target/4,color:T.seg2,peers:SDRS.filter(s=>s.type===person.type).map(s=>s.opps),mine:person.opps}
+    : kind==="closer"
+    ? {area:"Closers",squad:tierLabel(person.tier),metric:"CW / semana",base:person.cw/4,meta:person.cwTarget/4,color:T.seg2,peers:CLOSERS.filter(c=>c.tier===person.tier).map(c=>c.cw),mine:person.cw}
+    : {area:"Onboarding",squad:tierLabel(person.tier),metric:"Ativações / semana",base:person.activated/4,meta:person.targetAct/4,color:T.good,peers:ONBS.filter(o=>o.tier===person.tier).map(o=>o.activated),mine:person.activated};
+  const wk=seededWeeks(cfg.base,person.id), med=median(cfg.peers), vsMed=med?(cfg.mine-med)/med:0;
+  const rows=drawerRows(person,kind), co=coaching(person,kind);
+  return <div style={{display:"flex",flexDirection:"column",gap:16}}>
+    <div className="panel" style={{padding:"18px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:14}}>
+      <div>
+        <div className="eyebrow" style={{color:T.brand}}>{cfg.area} · {cfg.squad} · {person.id}</div>
+        <div className="disp" style={{fontSize:25,fontWeight:800,marginTop:2}}>{person.name}</div>
+      </div>
+      <div style={{display:"flex",gap:26}}>
+        {stat("Resultado (mês)",fmtN(cfg.mine))}
+        {stat("Mediana do squad",fmtN(Math.round(med)))}
+        {stat("vs mediana",`${vsMed>=0?"+":""}${(vsMed*100).toFixed(0)}%`,vsMed>=0?T.good:T.bad)}
+      </div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+      <div className="panel" style={{padding:16}}>
+        <div className="eyebrow" style={{marginBottom:14}}>{cfg.metric} · últimas 4 semanas</div>
+        <WeekTrend label={person.name.split(" ")[0]} range="" color={cfg.color} prior={wk.prior} fullCur={wk.fullCur} metaWk={Math.round(cfg.meta)}/>
+        <div style={{fontSize:11,color:T.faint,marginTop:10}}>Linha tracejada = meta semanal individual.</div>
+      </div>
+      <div className="panel" style={{padding:16}}>
+        <div className="eyebrow" style={{marginBottom:8}}>Indicadores da semana</div>
+        {rows.map(([k,v],i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:i<rows.length-1?`1px solid ${T.hair}`:"none"}}><span style={{fontSize:12.5,color:T.muted}}>{k}</span><span className="mono" style={{fontSize:12.5,fontWeight:600}}>{v}</span></div>)}
+      </div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
+      {coachBox("Destaques",co.destaques,T.good)}
+      {coachBox("A melhorar",co.melhorar,T.warn)}
+      {coachBox("Ação da semana",[co.acao],T.brand)}
+    </div>
+  </div>;
+}
+function Reuniao1a1(){
+  const all=[...SDRS.map(p=>({p,kind:"sdr",area:"SDR"})),...CLOSERS.map(p=>({p,kind:"closer",area:"Closers"})),...ONBS.map(p=>({p,kind:"onb",area:"Onboarding"}))];
+  const [selId,setSel]=useState(all[0].p.id);
+  const [q,setQ]=useState("");
+  const sel=all.find(x=>x.p.id===selId)||all[0];
+  const filtered=all.filter(x=>x.p.name.toLowerCase().includes(q.toLowerCase())||x.area.toLowerCase().includes(q.toLowerCase()));
+  return <div style={{display:"grid",gridTemplateColumns:"250px 1fr",gap:16,alignItems:"start"}}>
+    <div className="panel" style={{padding:12,maxHeight:"80vh",overflowY:"auto",position:"sticky",top:90}}>
+      <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar pessoa…" style={{width:"100%",border:`1px solid ${T.hair}`,borderRadius:8,padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none",marginBottom:6}}/>
+      {["SDR","Closers","Onboarding"].map(area=>{const grp=filtered.filter(x=>x.area===area);if(!grp.length)return null;
+        return <div key={area}><div className="eyebrow" style={{margin:"10px 4px 4px"}}>{area} · {grp.length}</div>
+          {grp.map(x=><div key={x.p.id} onClick={()=>setSel(x.p.id)} style={{padding:"7px 9px",borderRadius:7,cursor:"pointer",fontSize:13,fontWeight:selId===x.p.id?700:500,background:selId===x.p.id?T.brandSoft:"transparent",color:selId===x.p.id?T.brand:T.text}}>{x.p.name}</div>)}
+        </div>;})}
+    </div>
+    <OneOnOneCard person={sel.p} kind={sel.kind}/>
+  </div>;
+}
+
+const MEETINGS=[
+  {k:"mensal",label:"Mensal Sales"},
+  {k:"wsales",label:"Semanal Sales"},
+  {k:"warea",label:"Semanal Área"},
+  {k:"oneone",label:"1:1 Gestor"},
+];
+const AREA_TABS=[{k:"sdr",label:"SDR"},{k:"closers",label:"Closers"},{k:"onboarding",label:"Onboarding"}];
+const CTX={mensal:`Mês fechado · ${CLOSED.month}`,wsales:"Semana · estoque do funil + produtividade por N",warea:"Semana · detalhe por FTE",oneone:"Semana · 1:1 gestor ↔ funcionário"};
+
+function App(){
+  const [meeting,setMeeting]=useState("wsales");
+  const [area,setArea]=useState("sdr");
+  const [drawer,setDrawer]=useState(null);
+  const openArea=(a)=>{setMeeting("warea");setArea(a);};
+  return <div className="ck"><style>{CSS}</style>
+    <div className="cmdbar" style={{padding:"14px 26px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:20,flexWrap:"wrap",position:"sticky",top:0,zIndex:30}}>
+      <div style={{display:"flex",alignItems:"center",gap:22,flexWrap:"wrap"}}>
+        <div>
+          <div className="disp" style={{fontSize:17,fontWeight:800,color:"#fff"}}>NEW BUSINESS <span style={{color:T.brand}}>·</span> COCKPIT</div>
+          <div className="mono" style={{fontSize:10.5,color:"#8595A0",marginTop:1}}>{CTX[meeting]}</div>
+        </div>
+        <div style={{display:"flex",gap:4}}>{MEETINGS.map(t=>(<div key={t.k} className={`tab ${meeting===t.k?"on":""}`} onClick={()=>setMeeting(t.k)}>{t.label}</div>))}</div>
+      </div>
+      {meeting==="warea"&&<div style={{display:"flex",gap:2,background:"#1E2A36",padding:3,borderRadius:9}}>
+        {AREA_TABS.map(a=>(<div key={a.k} onClick={()=>setArea(a.k)} style={{padding:"6px 13px",borderRadius:7,fontSize:12.5,fontWeight:600,cursor:"pointer",color:area===a.k?"#fff":"#8595A0",background:area===a.k?T.brand:"transparent"}}>{a.label}</div>))}
+      </div>}
+    </div>
+    <div style={{padding:"22px 26px 60px",maxWidth:1320,margin:"0 auto"}}>
+      {meeting==="mensal"&&<MonthlyView/>}
+      {meeting==="wsales"&&<Overview onStage={openArea}/>}
+      {meeting==="warea"&&<>
+        {area==="sdr"&&<SDRView onRow={(p)=>setDrawer({person:p,kind:"sdr"})}/>}
+        {area==="closers"&&<ClosersView onRow={(p)=>setDrawer({person:p,kind:"closer"})}/>}
+        {area==="onboarding"&&<OnboardingView onRow={(p)=>setDrawer({person:p,kind:"onb"})}/>}
+      </>}
+      {meeting==="oneone"&&<Reuniao1a1/>}
+      <div className="mono" style={{marginTop:28,textAlign:"center",fontSize:11,color:T.faint}}>Dados sintéticos · placeholders para validar estrutura. Plugar via CSV/BI no passo seguinte.</div>
+    </div>
+    {drawer&&<PersonDrawer person={drawer.person} kind={drawer.kind} onClose={()=>setDrawer(null)}/>}
+  </div>;
+}
+
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+<script>
+const src = document.getElementById("app-source").textContent;
+const { code } = Babel.transform(src, { presets: [["react", { runtime: "classic" }]] });
+const s = document.createElement("script");
+s.textContent = code;
+document.body.appendChild(s);
+</script>
+</body>
+</html>

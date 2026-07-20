@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>New Business · Cockpit (nossa v0)</title>
+<style>
+  :root{
+    --paper:#EBEEF1; --panel:#FFFFFF; --ink:#0E1620; --text:#141C25;
+    --muted:#67727E; --faint:#98A2AD; --hair:#E1E6EB;
+    --brand:#0C6E6E; --brandSoft:#E3F1F0;
+    --good:#1E9C6B; --warn:#D08A0A; --bad:#D24436;
+    --seg1:#9CC9C6; --seg2:#3E9A96; --seg3:#0B5150;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'IBM Plex Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    color:var(--text);background:var(--paper);-webkit-font-smoothing:antialiased}
+  .mono{font-variant-numeric:tabular-nums;font-family:'IBM Plex Mono',ui-monospace,Consolas,monospace}
+  .cmdbar{background:var(--ink);color:#EAF0F2;padding:14px 22px;position:sticky;top:0;z-index:20;
+    display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+  .cmdbar h1{font-size:16px;margin:0;font-weight:800;letter-spacing:.02em}
+  .cmdbar h1 .dot{color:var(--brand)}
+  .cmdbar .sub{font-size:10.5px;color:#8595A0;margin-top:2px}
+  .grow{flex:1}
+  .cmdbar input{background:#0d1218;border:1px solid #2a3743;color:#e6edf2;border-radius:8px;
+    padding:8px 11px;font-size:12.5px;min-width:260px;flex:1 1 300px}
+  .cmdbar button{background:var(--brand);border:none;color:#eafbfa;font-weight:700;border-radius:8px;
+    padding:8px 16px;font-size:12.5px;cursor:pointer}
+  .cmdbar button:disabled{opacity:.5;cursor:default}
+  .status{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:#8595A0}
+  .sdot{width:8px;height:8px;border-radius:50%;background:#8595A0}
+  .sdot.ok{background:var(--good)}.sdot.err{background:var(--bad)}.sdot.load{background:var(--warn);animation:p 1s infinite}
+  @keyframes p{0%,100%{opacity:.35}50%{opacity:1}}
+  .filters{display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:12px;color:#aeb9c4}
+  .filters label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+
+  .wrap{max-width:1280px;margin:0 auto;padding:20px 22px 60px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:11.5px;color:var(--muted);
+    background:var(--panel);border:1px solid var(--hair);border-radius:12px;padding:11px 15px;margin-bottom:18px}
+  .conf{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:11px;padding:3px 9px;border-radius:999px}
+  .conf.hi{color:var(--good);background:#1e9c6b1a}
+  .conf.md{color:var(--warn);background:#d08a0a1a}
+  .conf.lo{color:var(--bad);background:#d244361a}
+
+  .sec-title{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);
+    margin:26px 2px 12px}
+  .grid{display:grid;gap:14px}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  @media(max-width:960px){.g4{grid-template-columns:repeat(2,1fr)}.g3,.g2{grid-template-columns:1fr}}
+
+  .panel{background:var(--panel);border:1px solid var(--hair);border-radius:14px;padding:15px 16px;position:relative}
+  .num{position:absolute;top:-9px;left:-9px;width:24px;height:24px;border-radius:50%;background:var(--ink);
+    color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 6px rgba(10,20,30,.25)}
+  .panel .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px}
+  .label{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .big{font-size:27px;font-weight:600;line-height:1;letter-spacing:-.01em}
+  .subv{font-size:12px;color:var(--muted);margin-top:6px}
+  .formula{font-size:10.5px;color:var(--faint);margin-top:10px;border-top:1px dashed var(--hair);padding-top:8px;line-height:1.4}
+  .formula b{color:var(--muted);font-weight:600}
+
+  table{border-collapse:collapse;width:100%}
+  th{text-align:left;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);padding:7px 8px;border-bottom:1px solid var(--hair)}
+  td{font-size:13px;padding:8px;border-bottom:1px solid var(--hair)}
+  .bar{height:7px;border-radius:4px;background:var(--hair);overflow:hidden}
+  .barfill{height:100%;border-radius:4px}
+
+  /* funil */
+  .stage{display:flex;align-items:center;gap:12px;margin-bottom:2px}
+  .stage .nm{width:120px;text-align:right;font-size:12.5px;font-weight:600}
+  .stage .track{flex:1;height:30px;display:flex;align-items:center}
+  .stage .fill{height:100%;border-radius:7px;display:flex;align-items:center;padding-left:11px;color:#fff;font-weight:700;font-size:13px}
+  .conv{padding-left:132px;font-size:10.5px;font-weight:700;color:var(--faint);margin:0 0 4px}
+
+  .blocked li{margin-bottom:9px;font-size:12.5px;color:var(--text);line-height:1.4}
+  .blocked li b{color:var(--bad)}
+  .tag{font-size:10px;color:var(--faint);border:1px solid var(--hair);border-radius:5px;padding:1px 6px;margin-left:6px}
+</style>
+</head>
+<body>
+  <div class="cmdbar">
+    <div>
+      <h1>NEW BUSINESS <span class="dot">·</span> COCKPIT <span style="color:var(--brand);font-weight:600">nossa v0</span></h1>
+      <div class="sub">Métricas derivadas das tabelas reais (Financeira + Operacional) · confiança por container</div>
+    </div>
+    <input id="url" type="text" placeholder="URL do webhook n8n" />
+    <button id="btn" onclick="load()">Atualizar</button>
+    <span class="status"><span id="sdot" class="sdot"></span><span id="stext">Aguardando</span></span>
+    <div style="flex-basis:100%"></div>
+    <div class="filters">
+      <label><input type="checkbox" id="fNB" onchange="render()"/> Só New Business <span class="tag">is_current_new=1 / sales_type=NEW</span></label>
+      <span id="counts" class="mono" style="color:#8595A0"></span>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="legend">
+      <b style="color:var(--text)">Confiança da métrica:</b>
+      <span class="conf hi">Alto</span> mapeia direto p/ coluna existente
+      <span class="conf md">Médio</span> exige decisão (segmentação, moeda, parse de data) ou coluna veio vazia na amostra
+      <span class="conf lo">Baixo</span> sem fonte nos dados atuais
+    </div>
+
+    <div id="app"></div>
+
+    <div class="mono" style="text-align:center;font-size:11px;color:var(--faint);margin-top:26px">
+      v0 · agregação client-side · valores reais aparecem quando o webhook devolve TODAS as linhas (Return All)
+    </div>
+  </div>
+
+<script>
+const WEBHOOK_URL = "https://hotmart.app.n8n.cloud/webhook-test/nb-semanal";
+const $ = (id)=>document.getElementById(id);
+let DATA = { financeira:[], operacional:[] };
+
+if (WEBHOOK_URL) $("url").value = WEBHOOK_URL;
+
+/* ---------- helpers ---------- */
+const nf = new Intl.NumberFormat("pt-BR");
+const fmtN = (n)=>nf.format(Math.round(n||0));
+const fmtBRL = (n)=>{const v=Math.abs(n||0);
+  if(v>=1e6) return "R$ "+(n/1e6).toFixed(1).replace(".",",")+" mi";
+  if(v>=1e3) return "R$ "+Math.round(n/1e3)+" mil";
+  return "R$ "+fmtN(n);};
+const pct = (n)=> isFinite(n)? (n*100).toFixed(0)+"%" : "—";
+const notEmpty = (v)=> v!==null && v!==undefined && v!=="" && v!=="null";
+const cnt = (rows,f)=> rows.filter(r=>notEmpty(r[f])).length;
+const sumF = (rows,f)=> rows.reduce((a,r)=> a + (Number(r[f])||0), 0);
+const avgF = (rows,f)=>{const v=rows.filter(r=>notEmpty(r[f])&&isFinite(Number(r[f])));
+  return v.length? v.reduce((a,r)=>a+Number(r[f]),0)/v.length : NaN;};
+
+/* segmentação N* -> buckets do mockup */
+function bucket(seg){
+  const s=String(seg||"").toUpperCase().replace(/[^N0-9]/g,"");
+  const n=parseInt(s.replace("N",""),10);
+  if(!isFinite(n)) return "Outros";
+  if(n<=3) return "N2/N3";
+  if(n<=5) return "N4/N5";
+  return "N6+";
+}
+const SEG=[{k:"N2/N3",c:"var(--seg1)"},{k:"N4/N5",c:"var(--seg2)"},{k:"N6+",c:"var(--seg3)"}];
+
+function conf(level){const m={hi:"Alto",md:"Médio",lo:"Baixo"};return `<span class="conf ${level}">${m[level]}</span>`;}
+function panel(num,level,label,inner,formula){
+  return `<div class="panel"><div class="num">${num}</div>
+    <div class="top"><div class="label">${label}</div>${conf(level)}</div>
+    ${inner}
+    ${formula?`<div class="formula">${formula}</div>`:""}</div>`;
+}
+
+/* ---------- fetch ---------- */
+async function load(){
+  const url=$("url").value.trim();
+  setStatus("load","Conectando…"); $("btn").disabled=true;
+  try{
+    const r=await fetch(url,{headers:{Accept:"application/json"}});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    let d=await r.json();
+    if(Array.isArray(d)&&d.length===1) d=d[0];
+    DATA.financeira = Array.isArray(d.financeira)? d.financeira : (d.financeira?[d.financeira]:[]);
+    DATA.operacional = Array.isArray(d.operacional)? d.operacional : (d.operacional?[d.operacional]:[]);
+    setStatus("ok","Conexão OK");
+    render();
+  }catch(e){
+    setStatus("err","Falha: "+e.message);
+  }finally{ $("btn").disabled=false; }
+}
+function setStatus(k,t){ $("sdot").className="sdot "+k; $("stext").textContent=t; }
+
+/* ---------- render ---------- */
+function render(){
+  let fin=DATA.financeira, op=DATA.operacional;
+  if($("fNB").checked){
+    fin=fin.filter(r=>String(r.is_current_new)==="1");
+    op=op.filter(r=>String(r.sales_type).toUpperCase()==="NEW");
+  }
+  $("counts").textContent = `financeira: ${fin.length} linhas · operacional: ${op.length} linhas`;
+
+  /* --- realização (Financeira) --- */
+  const netBRL=sumF(fin,"revenue_net_brl_sales");
+  const netUSD=sumF(fin,"revenue_net_usd_sales");
+  const netEUR=sumF(fin,"revenue_net_eur_sales");
+  const gmvBRL=sumF(fin,"gmv_brl_sales");
+  const cwFin = cnt(fin,"closed_won_date") || fin.length;   // grain: 1 linha ~ 1 deal ganho
+  const ativFin = cnt(fin,"activation_date_10k");
+  const ticket = cwFin? netBRL/cwFin : 0;
+
+  /* --- funil (Operacional) --- */
+  const F=[
+    ["Lead in", op.length, "hi"],
+    ["Contatado", cnt(op,"contacted_date"), "hi"],
+    ["Conectado", cnt(op,"connected_date"), "md"],
+    ["Opp in", cnt(op,"opportunity_create_date")||cnt(op,"opp_id"), "hi"],
+    ["SQL", cnt(op,"sql_date"), "md"],
+    ["Closed Won", cnt(op,"closed_won_date"), "hi"],
+    ["Ativado 10k", cnt(op,"activation_date_10k"), "hi"],
+  ];
+  const shades=["var(--brand)","var(--brand)","var(--brand)","var(--seg2)","var(--seg2)","var(--seg3)","var(--good)"];
+  const fmax=Math.max(...F.map(x=>x[1]),1);
+
+  /* --- segmentação --- */
+  const segNet=SEG.map(s=>({...s,v:sumF(fin.filter(r=>bucket(r.segmentation)===s.k),"revenue_net_brl_sales")}));
+  const segCW =SEG.map(s=>({...s,v:fin.filter(r=>bucket(r.segmentation)===s.k).length}));
+  const segNetMax=Math.max(...segNet.map(s=>s.v),1);
+  const segCWMax =Math.max(...segCW.map(s=>s.v),1);
+
+  /* --- estratégia --- */
+  const strat=["INBOUND","OUTBOUND"].map(k=>({k,
+    leads:op.filter(r=>String(r.sales_strategy).toUpperCase()===k).length,
+    opps: op.filter(r=>String(r.sales_strategy).toUpperCase()===k && (notEmpty(r.opportunity_create_date)||notEmpty(r.opp_id))).length
+  }));
+
+  /* --- tempos --- */
+  const tQuali=avgF(op,"Quali_time"), tDeal=avgF(op,"Deal_time"), tAtiv=avgF(op,"Activation_Time");
+
+  let html="";
+
+  /* SEÇÃO: Realização */
+  html+=`<div class="sec-title">Realização · Financeira</div><div class="grid g4">`;
+  html+=panel(1,"hi","Net Revenue (BRL)",
+    `<div class="big mono">${fmtBRL(netBRL)}</div><div class="subv">USD ${fmtN(netUSD)} · EUR ${fmtN(netEUR)} (não convertidos)</div>`,
+    `<b>Cálculo:</b> Σ <code>revenue_net_brl_sales</code> das linhas ganhas`);
+  html+=panel(2,"hi","GMV (BRL)",
+    `<div class="big mono">${fmtBRL(gmvBRL)}</div>`,
+    `<b>Cálculo:</b> Σ <code>gmv_brl_sales</code>`);
+  html+=panel(3,"hi","Closed Won (contagem)",
+    `<div class="big mono">${fmtN(cwFin)}</div><div class="subv">deals ganhos no período</div>`,
+    `<b>Cálculo:</b> contagem de <code>closed_won_date</code> ≠ vazio (fallback: nº de linhas)`);
+  html+=panel(5,"md","Ticket médio (Net/CW)",
+    `<div class="big mono">${fmtBRL(ticket)}</div>`,
+    `<b>Cálculo:</b> Net Revenue BRL ÷ Closed Won · <b>Médio:</b> depende da granularidade de 1 linha = 1 deal`);
+  html+=`</div>`;
+
+  /* SEÇÃO: Funil */
+  html+=`<div class="sec-title">Funil · Operacional</div><div class="grid g2">`;
+  let funnel=`<div class="panel"><div class="num">6</div>
+    <div class="top"><div class="label">Funil · volume por estágio</div>${conf("md")}</div>`;
+  F.forEach((f,i)=>{
+    const w=25+(f[1]/fmax)*75;
+    funnel+=`<div class="stage"><div class="nm">${f[0]} ${conf(f[2])}</div>
+      <div class="track"><div class="fill mono" style="width:${w}%;background:${shades[i]}">${fmtN(f[1])}</div></div></div>`;
+    const nx=F[i+1];
+    if(nx){const c=f[1]?nx[1]/f[1]:0;funnel+=`<div class="conv mono">↓ ${pct(c)}</div>`;}
+  });
+  funnel+=`<div class="formula"><b>Cálculo:</b> contagem de linhas com a data do estágio ≠ vazio
+    (<code>contacted_date</code>, <code>connected_date</code>, <code>opportunity_create_date</code>, <code>sql_date</code>, <code>closed_won_date</code>, <code>activation_date_10k</code>).
+    Selo por estágio: <span class="conf md">Médio</span> = coluna veio vazia na amostra.</div></div>`;
+
+  let rates=`<div class="panel"><div class="num">7</div>
+    <div class="top"><div class="label">Taxas de conversão entre estágios</div>${conf("md")}</div><table>
+    <thead><tr><th>Passagem</th><th style="text-align:right">Taxa</th></tr></thead><tbody>`;
+  for(let i=0;i<F.length-1;i++){const c=F[i][1]?F[i+1][1]/F[i][1]:0;
+    rates+=`<tr><td>${F[i][0]} → ${F[i+1][0]}</td><td class="mono" style="text-align:right;font-weight:700">${pct(c)}</td></tr>`;}
+  rates+=`</tbody></table><div class="formula"><b>Cálculo:</b> estágio(n+1) ÷ estágio(n). Proxy de tendência — estágios são estoques em janelas distintas, não coorte fechada.</div></div>`;
+  html+=funnel+rates+`</div>`;
+
+  /* SEÇÃO: Segmentação */
+  html+=`<div class="sec-title">Segmentação por nível de cliente</div><div class="grid g2">`;
+  html+=panel(8,"md","Net Revenue por nível (BRL)",
+    segNet.map(s=>`<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12.5px;font-weight:600;margin-bottom:4px"><span>${s.k}</span><span class="mono">${fmtBRL(s.v)}</span></div><div class="bar"><div class="barfill" style="width:${s.v/segNetMax*100}%;background:${s.c}"></div></div></div>`).join(""),
+    `<b>Cálculo:</b> Σ <code>revenue_net_brl_sales</code> agrupado por <code>segmentation</code> → bucket (N2,N3→N2/N3; N4,N5→N4/N5; N6+→N6+). <b>Médio:</b> mapeamento de níveis a confirmar`);
+  html+=panel(9,"md","Closed Won por nível",
+    segCW.map(s=>`<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12.5px;font-weight:600;margin-bottom:4px"><span>${s.k}</span><span class="mono">${fmtN(s.v)}</span></div><div class="bar"><div class="barfill" style="width:${s.v/segCWMax*100}%;background:${s.c}"></div></div></div>`).join(""),
+    `<b>Cálculo:</b> contagem de deals por bucket de <code>segmentation</code>`);
+  html+=`</div>`;
+
+  /* SEÇÃO: Motor + Tempos */
+  html+=`<div class="sec-title">Motor de aquisição & ciclo</div><div class="grid g2">`;
+  let stratP=`<div class="panel"><div class="num">10</div>
+    <div class="top"><div class="label">Inbound × Outbound</div>${conf("hi")}</div><table>
+    <thead><tr><th>Motor</th><th style="text-align:right">Leads</th><th style="text-align:right">Opps</th><th style="text-align:right">Lead→Opp</th></tr></thead><tbody>`;
+  strat.forEach(s=>{const c=s.leads?s.opps/s.leads:0;
+    stratP+=`<tr><td style="font-weight:600">${s.k}</td><td class="mono" style="text-align:right">${fmtN(s.leads)}</td><td class="mono" style="text-align:right">${fmtN(s.opps)}</td><td class="mono" style="text-align:right;font-weight:700">${pct(c)}</td></tr>`;});
+  stratP+=`</tbody></table><div class="formula"><b>Cálculo:</b> agrupa <code>sales_strategy</code> (INBOUND/OUTBOUND); Opps = linhas do motor com opp ≠ vazio</div></div>`;
+
+  let timesP=`<div class="panel"><div class="num">11</div>
+    <div class="top"><div class="label">Tempos médios de ciclo</div>${conf("md")}</div>
+    <div class="grid g3" style="gap:10px">
+      ${[["Quali",tQuali],["Deal",tDeal],["Ativação",tAtiv]].map(([l,v])=>
+        `<div style="text-align:center"><div class="big mono" style="font-size:22px">${isFinite(v)?v.toFixed(1):"—"}</div><div class="subv">${l}</div></div>`).join("")}
+    </div>
+    <div class="formula"><b>Cálculo:</b> média de <code>Quali_time</code>, <code>Deal_time</code>, <code>Activation_Time</code> (linhas ≠ vazio). <b>Médio:</b> unidade (dias/horas) a confirmar</div></div>`;
+  html+=stratP+timesP+`</div>`;
+
+  /* SEÇÃO: Bloqueadas */
+  html+=`<div class="sec-title">Bloqueadas · o mockup pede, os dados não têm</div>`;
+  html+=`<div class="panel"><div class="num">12</div>
+    <div class="top"><div class="label">Métricas sem fonte nos dados atuais</div>${conf("lo")}</div>
+    <ul class="blocked">
+      <li><b>Metas / Budget / Target</b> (Net Revenue, CW, Opp, Ativação) — não existe coluna de meta em nenhuma tabela. Sem isso: pacing MTD×BTD, atingimento %, gap vs budget e forecast-vs-meta ficam impossíveis.</li>
+      <li><b>Ranking por pessoa (nome)</b> — só há IDs (<code>lead_owner_id</code>, <code>closer_email_sf</code>, <code>onboarding_email_sf</code>) e vieram nulos na amostra. Precisa de tabela de-para ID→nome.</li>
+      <li><b>Saúde da carteira</b> (ontrack / carrinho aberto / atrasado) — não há coluna de estado de onboarding; dá pra aproximar por datas, mas é derivação, não dado.</li>
+      <li><b>Cobertura de pipeline (CW)</b> — depende de meta de CW restante (bloqueada) + opps abertas.</li>
+      <li><b>Tendência semanal (WoW / 4 semanas)</b> — exige bucketizar por semana parseando datas por extenso (ex.: "sábado, 13 de junho de 2026"). Viável, mas fica pra v1.</li>
+    </ul></div>`;
+
+  $("app").innerHTML=html;
+}
+
+/* auto-tenta ao abrir */
+load();
+</script>
+</body>
+</html>
