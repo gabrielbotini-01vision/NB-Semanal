@@ -52,6 +52,12 @@
   /* topbar */
   .topbar{position:sticky;top:0;z-index:50;background:var(--surface-dark);border-bottom:1px solid rgba(255,255,255,.08)}
   .topbar .wrap{display:flex;align-items:center;gap:var(--sp-5);min-height:60px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px}
+  /* altura FIXA (não só mínima) pra linha de filtros — garante que ela ocupe exatamente
+     o mesmo espaço em toda página, tenha 5 selects (Semanal Sales) ou só o botão Dark
+     (Mensal Sales/1:1 Gestor), pra não "pular" de tamanho ao trocar de aba. Alinhado à
+     direita, com quebra de linha normal (sem scroll) se a janela for estreita demais. */
+  .topbar .wrap.controlsrow{height:60px;justify-content:flex-end}
+  #otherControls .themebtn{align-self:center}
   .brand{display:flex;align-items:center;gap:10px;color:#fff;font-weight:700;letter-spacing:-.01em;font-size:15px}
   .brand .dot{width:13px;height:13px;background:var(--orange);border-radius:3px}
   .brand small{display:block;color:rgba(255,255,255,.5);font-weight:500;font-size:10.5px;letter-spacing:.04em}
@@ -59,10 +65,13 @@
   .tab{cursor:pointer;padding:9px 14px;border-radius:8px;font-weight:600;font-size:13px;color:rgba(255,255,255,.55);transition:.15s}
   .tab:hover{color:#fff}
   .tab.on{background:var(--accent);color:#fff}
-  .controls{display:flex;gap:10px;align-items:center;margin-left:auto;flex-wrap:wrap}
+  /* sem margin-left:auto de propósito: o filtro fica sempre logo ao lado da última aba
+     (1:1 Gestor), na mesma posição em toda página, em vez de flutuar pra ponta direita
+     com largura variável conforme quantos selects a aba tem. */
+  .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   .ctl{display:flex;flex-direction:column;gap:3px}
   .ctl label{font-size:9.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.45)}
-  select.sel{font-family:inherit;font-size:13px;font-weight:600;color:#fff;background:#1c1c1c;border:1.5px solid #333;border-radius:var(--r-sm);padding:6px 10px;cursor:pointer}
+  select.sel{font-family:inherit;font-size:13px;font-weight:600;color:#fff;background:#1c1c1c;border:1.5px solid #333;border-radius:var(--r-sm);padding:6px 8px;cursor:pointer;max-width:118px}
   :root[data-theme="dark"] select.sel{background:#221c16;border-color:#3b332b}
   .themebtn{background:transparent;border:1.5px solid rgba(255,255,255,.2);color:#fff;border-radius:var(--r-sm);padding:7px 12px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px;align-self:flex-end}
   .themebtn:hover{border-color:var(--orange)}
@@ -210,12 +219,22 @@
   <div class="wrap">
     <div class="brand"><span class="dot"></span><div>NEW BUSINESS · COCKPIT<small id="ctxLine">Semana · estoque do funil</small></div></div>
     <div class="tabs" id="tabs"></div>
+  </div>
+  <div class="wrap controlsrow">
     <div class="controls" id="wsalesControls">
       <div class="ctl"><label>Mês</label><select id="selMes" class="sel"></select></div>
+      <div class="ctl"><label>Semana</label><select id="selSemana" class="sel"></select></div>
       <div class="ctl"><label>Estratégia</label><select id="selEstr" class="sel"></select></div>
       <div class="ctl"><label>Referência</label><select id="selRef" class="sel">
         <option value="budget">Budget</option><option value="reforecast">Reforecast</option></select></div>
       <button class="themebtn" id="themeBtn">🌙 Dark</button>
+    </div>
+    <div class="controls" id="wareaControls" style="display:none">
+      <div class="ctl"><label>Mês</label><select id="selMesArea" class="sel"></select></div>
+      <div class="ctl"><label>Semana</label><select id="selSemanaArea" class="sel"></select></div>
+      <div class="ctl"><label>Referência</label><select id="selRefArea" class="sel">
+        <option value="budget">Budget</option><option value="reforecast">Reforecast</option></select></div>
+      <button class="themebtn" id="themeBtn3">🌙 Dark</button>
     </div>
     <div class="controls" id="otherControls" style="display:none"><button class="themebtn" id="themeBtn2">🌙 Dark</button></div>
   </div>
@@ -270,7 +289,7 @@ function avatarHTML(p,size){
 function median(arr){const a=[...arr].filter(v=>v!=null).sort((x,y)=>x-y);const n=a.length;if(!n)return 0;return n%2?a[(n-1)/2]:(a[n/2-1]+a[n/2])/2;}
 
 // ---- estado ----
-let state={meeting:'wsales',area:'sdr',mes:null,estr:'all',ref:'budget',pessoa:null};
+let state={meeting:'wsales',area:'sdr',mes:null,semana:null,estr:'all',ref:'budget',mesArea:null,semanaArea:null,refArea:'budget',pessoa:null};
 
 const MEETINGS=[{k:'mensal',label:'Mensal Sales'},{k:'wsales',label:'Semanal Sales'},{k:'warea',label:'Semanal Área'},{k:'oneone',label:'1:1 Gestor'}];
 const AREA_TABS=[{k:'sdr',label:'SDR'},{k:'closers',label:'Closers'},{k:'onboarding',label:'Onboarding'}];
@@ -405,20 +424,43 @@ function renderMensal(){
 }
 
 // ================= SEMANAL SALES =================
+function semanaLabel(w){ if(!w)return '—'; const [y,ww]=w.split('-W'); return 'semana '+(+ww)+'/'+y; }
+function weeksInMonth(mes,pool){ return pool.filter(w=>D.semanaMes[w]===mes); }
+// filtro em cascata Mês → Semana: o select de Mês restringe quais semanas aparecem no select
+// de Semana (só as que pertencem àquele mês, via D.semanaMes calculado no build_data.js).
 function initWsalesControls(){
-  const mesesAtivos=D.meses.filter(m=>D.actual.mensal[m]||D.budget.mensal[m]);
+  const semanasAtivas=D.semanas.filter(w=>D.actual.semanal[w]||D.budget.semanal[w]);
+  const mesesAtivos=[...new Set(semanasAtivas.map(w=>D.semanaMes[w]))].sort();
+  const comFunil=Object.keys(D.actual.semanal).filter(w=>D.actual.semanal[w].total.contacted>0).sort();
+  const def=comFunil.pop()||Object.keys(D.actual.semanal).sort().pop();
+  state.semana=def&&semanasAtivas.includes(def)?def:semanasAtivas[semanasAtivas.length-1];
+  state.mes=D.semanaMes[state.semana]||mesesAtivos[mesesAtivos.length-1];
+
+  function renderSemanaOptions(){
+    const ws=weeksInMonth(state.mes,semanasAtivas);
+    $('selSemana').innerHTML=ws.map(w=>`<option value="${w}">${semanaLabel(w)}</option>`).join('');
+    if(!ws.includes(state.semana)) state.semana=ws[ws.length-1];
+    $('selSemana').value=state.semana;
+  }
+
   $('selMes').innerHTML=mesesAtivos.map(m=>`<option value="${m}">${mesLabel(m)}</option>`).join('');
-  const comFunil=Object.keys(D.actual.mensal).filter(m=>D.actual.mensal[m].total.contacted>0).sort();
-  const def=comFunil.pop()||Object.keys(D.actual.mensal).sort().pop();
-  state.mes=def&&mesesAtivos.includes(def)?def:mesesAtivos[mesesAtivos.length-1];
   $('selMes').value=state.mes;
+  renderSemanaOptions();
   $('selEstr').innerHTML=`<option value="all">Todas</option>`+STR_ORDER.map(s=>`<option value="${s}">${s}</option>`).join('');
-  $('selMes').onchange=e=>{state.mes=e.target.value;renderSemanal();};
+
+  $('selMes').onchange=e=>{
+    state.mes=e.target.value;
+    const ws=weeksInMonth(state.mes,semanasAtivas);
+    state.semana=ws[ws.length-1]||state.semana;
+    renderSemanaOptions();
+    renderSemanal();
+  };
+  $('selSemana').onchange=e=>{state.semana=e.target.value;renderSemanal();};
   $('selEstr').onchange=e=>{state.estr=e.target.value;renderSemanal();};
   $('selRef').onchange=e=>{state.ref=e.target.value;renderSemanal();};
 }
-function metricsFor(src,mes,estr){
-  const m=D[src]?.mensal?.[mes]; if(!m)return null;
+function metricsForSemana(src,semana,estr){
+  const m=D[src]?.semanal?.[semana]; if(!m)return null;
   if(estr==='all')return m.total;
   return m.porEstrategia?.[estr]||null;
 }
@@ -456,8 +498,8 @@ function funnelHTML(act,ref){
   });
   return h;
 }
-function estrHTML(mes){
-  const m=D.actual.mensal[mes], mb=D[state.ref].mensal[mes];
+function estrHTML(semana){
+  const m=D.actual.semanal[semana], mb=D[state.ref].semanal[semana];
   const rows=STR_ORDER.map(s=>({s,cw:m?.porEstrategia?.[s]?.cw||0,bud:mb?.porEstrategia?.[s]?.cw||0}));
   const max=Math.max(...rows.map(r=>Math.max(r.cw,r.bud)),1);
   return rows.map(r=>`<div class="barrow">
@@ -469,8 +511,8 @@ const CIC=[['dias_contato_conectado','Contato→Conect.'],['dias_conectado_opp',
 function cicloHTML(){
   return CIC.map(([k,l])=>`<div class="tile"><div class="v">${D.ciclo?.[k]??'—'}</div><div class="k">${l}</div></div>`).join('');
 }
-function segHTML(mes,key,cur){
-  const m=D.actual.mensal[mes], mb=D[state.ref].mensal[mes];
+function segHTML(semana,key,cur){
+  const m=D.actual.semanal[semana], mb=D[state.ref].semanal[semana];
   const rows=NIV.map(n=>({n,a:m?.porNivel?.[n]?.[key]||0,b:mb?.porNivel?.[n]?.[key]||0}));
   const max=Math.max(...rows.map(r=>Math.max(r.a,r.b)),1);
   return rows.map(r=>`<div class="barrow">
@@ -480,7 +522,7 @@ function segHTML(mes,key,cur){
 }
 function trendHTML(){
   const ws=D.semanas.slice(-20);
-  const vals=ws.map(w=>D.actual.semanal[w]?.cw||0);
+  const vals=ws.map(w=>D.actual.semanal[w]?.total?.cw||0);
   const max=Math.max(...vals,1);
   return ws.map((w,i)=>`<div class="col" title="${w}: ${fN(vals[i])} CW">
     <div class="b" style="height:${Math.max(2,vals[i]/max*120)}px"></div>
@@ -509,26 +551,26 @@ function entradasHTML(){
   }).join('')}</div>`;
 }
 function renderSemanal(){
-  const act=metricsFor('actual',state.mes,state.estr);
-  const ref=metricsFor(state.ref,state.mes,state.estr);
+  const act=metricsForSemana('actual',state.semana,state.estr);
+  const ref=metricsForSemana(state.ref,state.semana,state.estr);
   $('viewSemanal').innerHTML=`
-    <div class="sec"><div class="sec-head"><h2>Realização vs meta</h2><span class="hint">${mesLabel(state.mes)} · ${state.estr==='all'?'todas estratégias':state.estr} · vs ${state.ref==='budget'?'Budget':'Reforecast'}</span></div>
+    <div class="sec"><div class="sec-head"><h2>Realização vs meta</h2><span class="hint">${semanaLabel(state.semana)} · ${state.estr==='all'?'todas estratégias':state.estr} · vs ${state.ref==='budget'?'Budget':'Reforecast'}</span></div>
       <div class="grid g5">${kpisHTML(act,ref)}</div></div>
     <div class="sec"><div class="sec-head"><h2>Entradas do funil · últimas 4 semanas</h2><span class="hint">coortes em janelas distintas — a semana forte de um estágio não é a mesma dos seguintes</span></div>
       <div class="card">${entradasHTML()}</div></div>
     <div class="grid g2">
-      <div class="sec"><div class="sec-head"><h2>Funil</h2><span class="hint">volume por etapa (mês) · marca = meta</span></div>
+      <div class="sec"><div class="sec-head"><h2>Funil</h2><span class="hint">volume por etapa (semana) · marca = meta</span></div>
         <div class="card"><div class="funnel">${funnelHTML(act,ref)}</div></div></div>
       <div class="sec"><div class="sec-head"><h2>Motor de aquisição</h2><span class="hint">CW por estratégia</span></div>
-        <div class="card">${estrHTML(state.mes)}</div>
+        <div class="card">${estrHTML(state.semana)}</div>
         <div class="sec-head" style="margin-top:24px"><h2>Tempos de ciclo</h2><span class="hint">média em dias</span></div>
         <div class="grid g5">${cicloHTML()}</div></div>
     </div>
     <div class="grid g2">
       <div class="sec"><div class="sec-head"><h2>Net Revenue por nível</h2><span class="hint">todas as estratégias · marca = meta</span></div>
-        <div class="card">${segHTML(state.mes,'receita',1)}</div></div>
+        <div class="card">${segHTML(state.semana,'receita',1)}</div></div>
       <div class="sec"><div class="sec-head"><h2>Closed Won por nível</h2><span class="hint">todas as estratégias · marca = meta</span></div>
-        <div class="card">${segHTML(state.mes,'cw',0)}</div></div>
+        <div class="card">${segHTML(state.semana,'cw',0)}</div></div>
     </div>
     <div class="sec"><div class="sec-head"><h2>Closed Won semanal</h2><span class="hint">deals ganhos por semana (2025-W01 → atual)</span></div>
       <div class="card"><div class="trend">${trendHTML()}</div></div></div>
@@ -538,23 +580,38 @@ function renderSemanal(){
 }
 
 // ================= SEMANAL ÁREA =================
-function fteRows(){
-  const rows=D.fte||[];
+function fteRows(week){
+  const rows=D.fteSemanal?.[week]||[];
   const tot={estrategia:'Total',fte:sum(rows,r=>r.fte),contacted:sum(rows,r=>r.contacted),opps:sum(rows,r=>r.opps)};
   return [...rows,tot];
 }
+// meta + atingimento pro sub da linha de KPI, quando existe um alvo de budget/reforecast
+// pra aquela métrica (mesma lógica de atingimento da Semanal Sales, aplicada por pessoa/área).
+function metaSub(val,meta,fallbackSub,cur){
+  if(meta==null||!meta) return fallbackSub;
+  const p=pct(val,meta);
+  const metaFmt=cur?fBRL(meta):fN(meta);
+  return `meta ${metaFmt}${p!=null?` · <span class="att ${attClass(p)}">${p}%</span>`:''}`;
+}
+const SDR_DEF={contacted:0,connected:0,opps:0,contactRate:null,oppNivel:[0,0,0],diasContatoConectado:null};
+const CLOSER_DEF={opps:0,sql:0,cw:0,sqlRate:null,winRate:null,cwNivel:[0,0,0],diasOppSql:null,diasSqlWon:null};
+const ONB_DEF={cwIn:0,activated:0,actRate:null,actNivel:[0,0,0],diasWonAtivacao:null};
 function renderAreaSdr(){
-  const list=D.porPessoa?.sdr||[];
+  const week=state.semanaArea;
+  const base=D.porPessoa?.sdr||[];
+  const list=base.map(p=>weekView(p,week,SDR_DEF)).sort((a,b)=>b.opps-a.opps);
   const totContacted=sum(list,p=>p.contacted), totConnected=sum(list,p=>p.connected), totOpps=sum(list,p=>p.opps);
+  const fteWeek=D.fteSemanal?.[week]||[];
+  const refT=D[state.refArea]?.semanal?.[week]?.total;
   const kpis=[
-    ['Contatados',fN(totContacted),`${STR_ORDER.map(()=>'').join('')}${list.length} SDRs`],
+    ['Contatados',fN(totContacted),metaSub(totContacted,refT?.contacted,`${base.length} SDRs`)],
     ['Contact → Connected',`${pct(totConnected,totContacted)??'—'}%`,`${fN(totConnected)} conectados`],
-    ['Opp in',fN(totOpps),`${pct(totOpps,totConnected)??'—'}% dos conectados`],
-    ['Opp / FTE',(sum(D.fte||[],r=>r.opps)/Math.max(1,sum(D.fte||[],r=>r.fte))).toFixed(1),`${(totContacted/Math.max(1,list.length)).toFixed(0)} contatados/FTE · ${list.length} FTEs`],
+    ['Opp in',fN(totOpps),metaSub(totOpps,refT?.opps,`${pct(totOpps,totConnected)??'—'}% dos conectados`)],
+    ['Opp / FTE',(sum(fteWeek,r=>r.opps)/Math.max(1,sum(fteWeek,r=>r.fte))).toFixed(1),`${(totContacted/Math.max(1,sum(fteWeek,r=>r.fte))).toFixed(0)} contatados/FTE`],
   ];
   const wt=NIV.map((n,i)=>weekTrendHTML({label:n,color:NIV_COLOR[n],series:weeklyByNivel(D.semanalPorNivel?.opps,n).slice(-4)})).join('');
   const totWt=weekTrendHTML({label:'Total',color:'var(--accent)',series:weeklyTotals(D.semanalPorNivel?.opps).slice(-4)});
-  const fteT=fteRows();
+  const fteT=fteRows(week);
   const fteTable=fteT.map(f=>`<tr style="${f.estrategia==='Total'?'background:var(--surface-sunken)':''}">
     <td style="font-weight:${f.estrategia==='Total'?700:600}">${f.estrategia}</td>
     <td class="r mono">${f.fte}</td>
@@ -574,20 +631,23 @@ function renderAreaSdr(){
       <div class="card"><div class="wtgrid g3">${wt}</div></div></div>
     <div class="grid g2">
       <div class="sec"><div class="sec-head"><h2>Opp in total · últimas 4 semanas</h2></div><div class="card">${totWt}</div></div>
-      <div class="sec"><div class="sec-head"><h2>Produtividade por FTE</h2></div><div class="card" style="padding:0;overflow-x:auto"><table class="tbl">
+      <div class="sec"><div class="sec-head"><h2>Produtividade por FTE</h2><span class="hint">${semanaLabel(week)}</span></div><div class="card" style="padding:0;overflow-x:auto"><table class="tbl">
         <thead><tr><th>Motor</th><th class="r">FTEs</th><th class="r">Contatados/FTE</th><th class="r">Opp/FTE</th></tr></thead><tbody>${fteTable}</tbody></table></div></div>
     </div>
-    <div class="sec"><div class="sec-head"><h2>SDR · funil de entrada + opp por nível</h2></div>${table}</div>`;
+    <div class="sec"><div class="sec-head"><h2>SDR · funil de entrada + opp por nível</h2><span class="hint">${semanaLabel(week)}</span></div>${table}</div>`;
   bindRowClicks($('viewArea'));
 }
 function renderAreaClosers(){
-  const list=D.porPessoa?.closer||[];
+  const week=state.semanaArea;
+  const base=D.porPessoa?.closer||[];
+  const list=base.map(p=>weekView(p,week,CLOSER_DEF)).sort((a,b)=>b.cw-a.cw);
   const totOpps=sum(list,p=>p.opps), totSql=sum(list,p=>p.sql), totCw=sum(list,p=>p.cw);
+  const refT=D[state.refArea]?.semanal?.[week]?.total;
   const kpis=[
-    ['Opp in',fN(totOpps),'entrada no closer'],
+    ['Opp in',fN(totOpps),metaSub(totOpps,refT?.opps,'entrada no closer')],
     ['Opp → SQL',`${pct(totSql,totOpps)??'—'}%`,`${fN(totSql)} SQL`],
     ['Win rate (#)',`${pct(totCw,totSql)??'—'}%`,`${fN(totCw)} CW`],
-    ['CW in',fN(totCw),`${list.length} closers`],
+    ['CW in',fN(totCw),metaSub(totCw,refT?.cw,`${base.length} closers`)],
   ];
   const wt=NIV.map(n=>weekTrendHTML({label:n,color:NIV_COLOR[n],series:weeklyByNivel(D.semanalPorNivel?.cw,n).slice(-4)})).join('');
   const totWt=weekTrendHTML({label:'Total',color:'var(--accent)',series:weeklyTotals(D.semanalPorNivel?.cw).slice(-4)});
@@ -606,18 +666,20 @@ function renderAreaClosers(){
     <div class="sec" style="margin-top:24px"><div class="sec-head"><h2>CW por nível de cliente · últimas 4 semanas</h2></div>
       <div class="card"><div class="wtgrid g3">${wt}</div></div></div>
     <div class="sec"><div class="sec-head"><h2>CW total · últimas 4 semanas</h2></div><div class="card">${totWt}</div></div>
-    <div class="sec"><div class="sec-head"><h2>Closers · entrada, conversão e CW por nível</h2><span class="hint">sem agrupamento fixo por squad — cada closer atende níveis variados; ver coluna "CW por nível". Pipeline aberto e aging de opp não existem na base hoje.</span></div>${table}</div>`;
+    <div class="sec"><div class="sec-head"><h2>Closers · entrada, conversão e CW por nível</h2><span class="hint">${semanaLabel(week)} · sem agrupamento fixo por squad — cada closer atende níveis variados; ver coluna "CW por nível". Pipeline aberto e aging de opp não existem na base hoje.</span></div>${table}</div>`;
   bindRowClicks($('viewArea'));
 }
 function renderAreaOnboarding(){
-  const list=D.porPessoa?.onboarding||[];
+  const week=state.semanaArea;
+  const base=D.porPessoa?.onboarding||[];
+  const list=base.map(p=>weekView(p,week,ONB_DEF)).sort((a,b)=>b.activated-a.activated);
   const totCwIn=sum(list,p=>p.cwIn), totAct=sum(list,p=>p.activated);
-  const mesAtual=state.mes||Object.keys(D.actual.mensal).sort().pop();
-  const port=D.actual?.mensal?.[mesAtual]?.total;
+  const port=D.actual?.semanal?.[week]?.total;
+  const refT=D[state.refArea]?.semanal?.[week]?.total;
   const kpis=[
-    ['Net Revenue · mês',fBRL(port?.receita),'portfólio (sem quebra por pessoa)'],
-    ['GMV · mês',fBRL(port?.gmv),'portfólio (sem quebra por pessoa)'],
-    ['CW in / Ativados',`${fN(totCwIn)} / ${fN(totAct)}`,`${list.length} onboarders`],
+    ['Net Revenue · semana',fBRL(port?.receita),metaSub(port?.receita||0,refT?.receita,'portfólio (sem quebra por pessoa)',true)],
+    ['GMV · semana',fBRL(port?.gmv),metaSub(port?.gmv||0,refT?.gmv,'portfólio (sem quebra por pessoa)',true)],
+    ['CW in / Ativados',`${fN(totCwIn)} / ${fN(totAct)}`,refT?`meta ${fN(refT.cw)} / ${fN(refT.activation)}`:`${base.length} onboarders`],
     ['Taxa de ativação',`${pct(totAct,totCwIn)??'—'}%`,'ativados 10k ÷ CW recebido'],
   ];
   const wt=NIV.map(n=>weekTrendHTML({label:n,color:NIV_COLOR[n],series:weeklyByNivel(D.semanalPorNivel?.activation,n).slice(-4)})).join('');
@@ -636,13 +698,51 @@ function renderAreaOnboarding(){
     <div class="sec" style="margin-top:24px"><div class="sec-head"><h2>Ativações (10k GMV) por nível · últimas 4 semanas</h2></div>
       <div class="card"><div class="wtgrid g3">${wt}</div></div></div>
     <div class="sec"><div class="sec-head"><h2>Ativações total · últimas 4 semanas</h2></div><div class="card">${totWt}</div></div>
-    <div class="sec"><div class="sec-head"><h2>Onboarding · CW recebido, ativação e ciclo</h2><span class="hint">Net Revenue/GMV por onboarder nomeado não existem na base hoje (só agregado por nível/semana)</span></div>${table}</div>`;
+    <div class="sec"><div class="sec-head"><h2>Onboarding · CW recebido, ativação e ciclo</h2><span class="hint">${semanaLabel(week)} · Net Revenue/GMV por onboarder nomeado não existem na base hoje (só agregado por nível/semana)</span></div>${table}</div>`;
   bindRowClicks($('viewArea'));
 }
 function renderArea(){
   if(state.area==='sdr') renderAreaSdr();
   else if(state.area==='closers') renderAreaClosers();
   else renderAreaOnboarding();
+}
+// mesmo modelo de cascata Mês → Semana da Semanal Sales, com estado próprio (mesArea/
+// semanaArea) já que a aba tem seus próprios controles no topbar.
+function initWareaControls(){
+  const semanasAtivas=D.semanas.filter(w=>D.actual.semanal[w]);
+  const mesesAtivos=[...new Set(semanasAtivas.map(w=>D.semanaMes[w]))].sort();
+  const comFunil=Object.keys(D.actual.semanal).filter(w=>D.actual.semanal[w].total.contacted>0).sort();
+  const def=comFunil.pop()||semanasAtivas[semanasAtivas.length-1];
+  state.semanaArea=def&&semanasAtivas.includes(def)?def:semanasAtivas[semanasAtivas.length-1];
+  state.mesArea=D.semanaMes[state.semanaArea]||mesesAtivos[mesesAtivos.length-1];
+
+  function renderSemanaOptions(){
+    const ws=weeksInMonth(state.mesArea,semanasAtivas);
+    $('selSemanaArea').innerHTML=ws.map(w=>`<option value="${w}">${semanaLabel(w)}</option>`).join('');
+    if(!ws.includes(state.semanaArea)) state.semanaArea=ws[ws.length-1];
+    $('selSemanaArea').value=state.semanaArea;
+  }
+
+  $('selMesArea').innerHTML=mesesAtivos.map(m=>`<option value="${m}">${mesLabel(m)}</option>`).join('');
+  $('selMesArea').value=state.mesArea;
+  renderSemanaOptions();
+
+  $('selMesArea').onchange=e=>{
+    state.mesArea=e.target.value;
+    const ws=weeksInMonth(state.mesArea,semanasAtivas);
+    state.semanaArea=ws[ws.length-1]||state.semanaArea;
+    renderSemanaOptions();
+    renderArea();
+  };
+  $('selSemanaArea').onchange=e=>{state.semanaArea=e.target.value;renderArea();};
+  $('selRefArea').value=state.refArea;
+  $('selRefArea').onchange=e=>{state.refArea=e.target.value;renderArea();};
+}
+// projeta uma pessoa nos números DAQUELA semana (fallback nos defaults se não tiver
+// atividade na semana) — os totais acumulados de p ficam só pra ordenação/1:1 Gestor.
+function weekView(p,week,defaults){
+  const pw=(p.porSemana||{})[week];
+  return {...p,...defaults,...(pw||{})};
 }
 
 // ================= 1:1 GESTOR =================
@@ -652,11 +752,13 @@ const ROLE_CFG={
   onb:{label:'Onboarding',color:'var(--success)',metricKey:'activated',metricLabel:'Ativações / semana'},
 };
 function allPeople(){
+  // 1:1 Gestor é reunião com quem está na casa hoje — só entra quem a planilha de
+  // diretório (Imagens Sales.csv) marca como Ativo = "Sim". Sem match = fica de fora.
   return [
     ...(D.porPessoa?.sdr||[]).map(p=>({p,kind:'sdr'})),
     ...(D.porPessoa?.closer||[]).map(p=>({p,kind:'closer'})),
     ...(D.porPessoa?.onboarding||[]).map(p=>({p,kind:'onb'})),
-  ];
+  ].filter(x=>x.p.ativo);
 }
 function indicadores(p,kind){
   if(kind==='sdr') return [['Contatados',fN(p.contacted)],['Contact → Connected',p.contactRate!=null?pctR(p.contactRate)+'%':'—'],['Opp in',fN(p.opps)],['Opp por nível (N2-N3/N4-N5/N6+)',p.oppNivel.map(fN).join(' · ')],['Ciclo contato→conectado',p.diasContatoConectado!=null?p.diasContatoConectado+'d':'—']];
@@ -766,7 +868,8 @@ function render(){
   renderTabs();
   $('ctxLine').textContent=CTX[state.meeting]+(state.meeting==='mensal'&&D.mesFechado?.mes?(' · '+mesLabel(D.mesFechado.mes)):'');
   $('wsalesControls').style.display=state.meeting==='wsales'?'flex':'none';
-  $('otherControls').style.display=state.meeting==='wsales'?'none':'flex';
+  $('wareaControls').style.display=state.meeting==='warea'?'flex':'none';
+  $('otherControls').style.display=(state.meeting==='mensal'||state.meeting==='oneone')?'flex':'none';
   $('subbar').style.display=state.meeting==='warea'?'block':'none';
   $('viewMensal').style.display=state.meeting==='mensal'?'block':'none';
   $('viewSemanal').style.display=state.meeting==='wsales'?'block':'none';
@@ -784,12 +887,12 @@ function initTheme(){
   const dark=saved?saved==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;
   setTheme(dark);
   const toggle=()=>setTheme(document.documentElement.dataset.theme!=='dark');
-  $('themeBtn').onclick=toggle; $('themeBtn2').onclick=toggle;
+  $('themeBtn').onclick=toggle; $('themeBtn2').onclick=toggle; $('themeBtn3').onclick=toggle;
 }
 function setTheme(dark){
   document.documentElement.dataset.theme=dark?'dark':'light';
   const label=dark?'☀️ Light':'🌙 Dark';
-  $('themeBtn').textContent=label; $('themeBtn2').textContent=label;
+  $('themeBtn').textContent=label; $('themeBtn2').textContent=label; $('themeBtn3').textContent=label;
   localStorage.setItem('nb-theme',dark?'dark':'light');
 }
 
@@ -797,6 +900,7 @@ $('genAt').textContent='· dados de '+(D.geradoEm||'—');
 updateBanner();
 initTheme();
 initWsalesControls();
+initWareaControls();
 render();
 </script>
 </body>

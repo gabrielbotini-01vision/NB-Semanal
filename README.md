@@ -33,7 +33,8 @@ Pré-requisito: [Node.js](https://nodejs.org) instalado (versão LTS).
    no Redshift e exporte substituindo `Dados/01_receita_semana_nivel_estrategia.csv` e
    `Dados/06_operacional_raw.csv` — mesmo nome, separador `;` (ver `Dados/README.md` para o
    contrato exato de cada arquivo). Atualize `budget_oficial.csv`/`reforecast_oficial.csv`
-   na planilha oficial quando houver revisão de meta.
+   (meta mensal) e `f_budget_daily.csv`/`f_reforecast_daily.csv` (meta diária, alimenta a
+   meta por semana) quando houver revisão de meta.
 2. Duplo clique em `update.bat` (ou rode `node app/build_data.js` no terminal, a partir da
    raiz do projeto) — isso regenera `app/app_data.js`.
 3. Abra `app/index.html` e confira as 4 abas.

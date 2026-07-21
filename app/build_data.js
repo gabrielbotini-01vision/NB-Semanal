@@ -9,6 +9,8 @@ const REQUIRED = {
   '06_operacional_raw.csv': '06_operacional_raw.sql',
   'budget_oficial.csv': null,
   'reforecast_oficial.csv': null,
+  'f_budget_daily.csv': null,
+  'f_reforecast_daily.csv': null,
 };
 const missing = Object.keys(REQUIRED).filter(f => !fs.existsSync(DIR + f));
 if (missing.length) {
@@ -70,6 +72,9 @@ const bucketFromAmount = s => { const amt = parseFloat(s);
 const estr = s => ({ OUTBOUND: 'Outbound', INBOUND: 'Inbound', HUNTING: 'Hunting' }[(s || '').toUpperCase()] || null);
 const money = s => parseInt(String(s).replace(/[^\d]/g, ''), 10) || 0;  // 'R$ 1.234.567' -> 1234567
 const num = s => { const v = parseFloat(s); return isFinite(v) ? v : 0; };
+// f_budget_daily/f_reforecast_daily usam vírgula como separador DECIMAL (sem separador de
+// milhar) — diferente do money() acima, que é pra planilha mensal (ponto de milhar, sem decimal).
+const numBr = s => { const v = parseFloat(String(s).replace(',', '.')); return isFinite(v) ? v : 0; };
 // datas do Redshift vêm como '', 'null' (texto) ou 'AAAA-MM-DD'; só aceita se bater o formato.
 const cleanDate = s => { if (!s) return null; const t = String(s).trim(); return /^\d{4}-\d{2}-\d{2}/.test(t) ? t.slice(0, 10) : null; };
 const cleanEmail = s => { if (!s) return null; const t = String(s).trim(); return t.includes('@') ? t : null; };
@@ -97,6 +102,7 @@ const METRICS = ['contacted', 'connected', 'opps', 'sql', 'cw', 'activation', 's
 function blankM() { const o = {}; METRICS.forEach(m => o[m] = 0); return o; }
 function addM(a, b) { METRICS.forEach(m => a[m] += b[m] || 0); return a; }
 function getP(map, email) { if (!map[email]) map[email] = { email }; return map[email]; }
+function wk(p, w) { return (p.porSemana || (p.porSemana = {}))[w] || (p.porSemana[w] = {}); }
 function last4Weekly(semanalObj, allWeeks) {
   const ws = allWeeks.filter(w => semanalObj && semanalObj[w] != null).sort().slice(-4);
   return ws.map(w => ({ semana: w, valor: Math.round(semanalObj[w]) }));
@@ -107,18 +113,20 @@ function last4Weekly(semanalObj, allWeeks) {
 // Parquet + DuckDB-Wasm) entra numa etapa seguinte; por ora este arquivo não muda.
 const f01 = readCsv('01_receita_semana_nivel_estrategia.csv');
 const finCell = {};   // key mes|nivelbucket|estr
-const semanaFin = {}; // ano_semana -> {receita,gmv}
+const finCellSemanal = {}; // key ano_semana|nivelbucket|estr (mesma coisa, grão semana)
 for (const r of f01) {
-  const mk = mesKey(r.mes), b = bucket(r.nivel), e = estr(r.estrategia);
+  const b = bucket(r.nivel), e = estr(r.estrategia);
+  const mk = mesKey(r.mes);
   const k = mk + '|' + b + '|' + e;
   if (!finCell[k]) finCell[k] = { receita: 0, gmv: 0, sap: 0 };
   finCell[k].receita += num(r.receita_net_brl_sales);
   finCell[k].gmv += num(r.gmv_brl_sales);
   finCell[k].sap = Math.max(finCell[k].sap, +r.sap_mensal || 0); // max MTD = sap do mês por celula
   const w = r.ano_semana;
-  if (!semanaFin[w]) semanaFin[w] = { receita: 0, gmv: 0 };
-  semanaFin[w].receita += num(r.receita_net_brl_sales);
-  semanaFin[w].gmv += num(r.gmv_brl_sales);
+  const kw = w + '|' + b + '|' + e;
+  if (!finCellSemanal[kw]) finCellSemanal[kw] = { receita: 0, gmv: 0, sap: 0 };
+  finCellSemanal[kw].receita += num(r.receita_net_brl_sales);
+  finCellSemanal[kw].gmv += num(r.gmv_brl_sales);
 }
 
 // ---------- ACTUAL: operacional_raw (1 linha por lead — substitui 02/03/04/05) ----------
@@ -142,11 +150,12 @@ const STAGES = [
 const CUTOFF = '2025-01-01';
 
 const funCell = {};   // mes|nivelbucket|estr -> {contacted,...}
-const semanaFun = {}; // ano_semana -> {contacted,cw,...}
+const funCellSemanal = {}; // ano_semana|nivelbucket|estr -> {contacted,...} (mesma coisa, grão semana)
 const semContactedNivel = {}, semOppNivel = {}, semCwNivel = {}, semActNivel = {};
 const porPessoaSdr = {}, porPessoaCloser = {}, porPessoaOnb = {};
 const rankCw = {}, rankOwner = {};
 const fteBy = {};
+const fteByWeek = {}; // semana -> estrategia -> {sdrs:Set, contacted, opps} (mesma coisa que fteBy, por semana)
 const cicloAcc = { dias_contato_conectado: [], dias_conectado_opp: [], dias_opp_sql: [], dias_sql_won: [], dias_won_ativacao: [] };
 
 function pushCiclo(key, dateA, dateB) {
@@ -174,10 +183,25 @@ for (const r of fop) {
   const dOS = pushCiclo('dias_opp_sql', dates.opportunity_create_date, dates.sql_date);
   const dSW = pushCiclo('dias_sql_won', dates.sql_date, dates.closed_won_date);
   const dWA = pushCiclo('dias_won_ativacao', dates.closed_won_date, dates.activation_date_10k);
-  if (dCC != null && sdr) { const p = getP(porPessoaSdr, sdr); p._dCCsum = (p._dCCsum || 0) + dCC; p._dCCn = (p._dCCn || 0) + 1; }
-  if (dOS != null && closer) { const p = getP(porPessoaCloser, closer); p._dOSsum = (p._dOSsum || 0) + dOS; p._dOSn = (p._dOSn || 0) + 1; }
-  if (dSW != null && closer) { const p = getP(porPessoaCloser, closer); p._dSWsum = (p._dSWsum || 0) + dSW; p._dSWn = (p._dSWn || 0) + 1; }
-  if (dWA != null && onb) { const p = getP(porPessoaOnb, onb); p._dWAsum = (p._dWAsum || 0) + dWA; p._dWAn = (p._dWAn || 0) + 1; }
+  // ciclo por semana: bucketiza pela semana da data "de chegada" de cada transição (mesma
+  // data que já bucketiza o estágio correspondente mais abaixo), pra poder mostrar o ciclo
+  // médio da semana selecionada nas tabelas de Semanal Área.
+  if (dCC != null && sdr) {
+    const p = getP(porPessoaSdr, sdr); p._dCCsum = (p._dCCsum || 0) + dCC; p._dCCn = (p._dCCn || 0) + 1;
+    if (dates.connected_date) { const pw = wk(p, anoSemana(dates.connected_date)); pw.dCCsum = (pw.dCCsum || 0) + dCC; pw.dCCn = (pw.dCCn || 0) + 1; }
+  }
+  if (dOS != null && closer) {
+    const p = getP(porPessoaCloser, closer); p._dOSsum = (p._dOSsum || 0) + dOS; p._dOSn = (p._dOSn || 0) + 1;
+    if (dates.sql_date) { const pw = wk(p, anoSemana(dates.sql_date)); pw.dOSsum = (pw.dOSsum || 0) + dOS; pw.dOSn = (pw.dOSn || 0) + 1; }
+  }
+  if (dSW != null && closer) {
+    const p = getP(porPessoaCloser, closer); p._dSWsum = (p._dSWsum || 0) + dSW; p._dSWn = (p._dSWn || 0) + 1;
+    if (dates.closed_won_date) { const pw = wk(p, anoSemana(dates.closed_won_date)); pw.dSWsum = (pw.dSWsum || 0) + dSW; pw.dSWn = (pw.dSWn || 0) + 1; }
+  }
+  if (dWA != null && onb) {
+    const p = getP(porPessoaOnb, onb); p._dWAsum = (p._dWAsum || 0) + dWA; p._dWAn = (p._dWAn || 0) + 1;
+    if (dates.activation_date_10k) { const pw = wk(p, anoSemana(dates.activation_date_10k)); pw.dWAsum = (pw.dWAsum || 0) + dWA; pw.dWAn = (pw.dWAn || 0) + 1; }
+  }
 
   for (const [col, key] of STAGES) {
     const dateStr = dates[col];
@@ -187,15 +211,27 @@ for (const r of fop) {
     const ck = mk + '|' + b + '|' + e;
     if (!funCell[ck]) funCell[ck] = { contacted: 0, connected: 0, opps: 0, sql: 0, cw: 0, activation: 0 };
     funCell[ck][key] += 1;
-    if (!semanaFun[w]) semanaFun[w] = { contacted: 0, connected: 0, opps: 0, sql: 0, cw: 0, activation: 0 };
-    semanaFun[w][key] += 1;
+    const ckw = w + '|' + b + '|' + e;
+    if (!funCellSemanal[ckw]) funCellSemanal[ckw] = { contacted: 0, connected: 0, opps: 0, sql: 0, cw: 0, activation: 0 };
+    funCellSemanal[ckw][key] += 1;
 
     if (key === 'contacted') {
       (semContactedNivel[w] = semContactedNivel[w] || {})[b] = (semContactedNivel[w][b] || 0) + 1;
-      if (sdr) { const p = getP(porPessoaSdr, sdr); p.contacted = (p.contacted || 0) + 1; p.estrategia = e || p.estrategia; }
-      if (e) fteBy[e].contacted += 1;
+      if (sdr) {
+        const p = getP(porPessoaSdr, sdr); p.contacted = (p.contacted || 0) + 1; p.estrategia = e || p.estrategia;
+        wk(p, w).contacted = (wk(p, w).contacted || 0) + 1;
+      }
+      if (e) {
+        fteBy[e].contacted += 1;
+        const fwe = (fteByWeek[w] = fteByWeek[w] || {})[e] = (fteByWeek[w] || {})[e] || { sdrs: new Set(), contacted: 0, opps: 0 };
+        if (sdr) fwe.sdrs.add(sdr);
+        fwe.contacted += 1;
+      }
     }
-    if (key === 'connected' && sdr) { const p = getP(porPessoaSdr, sdr); p.connected = (p.connected || 0) + 1; }
+    if (key === 'connected' && sdr) {
+      const p = getP(porPessoaSdr, sdr); p.connected = (p.connected || 0) + 1;
+      wk(p, w).connected = (wk(p, w).connected || 0) + 1;
+    }
     if (key === 'opps') {
       (semOppNivel[w] = semOppNivel[w] || {})[b] = (semOppNivel[w][b] || 0) + 1;
       if (sdr) {
@@ -203,11 +239,22 @@ for (const r of fop) {
         p.opps = (p.opps || 0) + 1;
         p.oppNivel = p.oppNivel || {}; p.oppNivel[b] = (p.oppNivel[b] || 0) + 1;
         p.semanal = p.semanal || {}; p.semanal[w] = (p.semanal[w] || 0) + 1;
+        const pw = wk(p, w); pw.opps = (pw.opps || 0) + 1; pw.oppNivel = pw.oppNivel || {}; pw.oppNivel[b] = (pw.oppNivel[b] || 0) + 1;
       }
-      if (closer) { const p = getP(porPessoaCloser, closer); p.opps = (p.opps || 0) + 1; }
-      if (e) fteBy[e].opps += 1;
+      if (closer) {
+        const p = getP(porPessoaCloser, closer); p.opps = (p.opps || 0) + 1;
+        wk(p, w).opps = (wk(p, w).opps || 0) + 1;
+      }
+      if (e) {
+        fteBy[e].opps += 1;
+        const fwe = (fteByWeek[w] = fteByWeek[w] || {})[e] = (fteByWeek[w] || {})[e] || { sdrs: new Set(), contacted: 0, opps: 0 };
+        fwe.opps += 1;
+      }
     }
-    if (key === 'sql' && closer) { const p = getP(porPessoaCloser, closer); p.sql = (p.sql || 0) + 1; }
+    if (key === 'sql' && closer) {
+      const p = getP(porPessoaCloser, closer); p.sql = (p.sql || 0) + 1;
+      wk(p, w).sql = (wk(p, w).sql || 0) + 1;
+    }
     if (key === 'cw') {
       (semCwNivel[w] = semCwNivel[w] || {})[b] = (semCwNivel[w][b] || 0) + 1;
       if (closer) {
@@ -215,9 +262,13 @@ for (const r of fop) {
         p.cw = (p.cw || 0) + 1;
         p.cwNivel = p.cwNivel || {}; p.cwNivel[b] = (p.cwNivel[b] || 0) + 1;
         p.semanal = p.semanal || {}; p.semanal[w] = (p.semanal[w] || 0) + 1;
+        const pw = wk(p, w); pw.cw = (pw.cw || 0) + 1; pw.cwNivel = pw.cwNivel || {}; pw.cwNivel[b] = (pw.cwNivel[b] || 0) + 1;
         rankCw[closer] = rankCw[closer] || { email: closer, cw: 0, ativados: 0 }; rankCw[closer].cw += 1;
       }
-      if (onb) { const p = getP(porPessoaOnb, onb); p.cwIn = (p.cwIn || 0) + 1; }
+      if (onb) {
+        const p = getP(porPessoaOnb, onb); p.cwIn = (p.cwIn || 0) + 1;
+        wk(p, w).cwIn = (wk(p, w).cwIn || 0) + 1;
+      }
       if (owner) { rankOwner[owner] = rankOwner[owner] || { email: owner, cw: 0, ativados: 0 }; rankOwner[owner].cw += 1; }
     }
     if (key === 'activation') {
@@ -227,6 +278,7 @@ for (const r of fop) {
         p.activated = (p.activated || 0) + 1;
         p.actNivel = p.actNivel || {}; p.actNivel[b] = (p.actNivel[b] || 0) + 1;
         p.semanal = p.semanal || {}; p.semanal[w] = (p.semanal[w] || 0) + 1;
+        const pw = wk(p, w); pw.activated = (pw.activated || 0) + 1; pw.actNivel = pw.actNivel || {}; pw.actNivel[b] = (pw.actNivel[b] || 0) + 1;
       }
       if (closer) { rankCw[closer] = rankCw[closer] || { email: closer, cw: 0, ativados: 0 }; rankCw[closer].ativados += 1; }
       if (owner) { rankOwner[owner] = rankOwner[owner] || { email: owner, cw: 0, ativados: 0 }; rankOwner[owner].ativados += 1; }
@@ -263,19 +315,6 @@ for (const mk in actualMensal) {
   for (const e in actualMensal[mk].porEstrategia) roundM(actualMensal[mk].porEstrategia[e]);
 }
 
-// semanal (trend) — cw agora vem do próprio unpivot (semanaFun), sempre completo
-const semanas = [...new Set([...Object.keys(semanaFin), ...Object.keys(semanaFun)])].sort();
-const actualSemanal = {};
-for (const w of semanas) {
-  actualSemanal[w] = {
-    receita: Math.round((semanaFin[w] || {}).receita || 0),
-    gmv: Math.round((semanaFin[w] || {}).gmv || 0),
-    cw: (semanaFun[w] || {}).cw || 0,
-    contacted: (semanaFun[w] || {}).contacted || 0,
-    opps: (semanaFun[w] || {}).opps || 0
-  };
-}
-
 // ---------- BUDGET / REFORECAST ----------
 function buildRef(name, estCol, nivCol) {
   const rows = readCsv(name);
@@ -294,6 +333,71 @@ function buildRef(name, estCol, nivCol) {
 }
 const budgetMensal = buildRef('budget_oficial.csv', 'Estrategia', 'Nivel');
 const reforecastMensal = buildRef('reforecast_oficial.csv', 'Estratégia', 'Nível');
+
+// ---------- BUDGET / REFORECAST DIÁRIO (meta real por semana) ----------
+// f_budget_daily/f_reforecast_daily: 1 linha por dia × nível × estratégia × pessoa (SDR/
+// Closer/Onboarding), já rateada — somar as colunas "_Dia" de TODAS as linhas de uma mesma
+// semana reconstrói a meta da semana (validado: soma do mês bate com f_goals.* dentro de
+// ~0,02%). Ano+Semana_Ano já seguem a MESMA regra de ano_semana usada no resto do projeto
+// (semana 1 parcial + segunda-feira em diante), então não precisa parsear a data por extenso.
+function buildDailySemanal(name) {
+  const rows = readCsv(name);
+  const cells = {};
+  for (const r of rows) {
+    const niv = (r['f_goals.Nivel'] || '').trim(); if (!niv) continue;
+    const est = estr(r['f_goals.Estrategia']); if (!est) continue;
+    const wk = r.Ano + '-W' + String(+r.Semana_Ano).padStart(2, '0');
+    const k = wk + '|' + niv + '|' + est;
+    if (!cells[k]) cells[k] = blankM();
+    cells[k].contacted += numBr(r.Contacted_Dia);
+    cells[k].connected += numBr(r.Connected_Dia);
+    cells[k].opps += numBr(r.Opps_Dia);
+    cells[k].sql += numBr(r.SQL_Dia);
+    cells[k].cw += numBr(r.CW_Dia);
+    cells[k].activation += numBr(r.Activation_Dia);
+    cells[k].sap += numBr(r.SAP_Dia);
+    cells[k].gmv += numBr(r.GMV_Dia);
+    cells[k].receita += numBr(r.Net_Revenue_Dia);
+  }
+  return buildMensal(cells); // genérico o bastante pra reaproveitar (chave semana em vez de mês)
+}
+const budgetSemanal = buildDailySemanal('f_budget_daily.csv');
+const reforecastSemanal = buildDailySemanal('f_reforecast_daily.csv');
+
+// actual.semanal — mesma estrutura {total,porNivel,porEstrategia} do actual.mensal, só que
+// por semana (reaproveita buildMensal, que não sabe/não liga se a chave é mês ou semana).
+const actualCellsSemanal = {};
+mergeInto(actualCellsSemanal, finCellSemanal);
+mergeInto(actualCellsSemanal, funCellSemanal);
+const actualSemanal = buildMensal(actualCellsSemanal);
+for (const w in actualSemanal) {
+  roundM(actualSemanal[w].total);
+  for (const b in actualSemanal[w].porNivel) roundM(actualSemanal[w].porNivel[b]);
+  for (const e in actualSemanal[w].porEstrategia) roundM(actualSemanal[w].porEstrategia[e]);
+}
+const semanas = [...new Set([...Object.keys(actualSemanal), ...Object.keys(budgetSemanal), ...Object.keys(reforecastSemanal)])].sort();
+
+// semana -> mês (chave 'YYYY-MM'), usado pelo filtro em cascata Mês → Semana no dashboard.
+// Mês de uma semana = mês da SEGUNDA-FEIRA que abre a semana (ou 01/jan pra semana 1 parcial).
+function weekStartUTC(weekKey) {
+  const [ys, ws] = weekKey.split('-W');
+  const year = +ys, w = +ws;
+  if (w === 1) return new Date(Date.UTC(year, 0, 1));
+  const fm = firstMondayUTC(year);
+  const d = new Date(fm); d.setUTCDate(d.getUTCDate() + (w - 2) * 7);
+  return d;
+}
+const semanaMes = {};
+for (const w of semanas) semanaMes[w] = weekStartUTC(w).toISOString().slice(0, 7);
+
+// fte por semana (mesma coisa que "fte" acima, só que por semana, pro filtro de Semanal Área)
+const fteSemanal = {};
+for (const w in fteByWeek) {
+  fteSemanal[w] = ESTRS.filter(e => fteByWeek[w][e]).map(e => ({
+    estrategia: e, fte: fteByWeek[w][e].sdrs.size,
+    contacted: Math.round(fteByWeek[w][e].contacted), opps: Math.round(fteByWeek[w][e].opps)
+  }));
+}
 
 // ---------- CICLO (médias simples por lead, direto do unpivot acima) ----------
 const avg = arr => arr.length ? +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : null;
@@ -322,13 +426,59 @@ for (const r of fimg) {
   diretorio[email.toLowerCase()] = {
     nome: (r['Nome Completo'] || r.Nome || '').trim() || null,
     foto: (r.Image || '').trim() || null,
+    ativo: (r.Ativo || '').trim().toLowerCase() === 'sim',
   };
 }
 function enrichPessoa(p) {
   const d = diretorio[p.email.toLowerCase()];
   p.nome = d?.nome || null;
   p.foto = d?.foto || null;
+  p.ativo = d?.ativo === true; // só "Sim" na planilha conta como ativo (sem match = inativo)
   return p;
+}
+
+// porSemana por pessoa: mesmas métricas do total, só que uma célula por semana — alimenta
+// a Semanal Área quando o usuário filtra por uma semana específica em vez do acumulado.
+function buildPessoaSemanaSdr(p) {
+  const out = {};
+  for (const w in (p.porSemana || {})) {
+    const pw = p.porSemana[w];
+    out[w] = {
+      contacted: Math.round(pw.contacted || 0), connected: Math.round(pw.connected || 0), opps: Math.round(pw.opps || 0),
+      contactRate: pw.contacted ? +(pw.connected / pw.contacted).toFixed(3) : null,
+      oppNivel: NIVEIS.map(n => Math.round((pw.oppNivel || {})[n] || 0)),
+      diasContatoConectado: pw.dCCn ? +(pw.dCCsum / pw.dCCn).toFixed(1) : null,
+    };
+  }
+  return out;
+}
+function buildPessoaSemanaCloser(p) {
+  const out = {};
+  for (const w in (p.porSemana || {})) {
+    const pw = p.porSemana[w];
+    out[w] = {
+      opps: Math.round(pw.opps || 0), sql: Math.round(pw.sql || 0), cw: Math.round(pw.cw || 0),
+      sqlRate: pw.opps ? +(pw.sql / pw.opps).toFixed(3) : null,
+      winRate: pw.sql ? +(pw.cw / pw.sql).toFixed(3) : null,
+      cwNivel: NIVEIS.map(n => Math.round((pw.cwNivel || {})[n] || 0)),
+      diasOppSql: pw.dOSn ? +(pw.dOSsum / pw.dOSn).toFixed(1) : null,
+      diasSqlWon: pw.dSWn ? +(pw.dSWsum / pw.dSWn).toFixed(1) : null,
+    };
+  }
+  return out;
+}
+function buildPessoaSemanaOnb(p) {
+  const out = {};
+  for (const w in (p.porSemana || {})) {
+    const pw = p.porSemana[w];
+    out[w] = {
+      cwIn: Math.round(pw.cwIn || 0), activated: Math.round(pw.activated || 0),
+      actRate: pw.cwIn ? +(pw.activated / pw.cwIn).toFixed(3) : null,
+      actNivel: NIVEIS.map(n => Math.round((pw.actNivel || {})[n] || 0)),
+      diasWonAtivacao: pw.dWAn ? +(pw.dWAsum / pw.dWAn).toFixed(1) : null,
+    };
+  }
+  return out;
 }
 
 // ---------- PESSOAS (SDR / Closer / Onboarding) ----------
@@ -339,6 +489,7 @@ const sdrList = Object.values(porPessoaSdr).map(p => enrichPessoa({
   diasContatoConectado: p._dCCn ? +(p._dCCsum / p._dCCn).toFixed(1) : null,
   oppNivel: NIVEIS.map(n => Math.round((p.oppNivel || {})[n] || 0)),
   metricaSemanal: 'opps', semanal: last4Weekly(p.semanal, semanas),
+  porSemana: buildPessoaSemanaSdr(p),
 })).sort((a, b) => b.opps - a.opps);
 
 const closerList = Object.values(porPessoaCloser).map(p => enrichPessoa({
@@ -350,6 +501,7 @@ const closerList = Object.values(porPessoaCloser).map(p => enrichPessoa({
   diasSqlWon: p._dSWn ? +(p._dSWsum / p._dSWn).toFixed(1) : null,
   cwNivel: NIVEIS.map(n => Math.round((p.cwNivel || {})[n] || 0)),
   metricaSemanal: 'cw', semanal: last4Weekly(p.semanal, semanas),
+  porSemana: buildPessoaSemanaCloser(p),
 })).sort((a, b) => b.cw - a.cw);
 
 const onbList = Object.values(porPessoaOnb).map(p => enrichPessoa({
@@ -359,6 +511,7 @@ const onbList = Object.values(porPessoaOnb).map(p => enrichPessoa({
   diasWonAtivacao: p._dWAn ? +(p._dWAsum / p._dWAn).toFixed(1) : null,
   actNivel: NIVEIS.map(n => Math.round((p.actNivel || {})[n] || 0)),
   metricaSemanal: 'activated', semanal: last4Weekly(p.semanal, semanas),
+  porSemana: buildPessoaSemanaOnb(p),
 })).sort((a, b) => b.activated - a.activated);
 
 // ---------- SÉRIES SEMANAIS POR NÍVEL (direto do unpivot acima) ----------
@@ -394,14 +547,14 @@ const mesFechado = {
 const meses = [...new Set([...Object.keys(actualMensal), ...Object.keys(budgetMensal), ...Object.keys(reforecastMensal)])].sort();
 const DATA = {
   geradoEm: new Date().toISOString().slice(0, 10),
-  meses, semanas, niveis: NIVEIS, estrategias: ESTRS,
+  meses, semanas, semanaMes, niveis: NIVEIS, estrategias: ESTRS,
   actual: { mensal: actualMensal, semanal: actualSemanal },
-  budget: { mensal: budgetMensal },
-  reforecast: { mensal: reforecastMensal },
+  budget: { mensal: budgetMensal, semanal: budgetSemanal },
+  reforecast: { mensal: reforecastMensal, semanal: reforecastSemanal },
   ciclo, ranking,
   porPessoa: { sdr: sdrList, closer: closerList, onboarding: onbList },
   semanalPorNivel,
-  fte,
+  fte, fteSemanal,
   mesFechado,
 };
 fs.mkdirSync(outDir, { recursive: true });

@@ -55,6 +55,30 @@ reescrever a query no Redshift.
 - Colunas numéricas usam `.` como separador de milhar e não têm casas decimais
   (ex.: `R$ 1.234.567` ou `1.234`) — o parser (`money()` em `build_data.js`) remove tudo
   que não é dígito, então isso é seguro tanto com quanto sem o prefixo `R$`.
+- Essas duas alimentam só `budget.mensal`/`reforecast.mensal` (aba **Mensal Sales**, mês
+  fechado). A meta por **semana** (aba Semanal Sales) vem dos arquivos daily abaixo, não
+  destas.
+
+## Budget/reforecast diário (obrigatório — meta real por semana)
+
+| Arquivo | Separador | Granularidade |
+|---|---|---|
+| `f_budget_daily.csv` | `;` | 1 linha por dia × nível × estratégia × pessoa (SDR/Closer/Onboarding), com rateio |
+| `f_reforecast_daily.csv` | `;` | idem |
+
+Data vem por extenso em português (`"sexta-feira, 13 de março de 2026"`), mas `build_data.js`
+**não precisa parsear isso** — usa direto as colunas `Ano` + `Semana_Ano` (já seguem a mesma
+regra de semana do resto do projeto: semana 1 parcial a partir de 01/jan, depois sempre
+segunda-feira) e `Ano` + `Mes_Num`. As colunas `*_Dia` (`Contacted_Dia`, `Net_Revenue_Dia` etc.)
+já vêm rateadas por dia/pessoa com **vírgula como separador decimal** (`numBr()` em
+`build_data.js` — diferente do `money()` usado nas planilhas mensais, que usa ponto de
+milhar sem decimal). Somar as `_Dia` de todas as linhas de uma mesma semana reconstrói a
+meta da semana; somar o mês inteiro reconstrói o `f_goals.*` (validado, ~0,02% de diferença
+por arredondamento).
+
+Essas colunas também trazem meta por **pessoa** (SDR/Closer/Onboarding + `Percent_Rateio`) —
+não usado ainda no dashboard, mas disponível para uma meta individual real no futuro (hoje
+o 1:1 Gestor só compara com a mediana do squad, não com uma meta pessoal).
 
 ## Diretório de pessoas (opcional — alimenta nome + foto no dashboard)
 
