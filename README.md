@@ -29,10 +29,11 @@ servidor nem de Node — Node só é necessário para *gerar* `app/app_data.js` 
 
 Pré-requisito: [Node.js](https://nodejs.org) instalado (versão LTS).
 
-1. Rode as queries em `Querys/*.sql` no Redshift e exporte substituindo os arquivos em
-   `Dados/` — mesmo nome, separador `;` (ver `Dados/README.md` para o contrato exato de
-   cada arquivo). Atualize `budget_oficial.csv`/`reforecast_oficial.csv` na planilha oficial
-   quando houver revisão de meta.
+1. Rode `Querys/01_receita_semana_nivel_estrategia.sql` e `Querys/06_operacional_raw.sql`
+   no Redshift e exporte substituindo `Dados/01_receita_semana_nivel_estrategia.csv` e
+   `Dados/06_operacional_raw.csv` — mesmo nome, separador `;` (ver `Dados/README.md` para o
+   contrato exato de cada arquivo). Atualize `budget_oficial.csv`/`reforecast_oficial.csv`
+   na planilha oficial quando houver revisão de meta.
 2. Duplo clique em `update.bat` (ou rode `node app/build_data.js` no terminal, a partir da
    raiz do projeto) — isso regenera `app/app_data.js`.
 3. Abra `app/index.html` e confira as 4 abas.
@@ -43,9 +44,10 @@ Pré-requisito: [Node.js](https://nodejs.org) instalado (versão LTS).
    git push
    ```
 
-`05_produtividade.csv` é opcional — sem ele, o funil mensal/semanal por etapa (Contatado →
-Ativado 10k) na aba **Semanal Sales** fica marcado como parcial, mas o resto do dashboard
-(KPIs, Mensal Sales, Semanal Área, 1:1 Gestor) funciona normalmente.
+`06_operacional_raw.csv` traz 1 linha por lead (não pré-agregada por semana) — o `build_data.js`
+faz a bucketização por semana/mês em JS, o que permite trocar o grão de tempo sem precisar
+reescrever a query no Redshift. As antigas `02_safra_contacted.sql`...`05_produtividade.sql`
+ficam em `Querys/` só como referência histórica.
 
 ## Abas do dashboard
 

@@ -180,10 +180,15 @@
   .oneone{display:grid;grid-template-columns:250px 1fr;gap:16px;align-items:start}
   .oneone-side{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:12px;max-height:80vh;overflow-y:auto;position:sticky;top:120px}
   .oneone-side input{width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;margin-bottom:8px;background:var(--surface)}
-  .oneone-item{padding:7px 9px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text)}
+  .oneone-item{padding:7px 9px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text);display:flex;align-items:center;gap:9px}
   .oneone-item:hover{background:var(--accent-weak)}
   .oneone-item.on{background:var(--accent-weak);color:var(--accent);font-weight:700}
   @media(max-width:860px){.oneone{grid-template-columns:1fr}.oneone-side{position:static;max-height:none}}
+
+  /* avatar (1:1 Gestor) */
+  .avatar{position:relative;border-radius:50%;overflow:hidden;background:var(--surface-sunken);display:flex;align-items:center;justify-content:center;flex:none}
+  .avatar-fallback{font-family:var(--font-sans);font-weight:700;color:var(--text-faint);letter-spacing:.02em}
+  .avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 
   .statrow{display:flex;gap:26px;flex-wrap:wrap}
   .stat{text-align:right}
@@ -254,6 +259,14 @@ const pctR=r=>r==null?null:Math.round(r*100);
 const attClass=p=>p==null?'':p>=100?'hi':p>=80?'mid':'lo';
 const sum=(arr,f)=>arr.reduce((s,x)=>s+(f(x)||0),0);
 const shortEmail=e=>(e||'').replace('@hotmart.com','');
+const displayName=p=>p.nome||shortEmail(p.email);
+const initials=name=>{const parts=(name||'').trim().split(/\s+/);return ((parts[0]?.[0]||'')+(parts[1]?.[0]||'')).toUpperCase()||'?';};
+function avatarHTML(p,size){
+  size=size||36;
+  const name=displayName(p);
+  const img=p.foto?`<img src="${p.foto}" alt="" loading="lazy" onerror="this.style.display='none'">`:'';
+  return `<div class="avatar" style="width:${size}px;height:${size}px"><span class="avatar-fallback" style="font-size:${Math.round(size*0.38)}px">${initials(name)}</span>${img}</div>`;
+}
 function median(arr){const a=[...arr].filter(v=>v!=null).sort((x,y)=>x-y);const n=a.length;if(!n)return 0;return n%2?a[(n-1)/2]:(a[n/2-1]+a[n/2])/2;}
 
 // ---- estado ----
@@ -317,7 +330,8 @@ function groupedTable({rows,groupBy,groupOrder,groupLabel,cols,kind}){
 }
 function rowHTML(r,i,cols,kind){
   return `<tr class="rankrow" data-email="${r.email}" data-kind="${kind}">
-    <td><span class="mono idx">${String(i+1).padStart(2,'0')}</span>${shortEmail(r.email)}</td>
+    <td><span class="mono idx">${String(i+1).padStart(2,'0')}</span>
+      <span style="display:inline-flex;align-items:center;gap:8px;vertical-align:middle">${avatarHTML(r,22)}${displayName(r)}</span></td>
     ${cols.map(c=>`<td class="${c.align==='r'?'r':''}">${c.render(r)}</td>`).join('')}
   </tr>`;
 }
@@ -686,17 +700,17 @@ function renderOneOne(){
   const q=(state.q||'').toLowerCase();
   const groups=[['sdr','SDR'],['closer','Closers'],['onb','Onboarding']];
   const sideHTML=groups.map(([kind,label])=>{
-    const items=people.filter(x=>x.kind===kind&&shortEmail(x.p.email).toLowerCase().includes(q));
+    const items=people.filter(x=>x.kind===kind&&(shortEmail(x.p.email).toLowerCase().includes(q)||displayName(x.p).toLowerCase().includes(q)));
     if(!items.length)return '';
     return `<div class="eyebrow" style="margin:10px 4px 4px">${label} · ${items.length}</div>`+
-      items.map(x=>`<div class="oneone-item ${state.pessoa.email===x.p.email&&state.pessoa.kind===x.kind?'on':''}" data-email="${x.p.email}" data-kind="${x.kind}">${shortEmail(x.p.email)}</div>`).join('');
+      items.map(x=>`<div class="oneone-item ${state.pessoa.email===x.p.email&&state.pessoa.kind===x.kind?'on':''}" data-email="${x.p.email}" data-kind="${x.kind}">${avatarHTML(x.p,24)}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${displayName(x.p)}</span></div>`).join('');
   }).join('');
 
   const cfg=ROLE_CFG[sel.kind];
   const squadArr=sel.kind==='sdr'?D.porPessoa.sdr:sel.kind==='closer'?D.porPessoa.closer:D.porPessoa.onboarding;
   const co=coaching(sel.p,sel.kind,squadArr,cfg.metricKey);
   const vsMed=co.med?Math.round((co.mine-co.med)/co.med*100):null;
-  const wt=weekTrendHTML({label:shortEmail(sel.p.email).split('.')[0],color:cfg.color,series:sel.p.semanal||[]});
+  const wt=weekTrendHTML({label:displayName(sel.p).split(' ')[0],color:cfg.color,series:sel.p.semanal||[]});
 
   $('viewOneOne').innerHTML=`<div class="oneone">
     <div class="oneone-side">
@@ -705,7 +719,10 @@ function renderOneOne(){
     </div>
     <div>
       <div class="card" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:16px">
-        <div><div class="eyebrow">${cfg.label} · ${sel.p.email}</div><div style="font-size:22px;font-weight:700;margin-top:2px">${shortEmail(sel.p.email)}</div></div>
+        <div style="display:flex;align-items:center;gap:14px">
+          ${avatarHTML(sel.p,52)}
+          <div><div class="eyebrow">${cfg.label} · ${sel.p.email}</div><div style="font-size:22px;font-weight:700;margin-top:2px">${displayName(sel.p)}</div></div>
+        </div>
         <div class="statrow">
           <div class="stat"><div class="eyebrow" style="color:var(--text-faint)">Resultado (período)</div><div class="v">${fN(co.mine)}</div></div>
           <div class="stat"><div class="eyebrow" style="color:var(--text-faint)">Mediana do squad</div><div class="v">${fN(Math.round(co.med))}</div></div>
