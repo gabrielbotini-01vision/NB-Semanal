@@ -91,10 +91,10 @@ per_row AS (
         f.gmv_brl_sales,
         n.amount_12_months,
         -- 1ª segunda-feira do ano do hub: se 01/jan não for segunda, avança até a próxima.
-        DATEADD(
-            day,
-            MOD(1 - EXTRACT(DOW FROM DATE_TRUNC('year', f.hub_date)::date)::int + 7, 7),
+        -- (aritmética de data pura em vez de DATEADD — portável entre Redshift e Postgres)
+        (
             DATE_TRUNC('year', f.hub_date)::date
+            + MOD(1 - EXTRACT(DOW FROM DATE_TRUNC('year', f.hub_date)::date)::int + 7, 7)
         ) AS primeira_segunda
     FROM fin f
     JOIN deal n
@@ -114,7 +114,7 @@ bucketed AS (
         END AS semana,
         CASE WHEN hub_date < primeira_segunda
              THEN 1
-             ELSE (DATEDIFF(day, primeira_segunda, hub_date) / 7)::int + 2
+             ELSE ((hub_date - primeira_segunda) / 7)::int + 2
         END AS semana_num,
         DATE_TRUNC('month', hub_date)::date AS mes,   -- quebra semanas que cruzam a virada de mês
         CASE

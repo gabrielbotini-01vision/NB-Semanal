@@ -29,12 +29,17 @@ servidor nem de Node — Node só é necessário para *gerar* `app/app_data.js` 
 
 Pré-requisito: [Node.js](https://nodejs.org) instalado (versão LTS).
 
-1. Rode `Querys/01_receita_semana_nivel_estrategia.sql` e `Querys/06_operacional_raw.sql`
-   no Redshift e exporte substituindo `Dados/01_receita_semana_nivel_estrategia.csv` e
-   `Dados/06_operacional_raw.csv` — mesmo nome, separador `;` (ver `Dados/README.md` para o
-   contrato exato de cada arquivo). Atualize `budget_oficial.csv`/`reforecast_oficial.csv`
-   (meta mensal) e `f_budget_daily.csv`/`f_reforecast_daily.csv` (meta diária, alimenta a
-   meta por semana) quando houver revisão de meta.
+1. Atualize `Dados/01_receita_semana_nivel_estrategia.csv` e `Dados/06_operacional_raw.csv`,
+   de um dos dois jeitos:
+   - **Automático (recomendado):** `python3 scripts/atualizar_dados.py` — roda as duas
+     queries de `Querys/` direto no Astrobox (datasource `DHI_DATA_PRODUCTION`) e já escreve
+     os CSVs em `Dados/`. Pré-requisito: `ASTROBOX_TOKEN` válido em `~/.env` (gerado pela
+     skill `hotmart-oauth`; expira em ~48h, gere de novo quando o script acusar erro 401/403).
+   - **Manual:** rode as queries no Redshift e exporte substituindo os arquivos com o mesmo
+     nome, separador `;` (ver `Dados/README.md` para o contrato exato de cada arquivo).
+   Atualize também `budget_oficial.csv`/`reforecast_oficial.csv` (meta mensal) e
+   `f_budget_daily.csv`/`f_reforecast_daily.csv` (meta diária, alimenta a meta por semana)
+   quando houver revisão de meta — essas continuam sendo planilhas mantidas à mão.
 2. Duplo clique em `update.bat` (ou rode `node app/build_data.js` no terminal, a partir da
    raiz do projeto) — isso regenera `app/app_data.js`.
 3. Abra `app/index.html` e confira as 4 abas.

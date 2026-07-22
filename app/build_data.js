@@ -20,29 +20,57 @@ if (missing.length) {
   process.exit(1);
 }
 
-// Alguns exports (o SELECT * do operacional, principalmente) têm campos de texto livre
-// (motivo de perda, detalhes, notas) com quebra de linha LITERAL embutida, sem nenhuma aspa
-// ou escape ao redor — não é um CSV "de verdade" nesse sentido. Um split de linha ingênuo
-// (raw.split('\n')) parte uma linha lógica em várias linhas físicas e desalinha tudo dali
-// pra frente. Reconstituímos a linha real juntando fragmentos até bater a contagem de
-// colunas do cabeçalho (a quebra de linha embutida vira '\n' dentro do campo de texto).
+// Parser de CSV de verdade (RFC4180: campo entre aspas pode conter delimitador/quebra de
+// linha literal; "" dentro de aspas = aspas escapada). Os exports gerados pelo
+// scripts/atualizar_dados.py (Astrobox -> NDJSON -> CSV via csv.writer do Python) já saem
+// assim, então texto livre com quebra de linha/`;` embutido (motivo de perda, nome de
+// produtor etc.) vem corretamente entre aspas e este parser lê direto, sem corromper nada.
+function parseCsvRows(raw, delim) {
+  const rows = [];
+  let field = '', row = [], inQuotes = false, atFieldStart = true;
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (raw[i + 1] === '"') { field += '"'; i++; } else { inQuotes = false; }
+      } else field += c;
+      continue;
+    }
+    // Só entra em modo "aspas" se a aspa é o PRIMEIRO caractere do campo (RFC4180: campo
+    // é inteiramente cotado ou não é). Isso evita que uma aspa solta no meio de texto livre
+    // (comum em export antigo, sem escape de verdade) seja confundida com abertura de aspas.
+    if (c === '"' && atFieldStart) { inQuotes = true; atFieldStart = false; continue; }
+    if (c === delim) { row.push(field); field = ''; atFieldStart = true; continue; }
+    if (c === '\r') continue;
+    if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; atFieldStart = true; continue; }
+    field += c; atFieldStart = false;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => !(r.length === 1 && r[0] === ''));
+}
+// Fallback pra exports antigos, exportados à mão do Redshift SEM aspas ao redor de campo com
+// quebra de linha embutida (não é CSV válido nesse caso) — junta linhas consecutivas até
+// bater a contagem de colunas do cabeçalho. Em um CSV bem formado (gerado pelo
+// scripts/atualizar_dados.py) toda linha já sai com a contagem certa, então isso não faz nada.
+function reassembleByFieldCount(rows, H) {
+  const out = [];
+  let buf = null;
+  let descartadas = 0;
+  for (const fields of rows) {
+    if (buf === null) buf = fields;
+    else { buf[buf.length - 1] += '\n' + fields[0]; buf = buf.concat(fields.slice(1)); }
+    if (buf.length >= H) { out.push(buf.slice(0, H)); buf = null; }
+  }
+  if (buf !== null) descartadas++;
+  return { rows: out, descartadas };
+}
 function readCsv(name, delim) {
   delim = delim || ';';
   const raw = fs.readFileSync(DIR + name, 'utf8').replace(/^﻿/, '');
-  const physLines = raw.split(/\r?\n/);
-  while (physLines.length && physLines[physLines.length - 1] === '') physLines.pop();
-  const head = physLines[0].split(delim).map(h => h.trim());
-  const H = head.length;
-  const rows = [];
-  let buf = null;
-  let descartadas = 0;
-  for (let i = 1; i < physLines.length; i++) {
-    const fields = physLines[i].split(delim);
-    if (buf === null) buf = fields;
-    else { buf[buf.length - 1] += '\n' + fields[0]; buf = buf.concat(fields.slice(1)); }
-    if (buf.length >= H) { rows.push(buf.slice(0, H)); buf = null; }
-  }
-  if (buf !== null) descartadas++; // sobrou fragmento incompleto no fim do arquivo
+  const rawRows = parseCsvRows(raw, delim);
+  if (!rawRows.length) return [];
+  const head = rawRows[0].map(h => h.trim());
+  const { rows, descartadas } = reassembleByFieldCount(rawRows.slice(1), head.length);
   if (descartadas) console.warn('[aviso] ' + name + ': ' + descartadas + ' linha(s) final(is) incompleta(s) descartada(s).');
   return rows.map(cols => {
     const o = {};

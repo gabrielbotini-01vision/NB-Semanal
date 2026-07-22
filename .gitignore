@@ -4,3 +4,10 @@
 
 # Config local do Claude Code
 .claude/settings.local.json
+
+# Token do Astrobox (scripts/atualizar_dados.py) — nunca versionar
+.env
+
+# Cache de bytecode do Python
+__pycache__/
+*.pyc

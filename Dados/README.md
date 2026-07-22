@@ -16,6 +16,12 @@ mesmos nomes de coluna da query. Datas em `YYYY-MM-DD` nos exports do Redshift; 
 | `01_receita_semana_nivel_estrategia.csv` | `Querys/01_receita_semana_nivel_estrategia.sql` | `ano_semana;semana;mes;nivel;estrategia;receita_net_brl_sales;gmv_brl_sales;sap_semana;sap_mensal` |
 | `06_operacional_raw.csv` | `Querys/06_operacional_raw.sql` | `SELECT *` de `dhmv_sales_touched` + `owner_email` — todas as colunas da tabela fonte, não uma lista fixa (ver abaixo) |
 
+**Automático via Astrobox:** `python3 scripts/atualizar_dados.py` roda essas duas queries
+direto no datasource `DHI_DATA_PRODUCTION` (Postgres) e escreve os dois CSVs acima, no lugar
+de rodar na mão no Redshift. Requer `ASTROBOX_TOKEN` em `~/.env` (pessoal, expira em ~48h —
+ver skill `hotmart-oauth` pra gerar um novo). O `build_data.js` lê qualquer um dos dois
+formatos (query rodada manualmente ou via script) sem diferença.
+
 `01_receita_semana_nivel_estrategia.csv` ainda alimenta Net Revenue/GMV/SAP como hoje (pré-agregado
 por semana). Existe uma versão granular pronta para o futuro — `Querys/01b_financeira_raw.sql` /
 `01b_financeira_raw.csv` — que vai substituir este arquivo quando a etapa de Parquet + DuckDB-Wasm
