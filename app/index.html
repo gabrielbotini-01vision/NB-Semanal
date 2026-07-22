@@ -374,62 +374,84 @@ function ministack(vals,colors){
   return `<div class="ministack">${vals.map((v,i)=>`<div style="width:${v/t*100}%;background:${colors[i]}" title="${NIV[i]}: ${fN(v)}"></div>`).join('')}</div>`;
 }
 // ================= MENSAL SALES =================
+const MENSAL_KPIS=[
+  {k:'receita',lbl:'Net Revenue',cur:1},
+  {k:'opps',lbl:'Opp',cur:0},
+  {k:'cw',lbl:'CW',cur:0},
+  {k:'gmv',lbl:'GMV',cur:1},
+  {k:'activation',lbl:'Ativação 10K',cur:0},
+];
+function mensalKpiCard(c,act,bud,actPrev,mes){
+  const a=act?.[c.k]||0, b=bud?.[c.k]||0, aprev=actPrev?.[c.k];
+  const att=pct(a,b);
+  const mom=aprev?Math.round((a-aprev)/aprev*100):null;
+  return `<div class="kpi"><span class="rail"></span><div class="lbl">${c.lbl} · ${mesLabel(mes)} (fechado)</div>
+    <div class="num${c.cur?'':' n'}">${c.cur?fBRL(a):fN(a)}</div>
+    <div class="sub"><span>de ${c.cur?fBRL(b):fN(b)} budget${att!=null?' · '+att+'%':''}</span>${mom!=null?`<span class="att ${mom>=0?'hi':'lo'}">${mom>=0?'▲':'▼'} ${Math.abs(mom)}% MoM</span>`:''}</div></div>`;
+}
+// soma um metric por nível através de uma lista de meses (mês fechado = 1 mês; YTD = Jan..mês fechado)
+function nivelTotal(mesesList,dataset,nivel,metric){
+  return mesesList.reduce((s,m)=>s+(dataset?.[m]?.porNivel?.[nivel]?.[metric]||0),0);
+}
+function nivelRowsHTML(mesesList){
+  return NIV.map(n=>{
+    const aReceita=nivelTotal(mesesList,D.actual.mensal,n,'receita'), bReceita=nivelTotal(mesesList,D.budget.mensal,n,'receita');
+    const aCw=nivelTotal(mesesList,D.actual.mensal,n,'cw'), bCw=nivelTotal(mesesList,D.budget.mensal,n,'cw');
+    const na=pct(aReceita,bReceita), ca=pct(aCw,bCw);
+    return `<tr><td style="font-weight:600;white-space:nowrap"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${NIV_COLOR[n]};margin-right:7px"></span>${n}</td>
+      <td class="r mono">${fBRL(aReceita)}</td><td class="r mono" style="color:var(--text-muted)">${fBRL(bReceita)}</td>
+      <td class="r mono" style="font-weight:700" title="atingimento">${na!=null?na+'%':'—'}</td>
+      <td class="r mono">${fN(aCw)}</td><td class="r mono" style="color:var(--text-muted)">${fN(bCw)}</td>
+      <td class="r mono" style="font-weight:700">${ca!=null?ca+'%':'—'}</td></tr>`;
+  }).join('');
+}
+function nivelTableHTML(title,mesesList){
+  return `<div class="card" style="padding:0;overflow-x:auto">
+    <div style="padding:12px 14px 0;font-size:12px;font-weight:700;color:var(--text-muted)">${title}</div>
+    <table class="tbl">
+      <thead><tr><th>Nível</th><th class="r">Net Rev real</th><th class="r">Net Rev meta</th><th class="r">Ating.</th><th class="r">CW real</th><th class="r">CW meta</th><th class="r">Ating.</th></tr></thead>
+      <tbody>${nivelRowsHTML(mesesList)}</tbody></table></div>`;
+}
 function renderMensal(){
   const mf=D.mesFechado||{};
   const mes=mf.mes, prev=mf.mesAnterior;
   const act=D.actual?.mensal?.[mes]?.total, bud=D.budget?.mensal?.[mes]?.total, actPrev=D.actual?.mensal?.[prev]?.total;
   if(!mes||!act){ $('viewMensal').innerHTML='<div class="card"><span class="miss">Sem mês fechado com dado suficiente ainda — rode build_data.js com os CSVs atualizados.</span></div>'; return; }
-  const attNR=pct(act.receita,bud?.receita), attCW=pct(act.cw,bud?.cw), attOpp=pct(act.opps,bud?.opps);
-  const momNR=actPrev?.receita?Math.round((act.receita-actPrev.receita)/actPrev.receita*100):null;
-  const momGMV=actPrev?.gmv?Math.round((act.gmv-actPrev.gmv)/actPrev.gmv*100):null;
 
-  const kpis=`<div class="grid g4">
-    <div class="kpi"><span class="rail"></span><div class="lbl">Net Revenue · ${mesLabel(mes)} (fechado)</div>
-      <div class="num">${fBRL(act.receita)}</div>
-      <div class="sub"><span>de ${fBRL(bud?.receita)} budget${attNR!=null?' · '+attNR+'%':''}</span>${momNR!=null?`<span class="att ${momNR>=0?'hi':'lo'}">${momNR>=0?'▲':'▼'} ${Math.abs(momNR)}% MoM</span>`:''}</div></div>
-    <div class="kpi"><span class="rail"></span><div class="lbl">GMV · fechado</div>
-      <div class="num">${fBRL(act.gmv)}</div>
-      <div class="sub"><span>vs ${mesLabel(prev)}</span>${momGMV!=null?`<span class="att ${momGMV>=0?'hi':'lo'}">${momGMV>=0?'▲':'▼'} ${Math.abs(momGMV)}% MoM</span>`:''}</div></div>
-    <div class="kpi"><span class="rail"></span><div class="lbl">CW · fechado</div>
-      <div class="num n">${fN(act.cw)}</div>
-      <div class="sub"><span>meta ${fN(bud?.cw)}</span>${attCW!=null?`<span class="att ${attClass(attCW)}">${attCW}%</span>`:''}</div></div>
-    <div class="kpi"><span class="rail"></span><div class="lbl">Opp · fechado</div>
-      <div class="num n">${fN(act.opps)}</div>
-      <div class="sub"><span>meta ${fN(bud?.opps)}</span>${attOpp!=null?`<span class="att ${attClass(attOpp)}">${attOpp}%</span>`:''}</div></div>
-  </div>`;
+  const kpis=`<div class="grid g5">${MENSAL_KPIS.map(c=>mensalKpiCard(c,act,bud,actPrev,mes)).join('')}</div>`;
 
-  const idx=D.meses.indexOf(mes);
-  const last3=D.meses.slice(Math.max(0,idx-2),idx+1).filter(m=>D.actual.mensal[m]);
-  const maxv=Math.max(...last3.map(m=>D.actual.mensal[m].total.receita),1)*1.25;
-  const chart=`<div class="trend" style="padding-top:6px">${last3.map((m,i)=>{
-    const v=D.actual.mensal[m].total.receita, isLast=i===last3.length-1;
-    return `<div class="col"><div class="mono" style="font-size:11px;font-weight:${isLast?700:600};color:${isLast?'var(--text)':'var(--text-muted)'}">${fBRL(v)}</div>
-      <div class="b" style="height:${v/maxv*110}px;opacity:${isLast?1:.5}"></div>
-      <div class="cap" style="transform:none;font-size:10.5px;font-weight:${isLast?700:500};color:${isLast?'var(--text)':'var(--text-faint)'}">${mesLabel(m)}</div></div>`;
-  }).join('')}</div>`;
+  const year=mes.slice(0,4);
+  const yearMonths=D.meses.filter(m=>m.startsWith(year)).sort();
+  const yearVals=yearMonths.map(m=>({m,a:D.actual?.mensal?.[m]?.total?.receita||0,b:D.budget?.mensal?.[m]?.total?.receita||0}));
+  const maxYv=Math.max(...yearVals.flatMap(v=>[v.a,v.b]),1);
+  const chart=`
+    <div style="display:flex;gap:16px;align-items:center;margin-bottom:8px;font-size:11px;color:var(--text-muted)">
+      <span style="display:inline-flex;align-items:center;gap:5px"><i style="width:9px;height:9px;background:var(--accent);border-radius:2px;display:inline-block"></i>Actual</span>
+      <span style="display:inline-flex;align-items:center;gap:5px"><i style="width:9px;height:9px;background:var(--text-faint);border-radius:2px;display:inline-block"></i>Budget</span>
+    </div>
+    <div class="trend">${yearVals.map(v=>{
+      const isClosed=v.m===mes;
+      const hA=Math.max(2,v.a/maxYv*120), hB=Math.max(2,v.b/maxYv*120);
+      return `<div class="col">
+        <div style="display:flex;align-items:flex-end;gap:2px;height:120px">
+          <div class="b" style="width:11px;max-width:none;height:${hA}px;background:var(--accent);opacity:${isClosed?1:.55}" title="Actual ${mesLabel(v.m)}: ${fBRL(v.a)}"></div>
+          <div class="b" style="width:11px;max-width:none;height:${hB}px;background:var(--text-faint)" title="Budget ${mesLabel(v.m)}: ${fBRL(v.b)}"></div>
+        </div>
+        <div class="cap" style="transform:none;font-size:10px;font-weight:${isClosed?700:500};color:${isClosed?'var(--text)':'var(--text-faint)'}">${mesLabel(v.m)}</div>
+      </div>`;
+    }).join('')}</div>`;
 
-  const leitura=`O mês fechou em <b>${attNR!=null?attNR+'%':'—'}</b> do budget de Net Revenue (${momNR!=null?(momNR>=0?'+':'')+momNR+'%':'—'} vs ${mesLabel(prev)}). CW a <b>${attCW!=null?attCW+'%':'—'}</b> e Opp a <b>${attOpp!=null?attOpp+'%':'—'}</b> da meta.`;
-
-  const rows=NIV.map(n=>{
-    const a=act && D.actual.mensal[mes].porNivel[n], b=bud && D.budget.mensal[mes].porNivel[n];
-    const na=a?pct(a.receita,b?.receita):null, ca=a?pct(a.cw,b?.cw):null;
-    return `<tr><td style="font-weight:600;white-space:nowrap"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${NIV_COLOR[n]};margin-right:7px"></span>${n}</td>
-      <td class="r mono">${fBRL(a?.receita)}</td><td class="r mono" style="color:var(--text-muted)">${fBRL(b?.receita)}</td>
-      <td class="r mono" style="font-weight:700" title="atingimento">${na!=null?na+'%':'—'}</td>
-      <td class="r mono">${fN(a?.cw)}</td><td class="r mono" style="color:var(--text-muted)">${fN(b?.cw)}</td>
-      <td class="r mono" style="font-weight:700">${ca!=null?ca+'%':'—'}</td></tr>`;
-  }).join('');
+  const ytdMonths=yearMonths.filter(m=>m<=mes);
 
   $('viewMensal').innerHTML=`
     <div class="sec"><div class="sec-head"><h2>Realização vs meta · mês fechado</h2></div>${kpis}</div>
-    <div class="grid g2">
-      <div class="sec"><div class="sec-head"><h2>Net Revenue · 3 meses fechados</h2></div><div class="card">${chart}</div></div>
-      <div class="sec"><div class="sec-head"><h2>Leitura do mês</h2></div><div class="card" style="font-size:13px;line-height:1.6">${leitura}</div></div>
-    </div>
+    <div class="sec"><div class="sec-head"><h2>Net Revenue · ${year}</h2><span class="hint">actual vs budget, todos os meses do ano</span></div>
+      <div class="card">${chart}</div></div>
     <div class="sec"><div class="sec-head"><h2>Fechamento por nível de cliente</h2><span class="hint">realizado vs meta</span></div>
-      <div class="card" style="padding:0;overflow-x:auto"><table class="tbl">
-        <thead><tr><th>Nível</th><th class="r">Net Rev real</th><th class="r">Net Rev meta</th><th class="r">Ating.</th><th class="r">CW real</th><th class="r">CW meta</th><th class="r">Ating.</th></tr></thead>
-        <tbody>${rows}</tbody></table></div>
+      <div class="grid g2">
+        ${nivelTableHTML('Mês fechado — '+mesLabel(mes), [mes])}
+        ${nivelTableHTML('Year to date — '+year, ytdMonths)}
+      </div>
     </div>`;
 }
 
