@@ -246,6 +246,11 @@
         <option value="budget">Budget</option><option value="reforecast">Reforecast</option></select></div>
       <button class="themebtn" id="themeBtn3">🌙 Dark</button>
     </div>
+    <div class="controls" id="mensalControls" style="display:none">
+      <div class="ctl"><label>Mês</label><select id="selMesMensal" class="sel"></select></div>
+      <div class="ctl"><label>Estratégia</label><select id="selEstrMensal" class="sel"></select></div>
+      <button class="themebtn" id="themeBtn4">🌙 Dark</button>
+    </div>
     <div class="controls" id="otherControls" style="display:none"><button class="themebtn" id="themeBtn2">🌙 Dark</button></div>
   </div>
 </div>
@@ -273,6 +278,9 @@
 const $=id=>document.getElementById(id);
 const D=window.DATA||{};
 const STR_ORDER=D.estrategias||['Outbound','Inbound','Hunting'];
+// filtros de Mês (Mensal Sales, Semanal Sales, Semanal Área) só mostram este ano — ajustar
+// aqui quando virar o ano.
+const FILTRO_ANO='2026';
 const NIV=D.niveis||['N2-N3','N4-N5','N6+'];
 const STR_COLOR={Outbound:'var(--orange)',Inbound:'var(--blue)',Hunting:'var(--purple)'};
 const NIV_COLOR={'N2-N3':'var(--orange)','N4-N5':'var(--blue)','N6+':'var(--purple)'};
@@ -299,7 +307,7 @@ function avatarHTML(p,size){
 function median(arr){const a=[...arr].filter(v=>v!=null).sort((x,y)=>x-y);const n=a.length;if(!n)return 0;return n%2?a[(n-1)/2]:(a[n/2-1]+a[n/2])/2;}
 
 // ---- estado ----
-let state={meeting:'wsales',area:'sdr',mes:null,semana:null,estr:'all',ref:'budget',mesArea:null,semanaArea:null,refArea:'budget',pessoa:null};
+let state={meeting:'wsales',area:'sdr',mes:null,semana:null,estr:'all',ref:'budget',mesArea:null,semanaArea:null,refArea:'budget',mesMensal:null,estrMensal:'all',pessoa:null};
 
 const MEETINGS=[{k:'mensal',label:'Mensal Sales'},{k:'wsales',label:'Semanal Sales'},{k:'warea',label:'Semanal Área'},{k:'oneone',label:'1:1 Gestor'}];
 const AREA_TABS=[{k:'sdr',label:'SDR'},{k:'closers',label:'Closers'},{k:'onboarding',label:'Onboarding'}];
@@ -389,68 +397,96 @@ function mensalKpiCard(c,act,bud,actPrev,mes){
     <div class="num${c.cur?'':' n'}">${c.cur?fBRL(a):fN(a)}</div>
     <div class="sub"><span>de ${c.cur?fBRL(b):fN(b)} budget${att!=null?' · '+att+'%':''}</span>${mom!=null?`<span class="att ${mom>=0?'hi':'lo'}">${mom>=0?'▲':'▼'} ${Math.abs(mom)}% MoM</span>`:''}</div></div>`;
 }
-// soma um metric por nível através de uma lista de meses (mês fechado = 1 mês; YTD = Jan..mês fechado)
-function nivelTotal(mesesList,dataset,nivel,metric){
-  return mesesList.reduce((s,m)=>s+(dataset?.[m]?.porNivel?.[nivel]?.[metric]||0),0);
+function metricsForMes(src,mes,estr){
+  const m=D[src]?.mensal?.[mes]; if(!m) return null;
+  if(estr==='all') return m.total;
+  return m.porEstrategia?.[estr]||null;
 }
-function nivelRowsHTML(mesesList){
-  return NIV.map(n=>{
-    const aReceita=nivelTotal(mesesList,D.actual.mensal,n,'receita'), bReceita=nivelTotal(mesesList,D.budget.mensal,n,'receita');
-    const aCw=nivelTotal(mesesList,D.actual.mensal,n,'cw'), bCw=nivelTotal(mesesList,D.budget.mensal,n,'cw');
-    const na=pct(aReceita,bReceita), ca=pct(aCw,bCw);
-    return `<tr><td style="font-weight:600;white-space:nowrap"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${NIV_COLOR[n]};margin-right:7px"></span>${n}</td>
-      <td class="r mono">${fBRL(aReceita)}</td><td class="r mono" style="color:var(--text-muted)">${fBRL(bReceita)}</td>
-      <td class="r mono" style="font-weight:700" title="atingimento">${na!=null?na+'%':'—'}</td>
-      <td class="r mono">${fN(aCw)}</td><td class="r mono" style="color:var(--text-muted)">${fN(bCw)}</td>
-      <td class="r mono" style="font-weight:700">${ca!=null?ca+'%':'—'}</td></tr>`;
+// soma um metric por nível através de uma lista de meses (mês fechado = 1 mês; YTD = Jan..mês
+// fechado), respeitando o filtro de estratégia via o cruzamento porNivelEstrategia.
+function nivelTotal(mesesList,dataset,nivel,metric,estr){
+  return mesesList.reduce((s,m)=>{
+    const cell=estr==='all'?dataset?.[m]?.porNivel?.[nivel]:dataset?.[m]?.porNivelEstrategia?.[nivel]?.[estr];
+    return s+(cell?.[metric]||0);
+  },0);
+}
+const NIVEL_ROWS=[['Opps','opps',0],['CW','cw',0],['Ativação','activation',0],['Net Revenue','receita',1]];
+function nivelMiniTable(nivel,mesesList,estr){
+  const trs=NIVEL_ROWS.map(([label,key,cur])=>{
+    const a=nivelTotal(mesesList,D.actual.mensal,nivel,key,estr), b=nivelTotal(mesesList,D.budget.mensal,nivel,key,estr);
+    const p=pct(a,b);
+    return `<tr><td style="font-weight:600">${label}</td>
+      <td class="r mono">${cur?fBRL(a):fN(a)}</td>
+      <td class="r mono" style="color:var(--text-muted)">${cur?fBRL(b):fN(b)}</td>
+      <td class="r mono" style="font-weight:700">${p!=null?p+'%':'—'}</td></tr>`;
   }).join('');
+  return `<div class="card" style="padding:0;overflow-x:auto;margin-bottom:14px">
+    <div style="padding:10px 14px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:7px">
+      <span style="width:9px;height:9px;border-radius:2px;background:${NIV_COLOR[nivel]};display:inline-block"></span>${nivel}
+    </div>
+    <table class="tbl"><thead><tr><th></th><th class="r">Actual</th><th class="r">Meta</th><th class="r">% Ating.</th></tr></thead>
+    <tbody>${trs}</tbody></table></div>`;
 }
-function nivelTableHTML(title,mesesList){
-  return `<div class="card" style="padding:0;overflow-x:auto">
-    <div style="padding:12px 14px 0;font-size:12px;font-weight:700;color:var(--text-muted)">${title}</div>
-    <table class="tbl">
-      <thead><tr><th>Nível</th><th class="r">Net Rev real</th><th class="r">Net Rev meta</th><th class="r">Ating.</th><th class="r">CW real</th><th class="r">CW meta</th><th class="r">Ating.</th></tr></thead>
-      <tbody>${nivelRowsHTML(mesesList)}</tbody></table></div>`;
+// filtro em cascata Mês → (todos os componentes da página) + Estratégia — trocar o mês aqui
+// redefine o que é "mês fechado" e recalcula o YTD (Jan até o mês selecionado) na hora.
+function initMensalControls(){
+  const mesesComActual=Object.keys(D.actual.mensal).filter(m=>m.startsWith(FILTRO_ANO)).sort();
+  state.mesMensal=D.mesFechado?.mes&&mesesComActual.includes(D.mesFechado.mes)?D.mesFechado.mes:mesesComActual[mesesComActual.length-1];
+  $('selMesMensal').innerHTML=mesesComActual.map(m=>`<option value="${m}">${mesLabel(m)}</option>`).join('');
+  $('selMesMensal').value=state.mesMensal;
+  $('selEstrMensal').innerHTML=`<option value="all">Todas</option>`+STR_ORDER.map(s=>`<option value="${s}">${s}</option>`).join('');
+  $('selEstrMensal').value=state.estrMensal;
+  $('selMesMensal').onchange=e=>{state.mesMensal=e.target.value;renderMensal();};
+  $('selEstrMensal').onchange=e=>{state.estrMensal=e.target.value;renderMensal();};
 }
 function renderMensal(){
-  const mf=D.mesFechado||{};
-  const mes=mf.mes, prev=mf.mesAnterior;
-  const act=D.actual?.mensal?.[mes]?.total, bud=D.budget?.mensal?.[mes]?.total, actPrev=D.actual?.mensal?.[prev]?.total;
-  if(!mes||!act){ $('viewMensal').innerHTML='<div class="card"><span class="miss">Sem mês fechado com dado suficiente ainda — rode build_data.js com os CSVs atualizados.</span></div>'; return; }
+  const mes=state.mesMensal, estr=state.estrMensal;
+  const idx=D.meses.indexOf(mes), prev=D.meses[idx-1];
+  const act=metricsForMes('actual',mes,estr), bud=metricsForMes('budget',mes,estr), actPrev=metricsForMes('actual',prev,estr);
+  if(!mes||!act){ $('viewMensal').innerHTML='<div class="card"><span class="miss">Sem dado suficiente para este mês/estratégia — rode build_data.js com os CSVs atualizados.</span></div>'; return; }
 
   const kpis=`<div class="grid g5">${MENSAL_KPIS.map(c=>mensalKpiCard(c,act,bud,actPrev,mes)).join('')}</div>`;
 
   const year=mes.slice(0,4);
-  const yearMonths=D.meses.filter(m=>m.startsWith(year)).sort();
-  const yearVals=yearMonths.map(m=>({m,a:D.actual?.mensal?.[m]?.total?.receita||0,b:D.budget?.mensal?.[m]?.total?.receita||0}));
+  const ytdMonths=D.meses.filter(m=>m.startsWith(year)&&m<=mes).sort();
+  const yearVals=ytdMonths.map(m=>({m,a:metricsForMes('actual',m,estr)?.receita||0,b:metricsForMes('budget',m,estr)?.receita||0}));
   const maxYv=Math.max(...yearVals.flatMap(v=>[v.a,v.b]),1);
+  // uma tabela só (barras + dados) pra garantir que as colunas de mês fiquem exatamente
+  // alinhadas — duas tabelas/elementos separados nunca batem 100% porque a coluna de rótulo
+  // ("Actual"/"Budget"/"Ating.") desloca as colunas de mês de um jeito que o gráfico não tem.
   const chart=`
-    <div style="display:flex;gap:16px;align-items:center;margin-bottom:8px;font-size:11px;color:var(--text-muted)">
+    <div style="display:flex;gap:16px;align-items:center;margin-bottom:14px;font-size:11px;color:var(--text-muted)">
       <span style="display:inline-flex;align-items:center;gap:5px"><i style="width:9px;height:9px;background:var(--accent);border-radius:2px;display:inline-block"></i>Actual</span>
       <span style="display:inline-flex;align-items:center;gap:5px"><i style="width:9px;height:9px;background:var(--text-faint);border-radius:2px;display:inline-block"></i>Budget</span>
     </div>
-    <div class="trend">${yearVals.map(v=>{
-      const isClosed=v.m===mes;
-      const hA=Math.max(2,v.a/maxYv*120), hB=Math.max(2,v.b/maxYv*120);
-      return `<div class="col">
-        <div style="display:flex;align-items:flex-end;gap:2px;height:120px">
-          <div class="b" style="width:11px;max-width:none;height:${hA}px;background:var(--accent);opacity:${isClosed?1:.55}" title="Actual ${mesLabel(v.m)}: ${fBRL(v.a)}"></div>
-          <div class="b" style="width:11px;max-width:none;height:${hB}px;background:var(--text-faint)" title="Budget ${mesLabel(v.m)}: ${fBRL(v.b)}"></div>
-        </div>
-        <div class="cap" style="transform:none;font-size:10px;font-weight:${isClosed?700:500};color:${isClosed?'var(--text)':'var(--text-faint)'}">${mesLabel(v.m)}</div>
-      </div>`;
-    }).join('')}</div>`;
-
-  const ytdMonths=yearMonths.filter(m=>m<=mes);
+    <table class="tbl">
+      <thead><tr><th></th>${yearVals.map(v=>`<th style="text-align:center">${mesLabel(v.m)}</th>`).join('')}</tr></thead>
+      <tbody>
+        <tr>
+          <td></td>
+          ${yearVals.map(v=>{
+            const isClosed=v.m===mes;
+            const hA=Math.max(2,v.a/maxYv*190), hB=Math.max(2,v.b/maxYv*190);
+            return `<td style="vertical-align:bottom">
+              <div style="display:flex;justify-content:center;align-items:flex-end;gap:3px;height:190px">
+                <div class="b" style="width:18px;max-width:none;height:${hA}px;background:var(--accent);opacity:${isClosed?1:.55}" title="Actual ${mesLabel(v.m)}: ${fBRL(v.a)}"></div>
+                <div class="b" style="width:18px;max-width:none;height:${hB}px;background:var(--text-faint)" title="Budget ${mesLabel(v.m)}: ${fBRL(v.b)}"></div>
+              </div></td>`;
+          }).join('')}
+        </tr>
+        <tr><td style="font-weight:600">Actual</td>${yearVals.map(v=>`<td class="mono" style="text-align:center">${fBRL(v.a)}</td>`).join('')}</tr>
+        <tr><td style="font-weight:600;color:var(--text-muted)">Budget</td>${yearVals.map(v=>`<td class="mono" style="text-align:center;color:var(--text-muted)">${fBRL(v.b)}</td>`).join('')}</tr>
+        <tr><td style="font-weight:600">Ating.</td>${yearVals.map(v=>{const p=pct(v.a,v.b);return `<td class="mono" style="text-align:center;font-weight:700">${p!=null?p+'%':'—'}</td>`;}).join('')}</tr>
+      </tbody></table>`;
 
   $('viewMensal').innerHTML=`
-    <div class="sec"><div class="sec-head"><h2>Realização vs meta · mês fechado</h2></div>${kpis}</div>
-    <div class="sec"><div class="sec-head"><h2>Net Revenue · ${year}</h2><span class="hint">actual vs budget, todos os meses do ano</span></div>
-      <div class="card">${chart}</div></div>
+    <div class="sec"><div class="sec-head"><h2>Realização vs meta · mês fechado</h2><span class="hint">${mesLabel(mes)} · ${estr==='all'?'todas estratégias':estr}</span></div>${kpis}</div>
+    <div class="sec"><div class="sec-head"><h2>Net Revenue · ${year} (YTD)</h2><span class="hint">actual vs budget, jan → mês selecionado</span></div>
+      <div class="card" style="padding:24px;overflow-x:auto">${chart}</div></div>
     <div class="sec"><div class="sec-head"><h2>Fechamento por nível de cliente</h2><span class="hint">realizado vs meta</span></div>
       <div class="grid g2">
-        ${nivelTableHTML('Mês fechado — '+mesLabel(mes), [mes])}
-        ${nivelTableHTML('Year to date — '+year, ytdMonths)}
+        <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Mês fechado — ${mesLabel(mes)}</div>${NIV.map(n=>nivelMiniTable(n,[mes],estr)).join('')}</div>
+        <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Year to date — ${year}</div>${NIV.map(n=>nivelMiniTable(n,ytdMonths,estr)).join('')}</div>
       </div>
     </div>`;
 }
@@ -462,7 +498,7 @@ function weeksInMonth(mes,pool){ return pool.filter(w=>D.semanaMes[w]===mes); }
 // de Semana (só as que pertencem àquele mês, via D.semanaMes calculado no build_data.js).
 function initWsalesControls(){
   const semanasAtivas=D.semanas.filter(w=>D.actual.semanal[w]||D.budget.semanal[w]);
-  const mesesAtivos=[...new Set(semanasAtivas.map(w=>D.semanaMes[w]))].sort();
+  const mesesAtivos=[...new Set(semanasAtivas.map(w=>D.semanaMes[w]))].filter(m=>m.startsWith(FILTRO_ANO)).sort();
   const comFunil=Object.keys(D.actual.semanal).filter(w=>D.actual.semanal[w].total.contacted>0).sort();
   const def=comFunil.pop()||Object.keys(D.actual.semanal).sort().pop();
   state.semana=def&&semanasAtivas.includes(def)?def:semanasAtivas[semanasAtivas.length-1];
@@ -742,7 +778,7 @@ function renderArea(){
 // semanaArea) já que a aba tem seus próprios controles no topbar.
 function initWareaControls(){
   const semanasAtivas=D.semanas.filter(w=>D.actual.semanal[w]);
-  const mesesAtivos=[...new Set(semanasAtivas.map(w=>D.semanaMes[w]))].sort();
+  const mesesAtivos=[...new Set(semanasAtivas.map(w=>D.semanaMes[w]))].filter(m=>m.startsWith(FILTRO_ANO)).sort();
   const comFunil=Object.keys(D.actual.semanal).filter(w=>D.actual.semanal[w].total.contacted>0).sort();
   const def=comFunil.pop()||semanasAtivas[semanasAtivas.length-1];
   state.semanaArea=def&&semanasAtivas.includes(def)?def:semanasAtivas[semanasAtivas.length-1];
@@ -898,10 +934,11 @@ function updateBanner(){
 }
 function render(){
   renderTabs();
-  $('ctxLine').textContent=CTX[state.meeting]+(state.meeting==='mensal'&&D.mesFechado?.mes?(' · '+mesLabel(D.mesFechado.mes)):'');
+  $('ctxLine').textContent=CTX[state.meeting]+(state.meeting==='mensal'&&state.mesMensal?(' · '+mesLabel(state.mesMensal)):'');
   $('wsalesControls').style.display=state.meeting==='wsales'?'flex':'none';
   $('wareaControls').style.display=state.meeting==='warea'?'flex':'none';
-  $('otherControls').style.display=(state.meeting==='mensal'||state.meeting==='oneone')?'flex':'none';
+  $('mensalControls').style.display=state.meeting==='mensal'?'flex':'none';
+  $('otherControls').style.display=state.meeting==='oneone'?'flex':'none';
   $('subbar').style.display=state.meeting==='warea'?'block':'none';
   $('viewMensal').style.display=state.meeting==='mensal'?'block':'none';
   $('viewSemanal').style.display=state.meeting==='wsales'?'block':'none';
@@ -919,12 +956,12 @@ function initTheme(){
   const dark=saved?saved==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;
   setTheme(dark);
   const toggle=()=>setTheme(document.documentElement.dataset.theme!=='dark');
-  $('themeBtn').onclick=toggle; $('themeBtn2').onclick=toggle; $('themeBtn3').onclick=toggle;
+  $('themeBtn').onclick=toggle; $('themeBtn2').onclick=toggle; $('themeBtn3').onclick=toggle; $('themeBtn4').onclick=toggle;
 }
 function setTheme(dark){
   document.documentElement.dataset.theme=dark?'dark':'light';
   const label=dark?'☀️ Light':'🌙 Dark';
-  $('themeBtn').textContent=label; $('themeBtn2').textContent=label; $('themeBtn3').textContent=label;
+  $('themeBtn').textContent=label; $('themeBtn2').textContent=label; $('themeBtn3').textContent=label; $('themeBtn4').textContent=label;
   localStorage.setItem('nb-theme',dark?'dark':'light');
 }
 
@@ -933,6 +970,7 @@ updateBanner();
 initTheme();
 initWsalesControls();
 initWareaControls();
+initMensalControls();
 render();
 </script>
 </body>

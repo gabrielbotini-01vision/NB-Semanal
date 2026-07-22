@@ -316,17 +316,23 @@ for (const r of fop) {
 
 // montar actual.mensal
 function buildMensal(cells) {
-  // cells: key mes|nivel|estr -> partial metrics; retorna {mes:{total,porNivel,porEstrategia}}
+  // cells: key mes|nivel|estr -> partial metrics; retorna {mes:{total,porNivel,porEstrategia,porNivelEstrategia}}
+  // porNivelEstrategia é o cruzamento nível x estratégia (aditivo, não muda o shape de
+  // porNivel/porEstrategia já existentes) — alimenta o filtro de Estratégia na Mensal Sales
+  // sem quebrar quem já lê porNivel/porEstrategia direto (Semanal Sales, Semanal Área).
   const out = {};
   for (const k in cells) {
     const [mk, b, e] = k.split('|');
-    if (!out[mk]) out[mk] = { total: blankM(), porNivel: {}, porEstrategia: {} };
+    if (!out[mk]) out[mk] = { total: blankM(), porNivel: {}, porEstrategia: {}, porNivelEstrategia: {} };
     const cell = cells[k];
     addM(out[mk].total, cell);
     if (!out[mk].porNivel[b]) out[mk].porNivel[b] = blankM();
     addM(out[mk].porNivel[b], cell);
     if (!out[mk].porEstrategia[e]) out[mk].porEstrategia[e] = blankM();
     addM(out[mk].porEstrategia[e], cell);
+    if (!out[mk].porNivelEstrategia[b]) out[mk].porNivelEstrategia[b] = {};
+    if (!out[mk].porNivelEstrategia[b][e]) out[mk].porNivelEstrategia[b][e] = blankM();
+    addM(out[mk].porNivelEstrategia[b][e], cell);
   }
   return out;
 }
@@ -341,6 +347,8 @@ for (const mk in actualMensal) {
   roundM(actualMensal[mk].total);
   for (const b in actualMensal[mk].porNivel) roundM(actualMensal[mk].porNivel[b]);
   for (const e in actualMensal[mk].porEstrategia) roundM(actualMensal[mk].porEstrategia[e]);
+  for (const b in actualMensal[mk].porNivelEstrategia)
+    for (const e in actualMensal[mk].porNivelEstrategia[b]) roundM(actualMensal[mk].porNivelEstrategia[b][e]);
 }
 
 // ---------- BUDGET / REFORECAST ----------
