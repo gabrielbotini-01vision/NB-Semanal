@@ -11,3 +11,6 @@
 # Cache de bytecode do Python
 __pycache__/
 *.pyc
+
+# Artefatos do playwright-cli (snapshots da automação de refresh do token)
+.playwright-cli/
