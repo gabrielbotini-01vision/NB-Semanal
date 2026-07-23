@@ -775,20 +775,34 @@ function renderAreaSdr(){
   const wB=D.semanas[idxW-1]||null, wC=D.semanas[idxW-2]||null;
   const baseByEmail={}; base.forEach(p=>baseByEmail[p.email]=p);
   const oppsAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return x?(x.opps||0):0;};
-  const connAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return (x&&x.contactRate!=null)?Math.round(x.contactRate*100):null;};
-  const nivelPct=(r,i)=>{const a=baseByEmail[r.email]?.oppNivel||[0,0,0];const t=(a[0]+a[1]+a[2])||1;return Math.round((a[i]||0)/t*100);};
+  const contactedAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return x?(x.contacted||0):0;};
+  // coorte C2 por pessoa: dos contatados por essa pessoa NA semana W, quantos conectaram na
+  // MESMA semana (não é throughput — vem de cohortRate, calculado no build_data.js).
+  const cohAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return (x&&x.cohortRate!=null)?Math.round(x.cohortRate*100):null;};
+  // distribuição de opps por nível SÓ nas 3 últimas semanas (mesma janela das outras colunas),
+  // em vez do acumulado desde sempre.
+  const nivelPct=(r,i)=>{
+    const a=[0,0,0];
+    [week,wB,wC].forEach(w=>{const x=w&&(r.porSemana||{})[w]; if(x&&x.oppNivel) x.oppNivel.forEach((v,j)=>a[j]+=v||0);});
+    const t=(a[0]+a[1]+a[2])||1; return Math.round((a[i]||0)/t*100);
+  };
+  // produtividade/dia útil nas 3 últimas semanas — uma por Contacted, outra por Opp.
+  const diasUteis3=[week,wB,wC].reduce((s,w)=>s+(w?(D.diasUteisSemana?.[w]||0):0),0);
+  // rótulo das colunas de semana anterior: "Semana 29"/"Semana 28" em vez de "−1"/"−2".
+  const wkNum=w=>w?('Semana '+ +w.split('-W')[1]):'−';
+  const lblB=wkNum(wB), lblC=wkNum(wC);
   const cols=[
     {key:'oppsA',label:'Opps sem.',align:'r',render:r=>`<span class="mono num-cell">${fN(oppsAt(r,week))}</span>`},
-    {key:'oppsB',label:'−1',align:'r',render:r=>`<span class="mono">${fN(oppsAt(r,wB))}</span>`},
-    {key:'oppsC',label:'−2',align:'r',render:r=>`<span class="mono">${fN(oppsAt(r,wC))}</span>`},
-    {key:'connA',label:'%Conn',align:'r',render:r=>`<span class="mono">${connAt(r,week)!=null?connAt(r,week)+'%':'—'}</span>`},
-    {key:'connB',label:'−1',align:'r',render:r=>`<span class="mono">${connAt(r,wB)!=null?connAt(r,wB)+'%':'—'}</span>`},
-    {key:'connC',label:'−2',align:'r',render:r=>`<span class="mono">${connAt(r,wC)!=null?connAt(r,wC)+'%':'—'}</span>`},
+    {key:'oppsB',label:lblB,align:'r',render:r=>`<span class="mono">${fN(oppsAt(r,wB))}</span>`},
+    {key:'oppsC',label:lblC,align:'r',render:r=>`<span class="mono">${fN(oppsAt(r,wC))}</span>`},
+    {key:'connA',label:'C2 (coorte)',align:'r',render:r=>`<span class="mono">${cohAt(r,week)!=null?cohAt(r,week)+'%':'—'}</span>`},
+    {key:'connB',label:lblB,align:'r',render:r=>`<span class="mono">${cohAt(r,wB)!=null?cohAt(r,wB)+'%':'—'}</span>`},
+    {key:'connC',label:lblC,align:'r',render:r=>`<span class="mono">${cohAt(r,wC)!=null?cohAt(r,wC)+'%':'—'}</span>`},
     {key:'n1',label:'N2-N3',align:'r',render:r=>`<span class="mono">${nivelPct(r,0)}%</span>`},
     {key:'n2',label:'N4-N5',align:'r',render:r=>`<span class="mono">${nivelPct(r,1)}%</span>`},
     {key:'n3',label:'N6+',align:'r',render:r=>`<span class="mono">${nivelPct(r,2)}%</span>`},
-    {key:'pd',label:'Prod/dia sem.',align:'r',render:r=>`<span class="mono">${(oppsAt(r,week)/5).toFixed(1)}</span>`},
-    {key:'pd3',label:'Prod/dia 3s',align:'r',render:r=>`<span class="mono">${((oppsAt(r,week)+oppsAt(r,wB)+oppsAt(r,wC))/15).toFixed(1)}</span>`},
+    {key:'pdContacted',label:'Contacted/dia (3s)',align:'r',render:r=>{const t=contactedAt(r,week)+contactedAt(r,wB)+contactedAt(r,wC);return `<span class="mono">${diasUteis3?(t/diasUteis3).toFixed(1):'—'}</span>`;}},
+    {key:'pdOpp',label:'Opp/dia (3s)',align:'r',render:r=>{const t=oppsAt(r,week)+oppsAt(r,wB)+oppsAt(r,wC);return `<span class="mono">${diasUteis3?(t/diasUteis3).toFixed(2):'—'}</span>`;}},
   ];
   // só SDRs com pelo menos 1 opp em uma das 3 últimas semanas (atual, −1, −2)
   const listTbl=listF.filter(r=>(oppsAt(r,week)+oppsAt(r,wB)+oppsAt(r,wC))>0);
@@ -804,7 +818,7 @@ function renderAreaSdr(){
     <div class="sec"><div class="sec-head"><h2>Opps por nível de cliente</h2><span class="hint">oportunidades geradas por semana · últimas 8 semanas</span></div>
       <div class="grid g3">${wt}</div></div>
     <div class="sec">${prodResumo}</div>
-    <div class="sec"><div class="sec-head"><h2>SDR · por pessoa</h2><span class="hint">Opps e %Conn nas 3 últimas semanas · distribuição acumulada por nível · produtividade diária (opps/dia)</span></div>${table}</div>`;
+    <div class="sec"><div class="sec-head"><h2>SDR · por pessoa</h2><span class="hint">Opps e C2 (coorte contato→conexão na semana) nas 3 últimas semanas · distribuição de opps por nível (3 últimas semanas) · produtividade por dia útil (contacted e opp, 3 últimas semanas)</span></div>${table}</div>`;
   bindRowClicks($('viewArea'));
 }
 function renderAreaClosers(){
@@ -819,24 +833,46 @@ function renderAreaClosers(){
     ['Win rate (#)',`${pct(totCw,totSql)??'—'}%`,`${fN(totCw)} CW`,'Fechados ÷ SQL'],
     ['CW in',fN(totCw),metaSub(totCw,refT?.cw,`${base.length} closers`),'Negócios fechados'],
   ];
-  const wt=NIV.map(n=>weekTrendHTML({label:n,color:NIV_COLOR[n],series:weeklyByNivel(D.semanalPorNivel?.cw,n).slice(-4)})).join('');
-  const totWt=weekTrendHTML({label:'Total',color:'var(--accent)',series:weeklyTotals(D.semanalPorNivel?.cw).slice(-4)});
+  // mesmo estilo do SDR: pequenos múltiplos por nível, 8 últimas semanas, um card por nível.
+  const wt=NIV.map(n=>`<div class="card">${weekTrendHTML({label:n,color:NIV_COLOR[n],series:weeklyByNivel(D.semanalPorNivel?.cw,n).slice(-8)})}</div>`).join('');
+  // semanas de referência (atual, −1, −2) — mesmo padrão da tabela SDR.
+  const idxW=D.semanas.indexOf(week);
+  const wB=D.semanas[idxW-1]||null, wC=D.semanas[idxW-2]||null;
+  const wkNum=w=>w?('Semana '+ +w.split('-W')[1]):'−';
+  const lblB=wkNum(wB), lblC=wkNum(wC);
+  const cwAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return x?(x.cw||0):0;};
+  const sqlAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return x?(x.sql||0):0;};
+  const winAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return (x&&x.winRate!=null)?Math.round(x.winRate*100):null;};
+  // CW por nível só nas 3 últimas semanas (mesma janela das outras colunas), não acumulado.
+  const cwNivel3=r=>{
+    const a=[0,0,0];
+    [week,wB,wC].forEach(w=>{const x=w&&(r.porSemana||{})[w]; if(x&&x.cwNivel) x.cwNivel.forEach((v,j)=>a[j]+=v||0);});
+    return a;
+  };
+  const diasUteis3=[week,wB,wC].reduce((s,w)=>s+(w?(D.diasUteisSemana?.[w]||0):0),0);
   const cols=[
-    {key:'opps',label:'Opp in',render:r=>`<span class="mono">${fN(r.opps)}</span>`},
+    {key:'opps',label:'Opp in',align:'r',render:r=>`<span class="mono">${fN(r.opps)}</span>`},
     {key:'sqlRate',label:'Opp→SQL',align:'r',render:r=>`<span class="mono">${r.sqlRate!=null?pctR(r.sqlRate)+'%':'—'}</span>`},
-    {key:'winRate',label:'Win rate',align:'r',render:r=>`<span class="mono" style="color:${r.winRate!=null&&r.winRate<0.2?'var(--danger)':'inherit'}">${r.winRate!=null?pctR(r.winRate)+'%':'—'}</span>`},
-    {key:'cw',label:'CW in',render:r=>`<span class="mono num-cell">${fN(r.cw)}</span>`},
-    {key:'cwNivel',label:'CW por nível',render:r=>ministack(r.cwNivel,NIV.map(n=>NIV_COLOR[n]))},
+    {key:'cwA',label:'CW sem.',align:'r',render:r=>`<span class="mono num-cell">${fN(cwAt(r,week))}</span>`},
+    {key:'cwB',label:lblB,align:'r',render:r=>`<span class="mono">${fN(cwAt(r,wB))}</span>`},
+    {key:'cwC',label:lblC,align:'r',render:r=>`<span class="mono">${fN(cwAt(r,wC))}</span>`},
+    {key:'winA',label:'Win rate',align:'r',render:r=>`<span class="mono">${winAt(r,week)!=null?winAt(r,week)+'%':'—'}</span>`},
+    {key:'winB',label:lblB,align:'r',render:r=>`<span class="mono">${winAt(r,wB)!=null?winAt(r,wB)+'%':'—'}</span>`},
+    {key:'winC',label:lblC,align:'r',render:r=>`<span class="mono">${winAt(r,wC)!=null?winAt(r,wC)+'%':'—'}</span>`},
+    {key:'cwNivel',label:'CW por nível',render:r=>ministack(cwNivel3(r),NIV.map(n=>NIV_COLOR[n]))},
+    {key:'sqlDia',label:'SQL/dia (3s)',align:'r',render:r=>{const t=sqlAt(r,week)+sqlAt(r,wB)+sqlAt(r,wC);return `<span class="mono">${diasUteis3?(t/diasUteis3).toFixed(2):'—'}</span>`;}},
+    {key:'cwDia',label:'CW/dia (3s)',align:'r',render:r=>{const t=cwAt(r,week)+cwAt(r,wB)+cwAt(r,wC);return `<span class="mono">${diasUteis3?(t/diasUteis3).toFixed(2):'—'}</span>`;}},
     {key:'diasOppSql',label:'Ciclo Opp→SQL',align:'r',render:r=>`<span class="mono">${r.diasOppSql!=null?r.diasOppSql+'d':'—'}</span>`},
     {key:'diasSqlWon',label:'Ciclo SQL→CW',align:'r',render:r=>`<span class="mono">${r.diasSqlWon!=null?r.diasSqlWon+'d':'—'}</span>`},
   ];
-  const table=groupedTable({rows:list,cols,kind:'closer'});
+  // só closers com pelo menos 1 CW em uma das 3 últimas semanas (atual, −1, −2)
+  const listTbl=list.filter(r=>(cwAt(r,week)+cwAt(r,wB)+cwAt(r,wC))>0);
+  const table=groupedTable({rows:listTbl,cols,kind:'closer'});
   $('viewArea').innerHTML=`
     <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d])=>`<div class="kpi"><span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div>
-    <div class="sec" style="margin-top:24px"><div class="sec-head"><h2>CW por nível de cliente · últimas 4 semanas</h2></div>
-      <div class="card"><div class="wtgrid g3">${wt}</div></div></div>
-    <div class="sec"><div class="sec-head"><h2>CW total · últimas 4 semanas</h2></div><div class="card">${totWt}</div></div>
-    <div class="sec"><div class="sec-head"><h2>Closers · entrada, conversão e CW por nível</h2><span class="hint">${semanaLabel(week)} · sem agrupamento fixo por squad — cada closer atende níveis variados; ver coluna "CW por nível". Pipeline aberto e aging de opp não existem na base hoje.</span></div>${table}</div>`;
+    <div class="sec" style="margin-top:24px"><div class="sec-head"><h2>CW por nível de cliente</h2><span class="hint">últimas 8 semanas</span></div>
+      <div class="grid g3">${wt}</div></div>
+    <div class="sec"><div class="sec-head"><h2>Closers · por pessoa</h2><span class="hint">CW e win rate nas 3 últimas semanas · CW por nível (3 últimas semanas) · produtividade por dia útil (SQL e CW, 3 últimas semanas)</span></div>${table}</div>`;
   bindRowClicks($('viewArea'));
 }
 function renderAreaOnboarding(){

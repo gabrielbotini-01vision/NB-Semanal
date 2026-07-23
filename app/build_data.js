@@ -216,6 +216,12 @@ for (const r of fop) {
     const connSame = dates.connected_date && anoSemana(dates.connected_date) === wc;
     const bumpCoh = o => { const cc = o[wc] || (o[wc] = { contacted: 0, conn: 0 }); cc.contacted++; if (connSame) cc.conn++; };
     bumpCoh(sdrCohort.all); if (_estrLead) bumpCoh(sdrCohort[_estrLead]);
+    // mesma coorte, por SDR — alimenta a coluna "C2 (coorte)" na tabela SDR · por pessoa.
+    if (sdr) {
+      const pw = wk(getP(porPessoaSdr, sdr), wc);
+      pw.cohContacted = (pw.cohContacted || 0) + 1;
+      if (connSame) pw.cohConn = (pw.cohConn || 0) + 1;
+    }
   }
   const _unq = cleanDate(r.unqualified_date);
   if (_unq) { const wq = anoSemana(_unq); sdrUnq.all[wq] = (sdrUnq.all[wq] || 0) + 1; if (_estrLead) sdrUnq[_estrLead][wq] = (sdrUnq[_estrLead][wq] || 0) + 1; }
@@ -585,6 +591,8 @@ function buildPessoaSemanaSdr(p) {
     out[w] = {
       contacted: Math.round(pw.contacted || 0), connected: Math.round(pw.connected || 0), opps: Math.round(pw.opps || 0),
       contactRate: pw.contacted ? +(pw.connected / pw.contacted).toFixed(3) : null,
+      // coorte: dos contatados NESSA semana, quantos conectaram na MESMA semana (não throughput).
+      cohortRate: pw.cohContacted ? +(pw.cohConn / pw.cohContacted).toFixed(3) : null,
       oppNivel: NIVEIS.map(n => Math.round((pw.oppNivel || {})[n] || 0)),
       diasContatoConectado: pw.dCCn ? +(pw.dCCsum / pw.dCCn).toFixed(1) : null,
     };
