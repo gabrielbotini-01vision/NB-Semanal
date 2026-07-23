@@ -68,3 +68,10 @@ ficam em `Querys/` só como referência histórica.
 Onde a base real ainda não tem uma métrica (ex.: pipeline aberto, Net Revenue por onboarder
 nomeado, meta individual por pessoa), o dashboard mostra "sem dado" em vez de inventar
 número — ver `METRICAS.md` para o mapeamento completo métrica → coluna de origem.
+
+## Backlog
+
+- **FTE de SDR mais fiel:** hoje o card "Opps / FTE" (Semanal Área › SDR) usa como FTE os
+  *SDRs que de fato geraram opp na semana* (aproximação client-side). No futuro, trocar por
+  uma base de headcount/escala real (quem estava alocado e trabalhando na semana), quando
+  disponível.

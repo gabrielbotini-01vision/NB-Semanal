@@ -185,6 +185,15 @@ const rankCw = {}, rankOwner = {};
 const fteBy = {};
 const fteByWeek = {}; // semana -> estrategia -> {sdrs:Set, contacted, opps} (mesma coisa que fteBy, por semana)
 const cicloAcc = { dias_contato_conectado: [], dias_conectado_opp: [], dias_opp_sql: [], dias_sql_won: [], dias_won_ativacao: [] };
+// coorte de contato→conexão POR SEMANA: dos leads contatados na semana W, quantos conectaram
+// na PRÓPRIA semana W (não é o throughput de connected, que conta conexões de coortes antigas).
+const sdrCohort = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} }; // estr -> W -> { contacted, conn }
+const sdrUnq = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} };    // estr -> W -> nº de unqualifieds
+const sdrOppFteSet = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} }; // estr -> W -> Set(sdr que gerou opp)
+// coorte por semana de CONTATO × status ATUAL (hoje) do lead — situação mais recente entre
+// contacted/connected/nurturing/qualified/unqualified (data mais recente vence).
+const sdrCohortStatus = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} }; // estr -> W(contato) -> {status: n}
+const sdrContactFteSet = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} }; // estr -> W -> Set(sdr que contatou)
 
 function pushCiclo(key, dateA, dateB) {
   if (!dateA || !dateB) return null;
@@ -199,6 +208,26 @@ for (const r of fop) {
   const sdr = cleanEmail(r.sdr_email_sf), closer = cleanEmail(r.closer_email_sf), onb = cleanEmail(r.onboarding_email_sf), owner = cleanEmail(r.owner_email);
   // datas cruas normalizadas uma vez por lead (SELECT * pode trazer '', 'null' ou data real)
   const dates = {}; for (const [col] of STAGES) dates[col] = cleanDate(r[col]);
+
+  // coorte semanal contato→conexão (por estratégia): denom = contatado em W; num = conectou em W.
+  const _estrLead = estr(r.sales_strategy);
+  if (dates.contacted_date) {
+    const wc = anoSemana(dates.contacted_date);
+    const connSame = dates.connected_date && anoSemana(dates.connected_date) === wc;
+    const bumpCoh = o => { const cc = o[wc] || (o[wc] = { contacted: 0, conn: 0 }); cc.contacted++; if (connSame) cc.conn++; };
+    bumpCoh(sdrCohort.all); if (_estrLead) bumpCoh(sdrCohort[_estrLead]);
+  }
+  const _unq = cleanDate(r.unqualified_date);
+  if (_unq) { const wq = anoSemana(_unq); sdrUnq.all[wq] = (sdrUnq.all[wq] || 0) + 1; if (_estrLead) sdrUnq[_estrLead][wq] = (sdrUnq[_estrLead][wq] || 0) + 1; }
+  if (dates.contacted_date) {
+    const wc = anoSemana(dates.contacted_date);
+    const sd = { contacted: dates.contacted_date, connected: dates.connected_date,
+      nurturing: cleanDate(r.nurturing_date), qualified: cleanDate(r.qualified_date), unqualified: _unq };
+    let status = 'contacted', bestD = sd.contacted;
+    for (const k of ['connected', 'nurturing', 'qualified', 'unqualified']) if (sd[k] && sd[k] >= bestD) { bestD = sd[k]; status = k; }
+    const bumpSt = o => { const cc = o[wc] || (o[wc] = { contacted: 0, connected: 0, nurturing: 0, qualified: 0, unqualified: 0 }); cc[status]++; };
+    bumpSt(sdrCohortStatus.all); if (_estrLead) bumpSt(sdrCohortStatus[_estrLead]);
+  }
 
   if (e) {
     const f = fteBy[e] || (fteBy[e] = { sdrs: new Set(), contacted: 0, opps: 0 });
@@ -248,6 +277,8 @@ for (const r of fop) {
       if (sdr) {
         const p = getP(porPessoaSdr, sdr); p.contacted = (p.contacted || 0) + 1; p.estrategia = e || p.estrategia;
         wk(p, w).contacted = (wk(p, w).contacted || 0) + 1;
+        (sdrContactFteSet.all[w] = sdrContactFteSet.all[w] || new Set()).add(sdr);
+        if (e) (sdrContactFteSet[e][w] = sdrContactFteSet[e][w] || new Set()).add(sdr);
       }
       if (e) {
         fteBy[e].contacted += 1;
@@ -268,6 +299,8 @@ for (const r of fop) {
         p.oppNivel = p.oppNivel || {}; p.oppNivel[b] = (p.oppNivel[b] || 0) + 1;
         p.semanal = p.semanal || {}; p.semanal[w] = (p.semanal[w] || 0) + 1;
         const pw = wk(p, w); pw.opps = (pw.opps || 0) + 1; pw.oppNivel = pw.oppNivel || {}; pw.oppNivel[b] = (pw.oppNivel[b] || 0) + 1;
+        (sdrOppFteSet.all[w] = sdrOppFteSet.all[w] || new Set()).add(sdr);
+        if (e) (sdrOppFteSet[e][w] = sdrOppFteSet[e][w] || new Set()).add(sdr);
       }
       if (closer) {
         const p = getP(porPessoaCloser, closer); p.opps = (p.opps || 0) + 1;
@@ -435,6 +468,59 @@ for (const w in fteByWeek) {
   }));
 }
 
+// ---------- ESTOQUE DO FUNIL SDR (snapshot no FIM de cada semana) ----------
+// Diferente das contagens de throughput acima (que contam cada estágio na semana da SUA
+// data): aqui é ESTOQUE — quantos leads estavam PARADOS em cada estágio no último dia de
+// cada semana. Um lead está "em contacted" no fim da semana W se foi contatado até o fim de
+// W e ainda NÃO avançou (connected/nurturing) nem saiu do funil de SDR (virou opp/qualificado
+// ou foi desqualificado) até o fim de W. Mesma lógica, mais fundo, para connected e nurturing.
+// Só datas são lidas por nome (contacted/connected/nurturing/qualified/unqualified/opp) —
+// nenhuma PII entra no app_data.js, só contagens semanais agregadas.
+function weekEndUTC(weekKey) {
+  const [ys, ws] = weekKey.split('-W'); const year = +ys, w = +ws;
+  if (w === 1) { const d = firstMondayUTC(year); d.setUTCDate(d.getUTCDate() - 1); return d; } // véspera da 1ª segunda
+  const d = weekStartUTC(weekKey); d.setUTCDate(d.getUTCDate() + 6); return d;                  // domingo
+}
+const sdrLeads = fop.map(r => ({
+  estr: estr(r.sales_strategy),
+  contacted: cleanDate(r.contacted_date), connected: cleanDate(r.connected_date),
+  nurturing: cleanDate(r.nurturing_date), qualified: cleanDate(r.qualified_date),
+  unqualified: cleanDate(r.unqualified_date), opp: cleanDate(r.opportunity_create_date),
+})).filter(l => l.contacted); // só quem chegou a contacted pode estar no estoque de SDR
+const hojeStr = new Date().toISOString().slice(0, 10);
+const ESTOQUE_KEYS = ['all', ...ESTRS];
+const sdrEstoque = {}; ESTOQUE_KEYS.forEach(k => sdrEstoque[k] = []); // estr -> [{semana,contacted,connected,nurturing}]
+for (const w of semanas) {
+  const startStr = weekStartUTC(w).toISOString().slice(0, 10);
+  if (startStr > hojeStr) continue;              // semana totalmente no futuro (só budget as tem)
+  let T = weekEndUTC(w).toISOString().slice(0, 10);
+  if (T > hojeStr) T = hojeStr;                  // semana EM CURSO: snapshot até hoje
+  const acc = {}; ESTOQUE_KEYS.forEach(k => acc[k] = { contacted: 0, connected: 0, nurturing: 0 });
+  for (const l of sdrLeads) {
+    if (l.contacted > T) continue;                                  // ainda não contatado até T
+    if ((l.opp && l.opp <= T) || (l.qualified && l.qualified <= T) || (l.unqualified && l.unqualified <= T)) continue; // saiu do funil SDR
+    let best = l.contacted, stage = 'contacted';                    // etapa SDR mais recente até T
+    if (l.connected && l.connected <= T && l.connected >= best) { best = l.connected; stage = 'connected'; }
+    if (l.nurturing && l.nurturing <= T && l.nurturing >= best) { best = l.nurturing; stage = 'nurturing'; }
+    acc.all[stage]++;
+    if (l.estr) acc[l.estr][stage]++;
+  }
+  ESTOQUE_KEYS.forEach(k => sdrEstoque[k].push({ semana: w, ...acc[k] }));
+}
+// SDRs distintos que geraram opp por semana (por estratégia) — denominador do "Opps / FTE"
+const sdrOppFte = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} };
+for (const k of ESTOQUE_KEYS) for (const w in sdrOppFteSet[k]) sdrOppFte[k][w] = sdrOppFteSet[k][w].size;
+const sdrContactFte = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} };
+for (const k of ESTOQUE_KEYS) for (const w in sdrContactFteSet[k]) sdrContactFte[k][w] = sdrContactFteSet[k][w].size;
+// opps por nível × semana (por estratégia) — alimenta os pequenos múltiplos de 4 semanas do SDR
+const sdrOppsNivel = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} };
+for (const key in funCellSemanal) {
+  const [w, b, e] = key.split('|');
+  const v = funCellSemanal[key].opps || 0; if (!v || !NIVEIS.includes(b)) continue;
+  (sdrOppsNivel.all[w] = sdrOppsNivel.all[w] || {})[b] = (sdrOppsNivel.all[w][b] || 0) + v;
+  if (sdrOppsNivel[e]) (sdrOppsNivel[e][w] = sdrOppsNivel[e][w] || {})[b] = (sdrOppsNivel[e][w][b] || 0) + v;
+}
+
 // ---------- CICLO (médias simples por lead, direto do unpivot acima) ----------
 const avg = arr => arr.length ? +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : null;
 const ciclo = {
@@ -591,6 +677,7 @@ const DATA = {
   porPessoa: { sdr: sdrList, closer: closerList, onboarding: onbList },
   semanalPorNivel,
   fte, fteSemanal,
+  sdrEstoque, sdrCohort, sdrUnq, sdrOppsNivel, sdrOppFte, sdrCohortStatus, sdrContactFte,
   mesFechado,
 };
 fs.mkdirSync(outDir, { recursive: true });
@@ -605,3 +692,4 @@ console.log('exemplo 2026-06 total:', JSON.stringify(actualMensal['2026-06']?.to
 console.log('budget 2026-06 total:', JSON.stringify(budgetMensal['2026-06']?.total));
 console.log('ciclo:', JSON.stringify(ciclo));
 console.log('top closer:', JSON.stringify(ranking.closers[0]));
+console.log('estoque SDR all (últ. semana):', JSON.stringify(sdrEstoque.all[sdrEstoque.all.length - 1]), '| pontos:', sdrEstoque.all.length);

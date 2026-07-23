@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,198 +8,203 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  /* ===== TOKENS — Stravix admin (minimalista, arejado) × laranja Hotmart ===== */
+  /* ===== TOKENS — Hotmart Design System ===== */
   :root{
-    --orange:#FF4000; --orange-600:#E23A00; --orange-050:#FFF1EC; --orange-100:#FFE0D4;
-    --ink:#101828; --white:#FFFFFF;
-    --bg:#F4F5F4; --surface:#FFFFFF; --surface-2:#F8F9FA; --surface-sunken:#F3F4F3;
-    --sidebar:#FFFFFF;
-    --border:#EDECE9; --border-2:#E4E6E4;
-    --text:#101828; --text-muted:#667085; --text-faint:#98A2B3;
-    --accent:var(--orange); --accent-weak:var(--orange-050);
-    --success:#12B76A; --success-bg:#ECFDF3; --warn:#F79009; --warn-bg:#FFFAEB;
-    --danger:#F04438; --danger-bg:#FEF3F2; --danger-text:#F04438;
-    --track:#EFF0EF;
-    /* aliases legados usados pelo JS (categorias = laranja + cinzas) */
-    --black:#101828; --off-white:var(--bg); --blue:#7A8699; --purple:#B0AAA2;
-    --maroon:var(--orange-600); --lemon:var(--success); --yellow:var(--warn); --gray:#C3BFB8;
-    --surface-dark:#101828; --on-dark:#fff; --border-strong:var(--border-2);
+    --orange:#FF4000; --black:#0D0D0D; --off-white:#F5F3EF;
+    --gray:#C3BFB8; --white:#FFFFFF; --yellow:#FFD450; --maroon:#3E0F1D;
+    --lemon:#6DFF96; --purple:#B48EFF; --blue:#44D0FF;
 
-    --sh-card:0 1px 2px rgba(16,24,40,.05); --sh-sm:0 1px 2px rgba(16,24,40,.06);
-    --sh-md:0 4px 14px rgba(16,24,40,.07); --sh-lg:0 12px 32px rgba(16,24,40,.14);
-    --font-sans:"DM Sans","Inter","Arial",sans-serif; --font-mono:"DM Mono",ui-monospace,monospace;
+    --bg:var(--off-white); --surface:var(--white); --surface-sunken:#EFECE6;
+    --surface-dark:var(--black); --on-dark:var(--white);
+    --border:#E2DED7; --border-strong:#D3CEC5;
+    --text:var(--black); --text-muted:rgba(13,13,13,.60); --text-faint:rgba(13,13,13,.42);
+    --accent:var(--orange); --accent-weak:rgba(255,64,0,.10);
+    --danger:var(--maroon); --danger-text:#B23A25; --success:#1E7A3D; --warn:#B8860B;
+    --track:#EFECE6;
+    --sh-sm:0 1px 2px rgba(13,13,13,.06); --sh-md:0 2px 10px rgba(13,13,13,.08); --sh-lg:0 8px 28px rgba(13,13,13,.10);
+
+    --font-sans:"DM Sans","Arial",sans-serif; --font-mono:"DM Mono",ui-monospace,monospace;
     --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px; --sp-7:48px; --sp-8:64px;
-    --r-sm:10px; --r-md:16px; --r-lg:20px; --r-pill:999px;
-    --sidebar-w:236px;
+    --r-sm:6px; --r-md:10px; --r-lg:16px; --r-pill:999px;
+    --maxw:1320px;
   }
+  /* ===== DARK — criado para este projeto (mantém laranja, base preta quente) ===== */
+  :root[data-theme="dark"]{
+    --bg:#0D0D0D; --surface:#17130F; --surface-sunken:#0A0908;
+    --surface-dark:#000000; --on-dark:var(--off-white);
+    --border:#2A241E; --border-strong:#3B332B;
+    --text:var(--off-white); --text-muted:rgba(245,243,239,.58); --text-faint:rgba(245,243,239,.38);
+    --accent:var(--orange); --accent-weak:rgba(255,64,0,.16);
+    --danger:#4A1421; --danger-text:#FF7A63; --success:#4ED47D; --warn:#FFD450;
+    --track:#241E18;
+    --sh-sm:0 1px 2px rgba(0,0,0,.4); --sh-md:0 2px 12px rgba(0,0,0,.5); --sh-lg:0 10px 30px rgba(0,0,0,.6);
+  }
+
   *{box-sizing:border-box;margin:0;padding:0}
   html{scroll-behavior:smooth}
-  body{font-family:var(--font-sans);background:var(--bg);color:var(--text);line-height:1.5;-webkit-font-smoothing:antialiased}
+  body{font-family:var(--font-sans);background:var(--bg);color:var(--text);line-height:1.5;-webkit-font-smoothing:antialiased;transition:background .2s,color .2s}
   .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
   ::selection{background:var(--orange);color:#fff}
-  .eyebrow{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint)}
 
-  /* ===== LAYOUT ===== */
-  .layout{display:flex;min-height:100vh}
-  .scrim{display:none}
-  .sidebar{width:var(--sidebar-w);flex:none;background:var(--sidebar);border-right:1px solid var(--border);position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding:18px 14px}
-  .side-brand{display:flex;align-items:center;padding:8px 8px 18px}
-  .side-logo .hotmark{display:block;font-size:22px;font-weight:700;letter-spacing:-.045em;color:var(--orange);line-height:1}
-  .side-logo small{display:block;margin-top:6px;color:var(--text-faint);font-weight:600;font-size:10px;letter-spacing:.08em;text-transform:uppercase}
-  .side-nav{display:flex;flex-direction:column;gap:4px;margin-top:4px}
-  .side-nav .tab{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;font-size:13.5px;font-weight:600;color:var(--text-muted);cursor:pointer;transition:background .15s,color .15s}
-  .side-nav .tab .ic{width:18px;height:18px;flex:none;display:inline-flex;align-items:center;justify-content:center}
-  .side-nav .tab .ic svg{width:18px;height:18px;stroke-width:2}
-  .side-nav .tab:hover{background:var(--surface-2);color:var(--text)}
-  .side-nav .tab.on{background:var(--accent);color:#fff;box-shadow:0 8px 18px rgba(255,64,0,.26)}
-  .side-foot{margin-top:auto;padding-top:14px}
-  .side-note{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;font-size:11px;color:var(--text-muted);line-height:1.5}
-  .side-note b{color:var(--text)}
+  .eyebrow{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 var(--sp-5)}
 
-  .main{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg)}
-  .appbar{position:sticky;top:0;z-index:40;background:rgba(255,255,255,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:11px 26px;min-height:64px}
-  .menu-btn{display:none;background:var(--surface);border:1px solid var(--border-2);border-radius:10px;width:38px;height:38px;font-size:17px;cursor:pointer;color:var(--text);align-items:center;justify-content:center;flex:none}
-  .appbar-title h1{font-size:19px;font-weight:700;letter-spacing:-.02em}
-  .appbar-title .crumb{font-size:12px;color:var(--text-faint);margin-top:1px}
-  .appbar-right{margin-left:auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:flex-end}
-  .profile{display:flex;align-items:center;gap:9px}
-  .profile .pf b{font-size:13px;display:block;line-height:1.15}
-  .profile .pf small{font-size:11px;color:var(--text-faint)}
+  /* topbar */
+  .topbar{position:sticky;top:0;z-index:50;background:var(--surface-dark);border-bottom:1px solid rgba(255,255,255,.08)}
+  .topbar .wrap{display:flex;align-items:center;gap:var(--sp-5);min-height:60px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px}
+  /* altura FIXA (não só mínima) pra linha de filtros — garante que ela ocupe exatamente
+     o mesmo espaço em toda página, tenha 5 selects (Semanal Sales) ou só o botão Dark
+     (Mensal Sales/1:1 Gestor), pra não "pular" de tamanho ao trocar de aba. Alinhado à
+     direita, com quebra de linha normal (sem scroll) se a janela for estreita demais. */
+  .topbar .wrap.controlsrow{height:60px;justify-content:flex-end}
+  #otherControls .themebtn{align-self:center}
+  .brand{display:flex;align-items:center;gap:10px;color:#fff;font-weight:700;letter-spacing:-.01em;font-size:15px}
+  .brand .dot{width:13px;height:13px;background:var(--orange);border-radius:3px}
+  .brand small{display:block;color:rgba(255,255,255,.5);font-weight:500;font-size:10.5px;letter-spacing:.04em}
+  .tabs{display:flex;gap:4px;flex-wrap:wrap}
+  .tab{cursor:pointer;padding:9px 14px;border-radius:8px;font-weight:600;font-size:13px;color:rgba(255,255,255,.55);transition:.15s}
+  .tab:hover{color:#fff}
+  .tab.on{background:var(--accent);color:#fff}
+  /* sem margin-left:auto de propósito: o filtro fica sempre logo ao lado da última aba
+     (1:1 Gestor), na mesma posição em toda página, em vez de flutuar pra ponta direita
+     com largura variável conforme quantos selects a aba tem. */
+  .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .ctl{display:flex;flex-direction:column;gap:3px}
+  .ctl label{font-size:9.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.45)}
+  select.sel{font-family:inherit;font-size:13px;font-weight:600;color:#fff;background:#1c1c1c;border:1.5px solid #333;border-radius:var(--r-sm);padding:6px 8px;cursor:pointer;max-width:118px}
+  /* "semana XX/YYYY" é mais largo que os outros selects — dá mais espaço só pra ele */
+  #selSemana, #selSemanaArea{max-width:150px}
+  :root[data-theme="dark"] select.sel{background:#221c16;border-color:#3b332b}
+  .themebtn{background:transparent;border:1.5px solid rgba(255,255,255,.2);color:#fff;border-radius:var(--r-sm);padding:7px 12px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px;align-self:flex-end}
+  .themebtn:hover{border-color:var(--orange)}
+  /* mobile: a linha de filtros vira flex de verdade — quebra em várias linhas e cresce em
+     altura em vez de manter os 60px fixos (que são só pra manter a barra consistente entre
+     abas em telas largas; num celular, isso cortaria os selects que quebrarem linha). */
+  @media (max-width:700px){
+    .topbar .wrap.controlsrow{height:auto;min-height:60px;justify-content:flex-start}
+    .controls{width:100%}
+    select.sel, #selSemana, #selSemanaArea{max-width:none;flex:1 1 120px}
+  }
 
-  .controls{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
-  .ctl{display:flex;flex-direction:column;gap:4px}
-  .ctl label{font-size:9px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--text-faint)}
-  select.sel{font-family:inherit;font-size:13px;font-weight:600;color:var(--text);background:var(--surface);border:1px solid var(--border-2);border-radius:10px;padding:8px 10px;cursor:pointer;max-width:130px;outline:none}
-  select.sel:focus{border-color:var(--accent)}
-  #selSemana,#selSemanaArea{max-width:150px}
+  /* subtabs (Semanal Área) */
+  .subbar{background:var(--surface-dark);border-bottom:1px solid rgba(255,255,255,.08)}
+  .subbar .wrap{display:flex;gap:6px;padding:8px var(--sp-5)}
+  .subtab{cursor:pointer;padding:6px 14px;border-radius:7px;font-weight:600;font-size:12.5px;color:rgba(255,255,255,.55);transition:.15s}
+  .subtab:hover{color:#fff}
+  .subtab.on{background:rgba(255,255,255,.14);color:#fff}
 
-  .subbar{padding:14px 26px 0}
-  .subbar #subtabs{display:inline-flex;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:4px}
-  .subtab{cursor:pointer;padding:7px 16px;border-radius:9px;font-weight:600;font-size:12.5px;color:var(--text-muted)}
-  .subtab:hover{color:var(--text)}
-  .subtab.on{background:var(--surface);color:var(--accent);box-shadow:var(--sh-sm)}
-
-  .banner{display:flex;align-items:center;gap:9px;padding:14px 26px 0;font-size:12px;color:var(--text-muted)}
-  .banner .dotmini{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:none}
+  /* banner */
+  .banner{background:var(--accent-weak);border-bottom:1px solid var(--border)}
+  .banner .wrap{display:flex;gap:12px;align-items:center;padding:9px var(--sp-5);font-size:12.5px;color:var(--text-muted)}
   .banner b{color:var(--text)}
+  .banner .rail{width:3px;height:20px;background:var(--orange);border-radius:2px;flex:none}
 
-  .content{padding:24px 26px 20px;display:flex;flex-direction:column}
-  .pagefoot{padding:20px 26px 40px;color:var(--text-faint);font-size:12px}
-
-  .sec{margin-bottom:30px}
-  .sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}
-  .sec-head h2{font-size:17px;font-weight:700;letter-spacing:-.015em}
+  main{padding:var(--sp-6) 0 var(--sp-8)}
+  .sec{margin-bottom:var(--sp-7)}
+  .sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:var(--sp-4);flex-wrap:wrap}
+  .sec-head h2{font-size:18px;font-weight:700;letter-spacing:-.01em}
   .sec-head .hint{font-size:12px;color:var(--text-faint)}
 
-  .grid{display:grid;gap:18px}
-  .g6{grid-template-columns:repeat(6,1fr)} .g5{grid-template-columns:repeat(5,1fr)} .g4{grid-template-columns:repeat(4,1fr)}
+  .grid{display:grid;gap:var(--sp-4)}
+  .g5{grid-template-columns:repeat(5,1fr)} .g4{grid-template-columns:repeat(4,1fr)}
   .g3{grid-template-columns:repeat(3,1fr)} .g2{grid-template-columns:repeat(2,1fr)}
-  @media(max-width:1180px){.g6,.g5{grid-template-columns:repeat(3,1fr)}}
-  @media(max-width:920px){.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:1fr}}
-  @media(max-width:640px){.g6,.g5,.g4,.g2{grid-template-columns:1fr}}
+  @media(max-width:1080px){.g5{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:860px){.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:1fr}}
+  @media(max-width:640px){.g5,.g4,.g2{grid-template-columns:1fr}}
 
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:22px;box-shadow:var(--sh-card);position:relative;overflow:hidden}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--sp-5);position:relative;overflow:hidden}
 
   /* KPI stat */
-  /* estrutura fixa título / corpo / rodapé — evita os componentes "sambarem" entre cards:
-     o título sempre ocupa 2 linhas e o rodapé (.sub) fica ancorado no fundo. */
-  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:20px;box-shadow:var(--sh-card);position:relative;display:flex;flex-direction:column;min-height:128px}
-  .kpi .rail{display:none}
-  .kpi .lbl{font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:2px}
-  .kpi .sub2{font-size:11px;color:var(--text-faint);line-height:1.35;margin-bottom:14px;min-height:30px}
-  .kpi .num{font-size:27px;font-weight:700;color:var(--text);line-height:1.1;letter-spacing:-.02em}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--sp-5) var(--sp-5) var(--sp-4) var(--sp-6);position:relative}
+  .kpi .rail{position:absolute;left:0;top:16px;bottom:16px;width:4px;background:var(--orange);border-radius:0 3px 3px 0}
+  .kpi .lbl{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-faint);margin-bottom:10px}
+  .kpi .num{font-size:30px;font-weight:700;color:var(--accent);line-height:1;letter-spacing:-.02em}
   .kpi .num.n{color:var(--text)}
-  .kpi .sub{font-size:12px;color:var(--text-muted);margin-top:auto;padding-top:12px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
-  .kpi .prog{height:8px;background:var(--track);border-radius:var(--r-pill);overflow:hidden;margin-top:14px}
+  .kpi .sub{font-size:12px;color:var(--text-muted);margin-top:8px;display:flex;justify-content:space-between;gap:8px}
+  .kpi .prog{height:6px;background:var(--track);border-radius:var(--r-pill);overflow:hidden;margin-top:10px}
   .kpi .prog i{display:block;height:100%;background:var(--accent);border-radius:var(--r-pill)}
-  .att{font-weight:700;font-family:var(--font-sans);font-size:11px;padding:3px 9px;border-radius:var(--r-pill);display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
-  .att.hi{color:var(--success);background:var(--success-bg)} .att.mid{color:#B54708;background:var(--warn-bg)} .att.lo{color:var(--danger);background:var(--danger-bg)}
+  .att{font-weight:700;font-family:var(--font-mono)}
+  .att.hi{color:var(--success)} .att.mid{color:var(--warn)} .att.lo{color:var(--danger-text)}
 
   /* funnel */
   .funnel{display:flex;flex-direction:column;gap:3px}
   .fstage{display:grid;grid-template-columns:120px 1fr;align-items:center;gap:14px}
   .fstage .nm{text-align:right;font-size:13px;font-weight:600}
-  .fstage .track{height:36px;background:var(--track);border-radius:10px;position:relative;overflow:hidden}
-  .fstage .fill{height:100%;border-radius:10px;display:flex;align-items:center;padding-left:12px;color:#fff;font-weight:700;font-size:14px;min-width:44px}
-  .fstage .bud{position:absolute;top:-3px;bottom:-3px;width:2.5px;background:var(--text);opacity:.45}
+  .fstage .track{height:34px;background:var(--track);border-radius:7px;position:relative;overflow:hidden}
+  .fstage .fill{height:100%;border-radius:7px;display:flex;align-items:center;padding-left:12px;color:#fff;font-weight:700;font-size:14px;min-width:44px}
+  .fstage .bud{position:absolute;top:-3px;bottom:-3px;width:2.5px;background:var(--text);opacity:.5}
   .fstage .bud::after{content:attr(data-b);position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:9.5px;color:var(--text-muted);white-space:nowrap;font-family:var(--font-mono)}
   .conv{grid-column:2;font-size:10.5px;font-weight:700;color:var(--text-faint);font-family:var(--font-mono);padding-left:2px}
 
-  /* bars */
-  .barrow{margin-bottom:16px} .barrow:last-child{margin-bottom:0}
-  .barrow .top{display:flex;justify-content:space-between;font-size:12.5px;font-weight:600;margin-bottom:6px}
+  /* bars (segmentação/estratégia) */
+  .barrow{margin-bottom:14px}
+  .barrow:last-child{margin-bottom:0}
+  .barrow .top{display:flex;justify-content:space-between;font-size:12.5px;font-weight:600;margin-bottom:5px}
   .barrow .top .v{font-family:var(--font-mono)}
-  .barrow .bar{height:10px;background:var(--track);border-radius:var(--r-pill);overflow:hidden;position:relative}
+  .barrow .bar{height:9px;background:var(--track);border-radius:var(--r-pill);overflow:hidden;position:relative}
   .barrow .bar i{display:block;height:100%;border-radius:var(--r-pill)}
-  .barrow .bar .tgt{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--text);opacity:.4}
+  .barrow .bar .tgt{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--text);opacity:.45}
 
-  /* tiles */
-  .tile{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--sp-4);text-align:center;box-shadow:var(--sh-card)}
-  .tile .v{font-size:25px;font-weight:700;color:var(--text);line-height:1;font-family:var(--font-mono)}
+  /* tiles (ciclo) */
+  .tile{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--sp-4);text-align:center}
+  .tile .v{font-size:26px;font-weight:700;color:var(--accent);line-height:1;font-family:var(--font-mono)}
   .tile .k{font-size:11px;color:var(--text-muted);margin-top:6px}
 
-  /* trend */
-  .b{border-radius:5px 5px 0 0}
+  /* weekly trend (mês fechado) */
   .trend{display:flex;align-items:flex-end;gap:4px;height:150px;padding-top:20px}
   .trend .col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
-  .trend .b{width:100%;max-width:26px;background:var(--accent);border-radius:5px 5px 0 0;position:relative;transition:height .2s}
-  .trend .b:hover{background:var(--orange-600)}
+  .trend .b{width:100%;max-width:26px;background:var(--accent);border-radius:3px 3px 0 0;position:relative;transition:height .2s}
+  .trend .b:hover{background:var(--text)}
   .trend .cap{font-size:8.5px;color:var(--text-faint);font-family:var(--font-mono);white-space:nowrap;transform:rotate(-45deg);transform-origin:center;margin-top:6px}
 
-  /* estoque do funil SDR — barras empilhadas (snapshot por semana) */
-  .estoque{display:flex;align-items:flex-end;gap:4px;min-height:236px;padding-top:8px;padding-bottom:2px}
-  .ecol{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center}
-  .etot{font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text-muted);margin-bottom:4px;white-space:nowrap}
-  .eseg{width:100%;max-width:30px}
-  .eseg:first-of-type{border-radius:5px 5px 0 0}
-  .ecap{font-size:8.5px;color:var(--text-faint);font-family:var(--font-mono);white-space:nowrap;transform:rotate(-45deg);transform-origin:center;margin-top:8px}
-
-  /* weektrend */
-  .wtgrid{display:grid;gap:18px} .wt{min-width:0}
+  /* WeekTrend — pequenos múltiplos de 4 semanas (Últ. em destaque) */
+  .wtgrid{display:grid;gap:18px}
+  .wt{min-width:0}
   .wttop{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:8px;flex-wrap:wrap}
-  .wtlabel{font-size:12.5px;font-weight:600} .wtsub{color:var(--text-faint);font-weight:500;font-size:11px}
-  .wtwow{font-family:var(--font-sans);font-size:11px;font-weight:700;padding:2px 8px;border-radius:var(--r-pill)}
-  .wtwow.up{color:var(--success);background:var(--success-bg)} .wtwow.down{color:var(--danger);background:var(--danger-bg)}
+  .wtlabel{font-size:12.5px;font-weight:600}
+  .wtsub{color:var(--text-faint);font-weight:500;font-size:11px}
+  .wtwow{font-family:var(--font-mono);font-size:11px;font-weight:600}
+  .wtwow.up{color:var(--success)} .wtwow.down{color:var(--danger-text)}
   .wtchart{display:flex;align-items:flex-end;gap:7px;height:100px;border-bottom:1px solid var(--border)}
   .wtcol{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100px;min-width:0}
   .wtval{font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--text-muted);margin-bottom:3px;white-space:nowrap}
   .wtval.cur{font-weight:700;color:var(--text)}
-  .wtbar{width:100%;max-width:28px;border-radius:5px 5px 0 0}
+  .wtbar{width:100%;max-width:28px;border-radius:4px 4px 0 0}
   .wtlbl{font-size:9.5px;color:var(--text-faint);font-weight:500;margin-top:5px}
   .wtlbl.cur{color:var(--text);font-weight:700}
   .wtlegend{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--text-faint);margin-top:14px}
-  .wtlegend .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:middle}
+  .wtlegend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
 
   /* table */
-  table.tbl{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;font-size:13.5px;box-shadow:var(--sh-card)}
-  table.tbl thead th{background:var(--surface);color:var(--text-faint);text-align:left;font-weight:700;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;padding:12px 16px;white-space:nowrap;border-bottom:1px solid var(--border)}
+  table.tbl{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;font-size:13.5px}
+  table.tbl thead th{background:var(--surface-dark);color:#fff;text-align:left;font-weight:600;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:11px 14px;white-space:nowrap}
   table.tbl th.r,table.tbl td.r{text-align:right}
-  table.tbl td{padding:12px 16px;border-top:1px solid var(--border)}
-  table.tbl tbody tr:first-child td{border-top:none}
+  table.tbl td{padding:10px 14px;border-top:1px solid var(--border)}
   table.tbl tbody tr.rankrow{cursor:pointer}
-  table.tbl tbody tr.rankrow:hover{background:var(--surface-2)}
-  table.tbl tbody tr.grouprow td{background:var(--surface-2);font-weight:700;font-size:12px;color:var(--text-muted)}
-  .num-cell{font-family:var(--font-mono);color:var(--accent);font-weight:700}
+  table.tbl tbody tr.rankrow:hover{background:var(--accent-weak)}
+  table.tbl tbody tr.grouprow td{background:var(--surface-sunken);font-weight:700;font-size:12px}
+  .num-cell{font-family:var(--font-mono);color:var(--accent);font-weight:600}
   .idx{color:var(--text-faint);margin-right:8px}
-  .rankbar{height:7px;background:var(--track);border-radius:var(--r-pill);overflow:hidden;min-width:60px}
-  .rankbar i{display:block;height:100%;background:var(--accent);border-radius:var(--r-pill)}
-  .ministack{display:flex;height:14px;width:100px;border-radius:5px;overflow:hidden}
+  .rankbar{height:6px;background:var(--track);border-radius:var(--r-pill);overflow:hidden;min-width:60px}
+  .rankbar i{display:block;height:100%;background:var(--accent)}
+  .ministack{display:flex;height:14px;width:100px;border-radius:4px;overflow:hidden}
 
   .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--text-muted);margin-top:10px}
   .legend span{display:inline-flex;align-items:center;gap:6px}
-  .legend .sw{width:12px;height:12px;border-radius:4px;flex:none}
+  .legend .sw{width:12px;height:12px;border-radius:3px;flex:none}
   .miss{color:var(--text-faint);font-style:italic}
+  footer{border-top:1px solid var(--border);padding:var(--sp-6) 0;color:var(--text-faint);font-size:12px}
 
   /* 1:1 Gestor */
-  .oneone{display:grid;grid-template-columns:260px 1fr;gap:18px;align-items:start}
-  .oneone-side{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;max-height:80vh;overflow-y:auto;position:sticky;top:88px;box-shadow:var(--sh-card)}
-  .oneone-side input{width:100%;border:1px solid var(--border-2);border-radius:10px;padding:9px 12px;font-size:13px;font-family:inherit;outline:none;margin-bottom:8px;background:var(--surface)}
-  .oneone-side input:focus{border-color:var(--accent)}
-  .oneone-item{padding:8px 10px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text);display:flex;align-items:center;gap:9px}
-  .oneone-item:hover{background:var(--surface-2)}
-  .oneone-item.on{background:var(--accent-weak);color:var(--orange-600);font-weight:700}
+  .oneone{display:grid;grid-template-columns:250px 1fr;gap:16px;align-items:start}
+  .oneone-side{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:12px;max-height:80vh;overflow-y:auto;position:sticky;top:120px}
+  .oneone-side input{width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;margin-bottom:8px;background:var(--surface)}
+  .oneone-item{padding:7px 9px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text);display:flex;align-items:center;gap:9px}
+  .oneone-item:hover{background:var(--accent-weak)}
+  .oneone-item.on{background:var(--accent-weak);color:var(--accent);font-weight:700}
   @media(max-width:860px){.oneone{grid-template-columns:1fr}.oneone-side{position:static;max-height:none}}
 
+  /* avatar (1:1 Gestor) */
   .avatar{position:relative;border-radius:50%;overflow:hidden;background:var(--surface-sunken);display:flex;align-items:center;justify-content:center;flex:none}
   .avatar-fallback{font-family:var(--font-sans);font-weight:700;color:var(--text-faint);letter-spacing:.02em}
   .avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
@@ -207,73 +212,66 @@
   .statrow{display:flex;gap:26px;flex-wrap:wrap}
   .stat{text-align:right}
   .stat .v{font-family:var(--font-mono);font-size:19px;font-weight:700;margin-top:2px}
-  .indic{display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border);font-size:12.5px}
+  .indic{display:flex;justify-content:space-between;padding:9px 0;border-top:1px solid var(--border);font-size:12.5px}
   .indic:first-child{border-top:none}
-  .indic .k{color:var(--text-muted)} .indic .v{font-family:var(--font-mono);font-weight:600}
+  .indic .k{color:var(--text-muted)}
+  .indic .v{font-family:var(--font-mono);font-weight:600}
   .coachgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
   @media(max-width:860px){.coachgrid{grid-template-columns:1fr}}
+  .coachbox{border-top:3px solid var(--accent)}
   .coachbox ul{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:7px}
   .coachbox li{font-size:12.5px;line-height:1.4}
-
-  /* ===== responsivo ===== */
-  @media(max-width:900px){
-    .sidebar{position:fixed;left:0;top:0;transform:translateX(-100%);transition:transform .25s ease;z-index:60;box-shadow:var(--sh-lg)}
-    body.side-open .sidebar{transform:translateX(0)}
-    .scrim{display:block;position:fixed;inset:0;background:rgba(16,24,40,.45);z-index:55;opacity:0;pointer-events:none;transition:opacity .25s}
-    body.side-open .scrim{opacity:1;pointer-events:auto}
-    .menu-btn{display:inline-flex}
-    .profile .pf{display:none}
-    .appbar{padding:11px 16px} .content{padding:18px 16px 16px}
-    .subbar,.banner,.pagefoot{padding-left:16px;padding-right:16px}
-  }
 </style>
 </head>
 <body>
-<div class="scrim" id="scrim"></div>
-<div class="layout">
-  <aside class="sidebar" id="sidebar">
-    <div class="side-brand"><div class="side-logo"><span class="hotmark">hotmart</span><small>New Business · Cockpit</small></div></div>
-    <nav class="side-nav" id="tabs"></nav>
-    <div class="side-foot"><div class="side-note"><b>Dados agregados</b> das bases NB + budget/reforecast.<br><span id="genAt"></span></div></div>
-  </aside>
-  <div class="main">
-    <header class="appbar">
-      <button class="menu-btn" id="menuBtn" aria-label="Menu">☰</button>
-      <div class="appbar-title"><h1 id="pageTitle">—</h1><div class="crumb" id="ctxLine"></div></div>
-      <div class="appbar-right">
-        <div class="controls" id="wsalesControls">
-          <div class="ctl"><label>Mês</label><select id="selMes" class="sel"></select></div>
-          <div class="ctl"><label>Semana</label><select id="selSemana" class="sel"></select></div>
-          <div class="ctl"><label>Estratégia</label><select id="selEstr" class="sel"></select></div>
-          <div class="ctl"><label>Referência</label><select id="selRef" class="sel">
-            <option value="budget">Budget</option><option value="reforecast">Reforecast</option></select></div>
-        </div>
-        <div class="controls" id="wareaControls" style="display:none">
-          <div class="ctl"><label>Mês</label><select id="selMesArea" class="sel"></select></div>
-          <div class="ctl"><label>Semana</label><select id="selSemanaArea" class="sel"></select></div>
-          <div class="ctl" id="ctlEstrArea"><label>Estratégia</label><select id="selEstrArea" class="sel"></select></div>
-          <div class="ctl"><label>Referência</label><select id="selRefArea" class="sel">
-            <option value="budget">Budget</option><option value="reforecast">Reforecast</option></select></div>
-        </div>
-        <div class="controls" id="mensalControls" style="display:none">
-          <div class="ctl"><label>Mês</label><select id="selMesMensal" class="sel"></select></div>
-          <div class="ctl"><label>Estratégia</label><select id="selEstrMensal" class="sel"></select></div>
-        </div>
-        <div class="controls" id="otherControls" style="display:none"></div>
-        <div class="profile"><div class="avatar" style="width:36px;height:36px"><span class="avatar-fallback" style="font-size:13px">GB</span></div><div class="pf"><b>Guilherme</b><small>New Business</small></div></div>
-      </div>
-    </header>
-    <div class="subbar" id="subbar" style="display:none"><div id="subtabs"></div></div>
-    <div class="banner"><span class="dotmini"></span><span id="bannerText"><b>Dados agregados</b> das bases NB + budget/reforecast.</span></div>
-    <main class="content">
-      <div id="viewMensal" style="display:none"></div>
-      <div id="viewSemanal" style="display:none"></div>
-      <div id="viewArea" style="display:none"></div>
-      <div id="viewOneOne" style="display:none"></div>
-    </main>
-    <footer class="pagefoot">Cockpit New Business · agregação client-side sobre bases pré-tratadas (Redshift → CSV → build_data.js).</footer>
+
+<div class="topbar">
+  <div class="wrap">
+    <div class="brand"><span class="dot"></span><div>NEW BUSINESS · COCKPIT<small id="ctxLine">Semana · estoque do funil</small></div></div>
+    <div class="tabs" id="tabs"></div>
+  </div>
+  <div class="wrap controlsrow">
+    <div class="controls" id="wsalesControls">
+      <div class="ctl"><label>Mês</label><select id="selMes" class="sel"></select></div>
+      <div class="ctl"><label>Semana</label><select id="selSemana" class="sel"></select></div>
+      <div class="ctl"><label>Estratégia</label><select id="selEstr" class="sel"></select></div>
+      <div class="ctl"><label>Referência</label><select id="selRef" class="sel">
+        <option value="budget">Budget</option><option value="reforecast">Reforecast</option></select></div>
+      <button class="themebtn" id="themeBtn">🌙 Dark</button>
+    </div>
+    <div class="controls" id="wareaControls" style="display:none">
+      <div class="ctl"><label>Mês</label><select id="selMesArea" class="sel"></select></div>
+      <div class="ctl"><label>Semana</label><select id="selSemanaArea" class="sel"></select></div>
+      <div class="ctl"><label>Referência</label><select id="selRefArea" class="sel">
+        <option value="budget">Budget</option><option value="reforecast">Reforecast</option></select></div>
+      <button class="themebtn" id="themeBtn3">🌙 Dark</button>
+    </div>
+    <div class="controls" id="mensalControls" style="display:none">
+      <div class="ctl"><label>Mês</label><select id="selMesMensal" class="sel"></select></div>
+      <div class="ctl"><label>Estratégia</label><select id="selEstrMensal" class="sel"></select></div>
+      <button class="themebtn" id="themeBtn4">🌙 Dark</button>
+    </div>
+    <div class="controls" id="otherControls" style="display:none"><button class="themebtn" id="themeBtn2">🌙 Dark</button></div>
   </div>
 </div>
+
+<div class="subbar" id="subbar" style="display:none"><div class="wrap" id="subtabs"></div></div>
+
+<div class="banner"><div class="wrap"><span class="rail"></span>
+  <span id="bannerText"><b>Dados agregados</b> das bases NB + budget/reforecast.</span>
+</div></div>
+
+<main class="wrap">
+  <div id="viewMensal" style="display:none"></div>
+  <div id="viewSemanal" style="display:none"></div>
+  <div id="viewArea" style="display:none"></div>
+  <div id="viewOneOne" style="display:none"></div>
+</main>
+
+<footer class="wrap">
+  Cockpit New Business · agregação client-side sobre bases pré-tratadas (Redshift → CSV → build_data.js).
+  <span id="genAt"></span>
+</footer>
 
 <script src="app_data.js"></script>
 <script>
@@ -284,9 +282,8 @@ const STR_ORDER=D.estrategias||['Outbound','Inbound','Hunting'];
 // aqui quando virar o ano.
 const FILTRO_ANO='2026';
 const NIV=D.niveis||['N2-N3','N4-N5','N6+'];
-// categorias: laranja (o que importa) + rampa de cinza (Stravix minimalista)
-const STR_COLOR={Outbound:'var(--accent)',Inbound:'#344054',Hunting:'#98A2B3'};
-const NIV_COLOR={'N2-N3':'#98A2B3','N4-N5':'#344054','N6+':'var(--accent)'};
+const STR_COLOR={Outbound:'var(--orange)',Inbound:'var(--blue)',Hunting:'var(--purple)'};
+const NIV_COLOR={'N2-N3':'var(--orange)','N4-N5':'var(--blue)','N6+':'var(--purple)'};
 
 // ---- formatação ----
 const nf=new Intl.NumberFormat('pt-BR');
@@ -310,14 +307,8 @@ function avatarHTML(p,size){
 function median(arr){const a=[...arr].filter(v=>v!=null).sort((x,y)=>x-y);const n=a.length;if(!n)return 0;return n%2?a[(n-1)/2]:(a[n/2-1]+a[n/2])/2;}
 
 // ---- estado ----
-let state={meeting:'wsales',area:'sdr',mes:null,semana:null,estr:'all',ref:'budget',mesArea:null,semanaArea:null,refArea:'budget',estrArea:'all',mesMensal:null,estrMensal:'all',pessoa:null};
+let state={meeting:'wsales',area:'sdr',mes:null,semana:null,estr:'all',ref:'budget',mesArea:null,semanaArea:null,refArea:'budget',mesMensal:null,estrMensal:'all',pessoa:null};
 
-const IC={
-  mensal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>',
-  wsales:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="7"/><rect x="12" y="6" width="3" height="11"/><rect x="17" y="13" width="3" height="4"/></svg>',
-  warea:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>',
-  oneone:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'
-};
 const MEETINGS=[{k:'mensal',label:'Mensal Sales'},{k:'wsales',label:'Semanal Sales'},{k:'warea',label:'Semanal Área'},{k:'oneone',label:'1:1 Gestor'}];
 const AREA_TABS=[{k:'sdr',label:'SDR'},{k:'closers',label:'Closers'},{k:'onboarding',label:'Onboarding'}];
 
@@ -336,12 +327,12 @@ function weekTrendHTML({label,sub,color,series,fmt}){
     const isLast=i===series.length-1;
     return `<div class="wtcol" title="${s.semana}: ${fmt(s.valor)}">
       <div class="wtval ${isLast?'cur':''}">${fmt(s.valor)}</div>
-      <div class="wtbar" style="height:${h}px;background:${color};opacity:${isLast?1:.4}"></div>
+      <div class="wtbar" style="height:${h}px;background:${color};opacity:${isLast?1:.45}"></div>
       <div class="wtlbl ${isLast?'cur':''}">${s.semana.replace(/^\d{4}-/,'')}</div></div>`;
   }).join('');
   return `<div class="wt">
     <div class="wttop"><span class="wtlabel">${label}${sub?` <span class="wtsub">· ${sub}</span>`:''}</span>
-    ${wow!=null?`<span class="wtwow ${wow>=0?'up':'down'}">${wow>=0?'▲':'▼'} ${Math.abs(wow)}% WoW</span>`:''}</div>
+    ${wow!=null?`<span class="wtwow ${wow>=0?'up':'down'}">${wow>=0?'▲':'▼'} ${Math.abs(wow)}% <span class="wtsub">WoW</span></span>`:''}</div>
     <div class="wtchart">${cols||'<span class="miss">sem dado</span>'}</div>
   </div>`;
 }
@@ -392,18 +383,17 @@ function ministack(vals,colors){
 }
 // ================= MENSAL SALES =================
 const MENSAL_KPIS=[
-  {k:'receita',lbl:'Net Revenue',cur:1,desc:'Receita líquida no mês fechado'},
-  {k:'opps',lbl:'Opp',cur:0,desc:'Oportunidades criadas no mês'},
-  {k:'cw',lbl:'CW',cur:0,desc:'Negócios fechados (Closed Won)'},
-  {k:'gmv',lbl:'GMV',cur:1,desc:'Volume bruto transacionado'},
-  {k:'activation',lbl:'Ativação 10K',cur:0,desc:'Contas ativadas (10k GMV)'},
+  {k:'receita',lbl:'Net Revenue',cur:1},
+  {k:'opps',lbl:'Opp',cur:0},
+  {k:'cw',lbl:'CW',cur:0},
+  {k:'gmv',lbl:'GMV',cur:1},
+  {k:'activation',lbl:'Ativação 10K',cur:0},
 ];
 function mensalKpiCard(c,act,bud,actPrev,mes){
   const a=act?.[c.k]||0, b=bud?.[c.k]||0, aprev=actPrev?.[c.k];
   const att=pct(a,b);
   const mom=aprev?Math.round((a-aprev)/aprev*100):null;
-  return `<div class="kpi"><span class="rail"></span><div class="lbl">${c.lbl}</div>
-    <div class="sub2">${c.desc||''}</div>
+  return `<div class="kpi"><span class="rail"></span><div class="lbl">${c.lbl} · ${mesLabel(mes)} (fechado)</div>
     <div class="num${c.cur?'':' n'}">${c.cur?fBRL(a):fN(a)}</div>
     <div class="sub"><span>de ${c.cur?fBRL(b):fN(b)} budget${att!=null?' · '+att+'%':''}</span>${mom!=null?`<span class="att ${mom>=0?'hi':'lo'}">${mom>=0?'▲':'▼'} ${Math.abs(mom)}% MoM</span>`:''}</div></div>`;
 }
@@ -431,10 +421,10 @@ function nivelMiniTable(nivel,mesesList,estr){
       <td class="r mono" style="font-weight:700">${p!=null?p+'%':'—'}</td></tr>`;
   }).join('');
   return `<div class="card" style="padding:0;overflow-x:auto;margin-bottom:14px">
-    <div style="padding:12px 16px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:7px">
-      <span style="width:9px;height:9px;border-radius:3px;background:${NIV_COLOR[nivel]};display:inline-block"></span>${nivel}
+    <div style="padding:10px 14px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:7px">
+      <span style="width:9px;height:9px;border-radius:2px;background:${NIV_COLOR[nivel]};display:inline-block"></span>${nivel}
     </div>
-    <table class="tbl" style="box-shadow:none;border:none;border-radius:0"><thead><tr><th></th><th class="r">Actual</th><th class="r">Meta</th><th class="r">% Ating.</th></tr></thead>
+    <table class="tbl"><thead><tr><th></th><th class="r">Actual</th><th class="r">Meta</th><th class="r">% Ating.</th></tr></thead>
     <tbody>${trs}</tbody></table></div>`;
 }
 // filtro em cascata Mês → (todos os componentes da página) + Estratégia — trocar o mês aqui
@@ -466,10 +456,10 @@ function renderMensal(){
   // ("Actual"/"Budget"/"Ating.") desloca as colunas de mês de um jeito que o gráfico não tem.
   const chart=`
     <div style="display:flex;gap:16px;align-items:center;margin-bottom:14px;font-size:11px;color:var(--text-muted)">
-      <span style="display:inline-flex;align-items:center;gap:5px"><i style="width:9px;height:9px;background:var(--accent);border-radius:3px;display:inline-block"></i>Actual</span>
-      <span style="display:inline-flex;align-items:center;gap:5px"><i style="width:9px;height:9px;background:#D0D5DD;border-radius:3px;display:inline-block"></i>Budget</span>
+      <span style="display:inline-flex;align-items:center;gap:5px"><i style="width:9px;height:9px;background:var(--accent);border-radius:2px;display:inline-block"></i>Actual</span>
+      <span style="display:inline-flex;align-items:center;gap:5px"><i style="width:9px;height:9px;background:var(--text-faint);border-radius:2px;display:inline-block"></i>Budget</span>
     </div>
-    <table class="tbl" style="box-shadow:none">
+    <table class="tbl">
       <thead><tr><th></th>${yearVals.map(v=>`<th style="text-align:center">${mesLabel(v.m)}</th>`).join('')}</tr></thead>
       <tbody>
         <tr>
@@ -480,7 +470,7 @@ function renderMensal(){
             return `<td style="vertical-align:bottom">
               <div style="display:flex;justify-content:center;align-items:flex-end;gap:3px;height:190px">
                 <div class="b" style="width:18px;max-width:none;height:${hA}px;background:var(--accent);opacity:${isClosed?1:.55}" title="Actual ${mesLabel(v.m)}: ${fBRL(v.a)}"></div>
-                <div class="b" style="width:18px;max-width:none;height:${hB}px;background:#D0D5DD" title="Budget ${mesLabel(v.m)}: ${fBRL(v.b)}"></div>
+                <div class="b" style="width:18px;max-width:none;height:${hB}px;background:var(--text-faint)" title="Budget ${mesLabel(v.m)}: ${fBRL(v.b)}"></div>
               </div></td>`;
           }).join('')}
         </tr>
@@ -542,8 +532,8 @@ function metricsForSemana(src,semana,estr){
   if(estr==='all')return m.total;
   return m.porEstrategia?.[estr]||null;
 }
-const KPIS=[{k:'receita',lbl:'Net Revenue',cur:1,desc:'Receita líquida da semana'},{k:'gmv',lbl:'GMV',cur:1,desc:'Volume bruto transacionado'},
-  {k:'cw',lbl:'Closed Won',cur:0,desc:'Negócios fechados na semana'},{k:'activation',lbl:'Ativações',cur:0,desc:'Contas ativadas (10k GMV)'},{k:'sap',lbl:'SAP',cur:0,desc:'Sales Accepted Prospects'}];
+const KPIS=[{k:'receita',lbl:'Net Revenue',cur:1},{k:'gmv',lbl:'GMV',cur:1},
+  {k:'cw',lbl:'Closed Won',cur:0},{k:'activation',lbl:'Ativações',cur:0},{k:'sap',lbl:'SAP',cur:0}];
 function kpisHTML(act,ref){
   return KPIS.map(c=>{
     const a=act?act[c.k]:0, b=ref?ref[c.k]:0;
@@ -553,10 +543,9 @@ function kpisHTML(act,ref){
     const w=p==null?0:Math.min(100,p);
     return `<div class="kpi"><span class="rail"></span>
       <div class="lbl">${c.lbl}</div>
-      <div class="sub2">${c.desc||''}</div>
       <div class="num ${c.cur?'':'n'}">${val}</div>
       <div class="sub"><span>meta ${budv}</span>${p!=null?`<span class="att ${attClass(p)}">${p}%</span>`:''}</div>
-      <div class="prog"><i style="width:${w}%;background:${p!=null&&p<80?'var(--danger)':'var(--accent)'}"></i></div>
+      <div class="prog"><i style="width:${w}%;background:${p!=null&&p<80?'var(--danger-text)':'var(--accent)'}"></i></div>
     </div>`;
   }).join('');
 }
@@ -570,7 +559,7 @@ function funnelHTML(act,ref){
     const w=25+(v/max)*75;
     const bpos=b>0?Math.min(100,25+(b/max)*75):null;
     h+=`<div class="fstage"><div class="nm">${nm}</div>
-      <div class="track"><div class="fill" style="width:${w}%;background:${i>=4?'var(--accent)':'#344054'}">${fN(v)}</div>
+      <div class="track"><div class="fill" style="width:${w}%;background:${i>=4?'var(--success)':'var(--orange)'}">${fN(v)}</div>
       ${bpos!=null?`<div class="bud" style="left:${bpos}%" data-b="${fN(b)}"></div>`:''}</div></div>`;
     if(i<FUNNEL.length-1){const nx=act?act[FUNNEL[i+1][1]]:0;const c=v>0?Math.round(nx/v*100):0;
       h+=`<div class="conv">↓ ${c}%</div>`;}
@@ -619,10 +608,10 @@ function rankingHTML(){
 }
 function entradasHTML(){
   const defs=[
-    {key:'contacted',label:'Contatado',color:'#344054',cap:'topo · hoje'},
-    {key:'opps',label:'Opp in',color:'#344054',cap:'~2–3 sem depois'},
-    {key:'cw',label:'CW in',color:'#344054',cap:'~4–8 sem depois'},
-    {key:'activation',label:'Ativação in',color:'var(--accent)',cap:'~6–12 sem depois'},
+    {key:'contacted',label:'Contatado',color:'var(--orange)',cap:'topo · hoje'},
+    {key:'opps',label:'Opp in',color:'var(--blue)',cap:'~2–3 sem depois'},
+    {key:'cw',label:'CW in',color:'var(--maroon)',cap:'~4–8 sem depois'},
+    {key:'activation',label:'Ativação in',color:'var(--success)',cap:'~6–12 sem depois'},
   ];
   return `<div class="grid g4">${defs.map(d=>{
     const series=weeklyTotals(D.semanalPorNivel?.[d.key]).slice(-4);
@@ -675,127 +664,45 @@ function metaSub(val,meta,fallbackSub,cur){
 const SDR_DEF={contacted:0,connected:0,opps:0,contactRate:null,oppNivel:[0,0,0],diasContatoConectado:null};
 const CLOSER_DEF={opps:0,sql:0,cw:0,sqlRate:null,winRate:null,cwNivel:[0,0,0],diasOppSql:null,diasSqlWon:null};
 const ONB_DEF={cwIn:0,activated:0,actRate:null,actNivel:[0,0,0],diasWonAtivacao:null};
-// estoque histórico do funil SDR: barras empilhadas (contacted/connected/nurturing) por
-// semana, snapshot no fim de cada semana (série D.sdrEstoque vinda do build_data.js).
-function sdrEstoqueHTML(estrF){
-  const rows=((D.sdrEstoque&&D.sdrEstoque[estrF||'all'])||[]).slice(-16);
-  if(!rows.length) return '<span class="miss">Sem série de estoque — regenere o app_data.js com o build_data.js atualizado.</span>';
-  const max=Math.max(...rows.map(r=>r.contacted+r.connected+r.nurturing),1), H=190;
-  const h=v=>v>0?Math.max(2,(v/max)*H):0;
-  const cols=rows.map(r=>{
-    const tot=r.contacted+r.connected+r.nurturing;
-    return `<div class="ecol" title="${semanaLabel(r.semana)} · total ${fN(tot)} — contacted ${fN(r.contacted)} · connected ${fN(r.connected)} · nurturing ${fN(r.nurturing)}">
-      <div class="etot">${fN(tot)}</div>
-      <div class="eseg" style="height:${h(r.nurturing)}px;background:var(--accent)"></div>
-      <div class="eseg" style="height:${h(r.connected)}px;background:#344054"></div>
-      <div class="eseg" style="height:${h(r.contacted)}px;background:#98A2B3"></div>
-      <div class="ecap">${r.semana.replace('2025-','25').replace('2026-','26')}</div></div>`;
-  }).join('');
-  return `<div class="estoque">${cols}</div>
-    <div class="legend"><span><i class="sw" style="background:#98A2B3"></i>Contacted</span><span><i class="sw" style="background:#344054"></i>Connected</span><span><i class="sw" style="background:var(--accent)"></i>Nurturing</span></div>`;
-}
-// status ATUAL (hoje) dos leads, agrupados pela SEMANA DE CONTATO: barras empilhadas
-// (contacted/connected/nurturing/qualified/unqualified) por semana — coorte × situação de hoje.
-function sdrStatusHTML(estrF){
-  const src=(D.sdrCohortStatus&&D.sdrCohortStatus[estrF||'all'])||{};
-  const weeks=Object.keys(src).sort().slice(-16);
-  if(!weeks.length) return '<span class="miss">Sem dado.</span>';
-  const ST=[['unqualified','var(--danger)'],['qualified','var(--success)'],['nurturing','var(--accent)'],['connected','#344054'],['contacted','#98A2B3']];
-  const totW=s=>s.contacted+s.connected+s.nurturing+s.qualified+s.unqualified;
-  const max=Math.max(...weeks.map(w=>totW(src[w])),1), H=190, h=v=>v>0?Math.max(2,(v/max)*H):0;
-  const cols=weeks.map(w=>{
-    const s=src[w], tot=totW(s);
-    const segs=ST.map(([k,c])=>`<div class="eseg" style="height:${h(s[k])}px;background:${c}"></div>`).join('');
-    return `<div class="ecol" title="${semanaLabel(w)} · ${fN(tot)} contatados — qualified ${fN(s.qualified)} · nurturing ${fN(s.nurturing)} · connected ${fN(s.connected)} · contacted ${fN(s.contacted)} · unqualified ${fN(s.unqualified)}">
-      <div class="etot">${fN(tot)}</div>${segs}
-      <div class="ecap">${w.replace('2025-','25').replace('2026-','26')}</div></div>`;
-  }).join('');
-  return `<div class="estoque">${cols}</div>
-    <div class="legend"><span><i class="sw" style="background:#98A2B3"></i>Contacted</span><span><i class="sw" style="background:#344054"></i>Connected</span><span><i class="sw" style="background:var(--accent)"></i>Nurturing</span><span><i class="sw" style="background:var(--success)"></i>Qualified</span><span><i class="sw" style="background:var(--danger)"></i>Unqualified</span></div>`;
-}
 function renderAreaSdr(){
   const week=state.semanaArea;
   const base=D.porPessoa?.sdr||[];
   const list=base.map(p=>weekView(p,week,SDR_DEF)).sort((a,b)=>b.opps-a.opps);
-  // ===== filtro de sales_strategy (Outbound/Inbound/Hunting) — vale pra página SDR inteira =====
-  const estrF=state.estrArea||'all';
-  const listF=estrF==='all'?list:list.filter(p=>p.estrategia===estrF);
-  // KPIs de entrada/conexão/opps vêm do agregado por estratégia (preciso, por lead)
-  const semAgg=D.actual?.semanal?.[week];
-  const agg=estrF==='all'?semAgg?.total:semAgg?.porEstrategia?.[estrF];
-  const totContacted=agg?.contacted||0, totConnected=agg?.connected||0, totOpps=agg?.opps||0;
-  const refAgg=estrF==='all'?D[state.refArea]?.semanal?.[week]?.total:D[state.refArea]?.semanal?.[week]?.porEstrategia?.[estrF];
-  const refT=refAgg;
-  // Estoque do funil na POSIÇÃO da semana selecionada (snapshot), na estratégia filtrada
-  const eCur=(D.sdrEstoque?.[estrF]||[]).find(e=>e.semana===week);
-  const estTot=eCur?eCur.contacted+eCur.connected+eCur.nurturing:null;
-  // Saídas do funil na semana = oportunidades geradas + unqualifieds (sem meta)
-  const totUnq=(D.sdrUnq?.[estrF]||{})[week]||0;
-  const totSaidas=totOpps+totUnq;
-  // delta de estoque da semana = entradas − saídas = contatados − opps − unqualifieds
-  const deltaEst=totContacted-totOpps-totUnq;
-  const deltaPill=`Δ estoque <span class="att ${deltaEst>=0?'hi':'lo'}">${deltaEst>=0?'▲ +':'▼ '}${fN(deltaEst)}</span>`;
-  // Coorte contato→conexão: dos contatados na semana, quantos conectaram na PRÓPRIA semana
-  const coh=(D.sdrCohort?.[estrF]||{})[week]||null;
-  const cohPct=coh&&coh.contacted?Math.round(coh.conn/coh.contacted*100):null;
-  // FTE — SDRs que de fato contataram / geraram opp na semana (Backlog: usar base de headcount real)
-  const contactFteCount=(D.sdrContactFte?.[estrF]||{})[week]||0;
-  const oppFteCount=(D.sdrOppFte?.[estrF]||{})[week]||0;
-  const contatadosFte=totContacted/Math.max(1,contactFteCount);
-  const oppsFte=totOpps/Math.max(1,oppFteCount);
+  const totContacted=sum(list,p=>p.contacted), totConnected=sum(list,p=>p.connected), totOpps=sum(list,p=>p.opps);
+  const fteWeek=D.fteSemanal?.[week]||[];
+  const refT=D[state.refArea]?.semanal?.[week]?.total;
   const kpis=[
-    ['Entradas',fN(totContacted),metaSub(totContacted,refT?.contacted,`${listF.length} SDRs`),'Contatados'],
-    ['Saídas do funil',fN(totSaidas),`${fN(totOpps)} opps · ${fN(totUnq)} unqualifieds`,'Oportunidades geradas + unqualifieds'],
-    ['Estoque atual',estTot!=null?fN(estTot):'—',deltaPill,'Funil de SDR atual'],
-    ['Contacted → Connected',cohPct!=null?cohPct+'%':'—',coh?`${fN(coh.conn)} de ${fN(coh.contacted)} contatados`:'sem dado','Coorte: conectou na mesma semana'],
-    ['Contacted / FTE',contatadosFte.toFixed(0),`${contactFteCount} SDRs contataram`,'Contatados ÷ SDRs que contataram'],
-    ['Opps / FTE',oppsFte.toFixed(1),`${oppFteCount} SDRs geraram opp`,'Oportunidades ÷ SDRs com opp'],
+    ['Contatados',fN(totContacted),metaSub(totContacted,refT?.contacted,`${base.length} SDRs`)],
+    ['Contact → Connected',`${pct(totConnected,totContacted)??'—'}%`,`${fN(totConnected)} conectados`],
+    ['Opp in',fN(totOpps),metaSub(totOpps,refT?.opps,`${pct(totOpps,totConnected)??'—'}% dos conectados`)],
+    ['Opp / FTE',(sum(fteWeek,r=>r.opps)/Math.max(1,sum(fteWeek,r=>r.fte))).toFixed(1),`${(totContacted/Math.max(1,sum(fteWeek,r=>r.fte))).toFixed(0)} contatados/FTE`],
   ];
-  const oppsNivelSrc=D.sdrOppsNivel?.[estrF]||{};
-  const wt=NIV.map((n,i)=>`<div class="card">${weekTrendHTML({label:n,color:NIV_COLOR[n],series:weeklyByNivel(oppsNivelSrc,n).slice(-8)})}</div>`).join('');
-  // resumo de produtividade por FTE (uma linha)
-  const prodResumo=`<div class="card" style="display:flex;gap:30px;flex-wrap:wrap;align-items:center;padding:16px 22px">
-    <span class="eyebrow">Produtividade por FTE · ${semanaLabel(week)}${estrF!=='all'?' · '+estrF:''}</span>
-    <span><b style="font-size:16px">${contactFteCount}</b> <span style="color:var(--text-muted);font-size:12px">FTEs (contataram)</span></span>
-    <span><b style="font-size:16px">${contatadosFte.toFixed(0)}</b> <span style="color:var(--text-muted);font-size:12px">contatados/FTE</span></span>
-    <span><b style="font-size:16px">${oppFteCount}</b> <span style="color:var(--text-muted);font-size:12px">FTEs (geraram opp)</span></span>
-    <span><b style="font-size:16px">${oppsFte.toFixed(1)}</b> <span style="color:var(--text-muted);font-size:12px">opps/FTE</span></span>
-  </div>`;
-  // semanas de referência (atual, −1, −2) + lookup do acumulado por pessoa
-  const idxW=D.semanas.indexOf(week);
-  const wB=D.semanas[idxW-1]||null, wC=D.semanas[idxW-2]||null;
-  const baseByEmail={}; base.forEach(p=>baseByEmail[p.email]=p);
-  const oppsAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return x?(x.opps||0):0;};
-  const connAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return (x&&x.contactRate!=null)?Math.round(x.contactRate*100):null;};
-  const nivelPct=(r,i)=>{const a=baseByEmail[r.email]?.oppNivel||[0,0,0];const t=(a[0]+a[1]+a[2])||1;return Math.round((a[i]||0)/t*100);};
+  const wt=NIV.map((n,i)=>weekTrendHTML({label:n,color:NIV_COLOR[n],series:weeklyByNivel(D.semanalPorNivel?.opps,n).slice(-4)})).join('');
+  const totWt=weekTrendHTML({label:'Total',color:'var(--accent)',series:weeklyTotals(D.semanalPorNivel?.opps).slice(-4)});
+  const fteT=fteRows(week);
+  const fteTable=fteT.map(f=>`<tr style="${f.estrategia==='Total'?'background:var(--surface-sunken)':''}">
+    <td style="font-weight:${f.estrategia==='Total'?700:600}">${f.estrategia}</td>
+    <td class="r mono">${f.fte}</td>
+    <td class="r mono" style="font-weight:600">${f.fte?Math.round(f.contacted/f.fte):0}</td>
+    <td class="r mono" style="font-weight:600">${f.fte?(f.opps/f.fte).toFixed(1):'0.0'}</td></tr>`).join('');
   const cols=[
-    {key:'oppsA',label:'Opps sem.',align:'r',render:r=>`<span class="mono num-cell">${fN(oppsAt(r,week))}</span>`},
-    {key:'oppsB',label:'−1',align:'r',render:r=>`<span class="mono">${fN(oppsAt(r,wB))}</span>`},
-    {key:'oppsC',label:'−2',align:'r',render:r=>`<span class="mono">${fN(oppsAt(r,wC))}</span>`},
-    {key:'connA',label:'%Conn',align:'r',render:r=>`<span class="mono">${connAt(r,week)!=null?connAt(r,week)+'%':'—'}</span>`},
-    {key:'connB',label:'−1',align:'r',render:r=>`<span class="mono">${connAt(r,wB)!=null?connAt(r,wB)+'%':'—'}</span>`},
-    {key:'connC',label:'−2',align:'r',render:r=>`<span class="mono">${connAt(r,wC)!=null?connAt(r,wC)+'%':'—'}</span>`},
-    {key:'n1',label:'N2-N3',align:'r',render:r=>`<span class="mono">${nivelPct(r,0)}%</span>`},
-    {key:'n2',label:'N4-N5',align:'r',render:r=>`<span class="mono">${nivelPct(r,1)}%</span>`},
-    {key:'n3',label:'N6+',align:'r',render:r=>`<span class="mono">${nivelPct(r,2)}%</span>`},
-    {key:'pd',label:'Prod/dia sem.',align:'r',render:r=>`<span class="mono">${(oppsAt(r,week)/5).toFixed(1)}</span>`},
-    {key:'pd3',label:'Prod/dia 3s',align:'r',render:r=>`<span class="mono">${((oppsAt(r,week)+oppsAt(r,wB)+oppsAt(r,wC))/15).toFixed(1)}</span>`},
+    {key:'contacted',label:'Contatados',render:r=>`<span class="mono">${fN(r.contacted)}</span>`},
+    {key:'contactRate',label:'Contact→Conn.',align:'r',render:r=>`<span class="mono">${r.contactRate!=null?pctR(r.contactRate)+'%':'—'}</span>`},
+    {key:'opps',label:'Opp in',render:r=>`<span class="mono num-cell">${fN(r.opps)}</span>`},
+    {key:'oppNivel',label:'Opp por nível',render:r=>ministack(r.oppNivel,NIV.map(n=>NIV_COLOR[n]))},
+    {key:'dias',label:'Ciclo contato→conect.',align:'r',render:r=>`<span class="mono">${r.diasContatoConectado!=null?r.diasContatoConectado+'d':'—'}</span>`},
   ];
-  // só SDRs com pelo menos 1 opp em uma das 3 últimas semanas (atual, −1, −2)
-  const listTbl=listF.filter(r=>(oppsAt(r,week)+oppsAt(r,wB)+oppsAt(r,wC))>0);
-  const table=groupedTable({rows:listTbl,groupBy:r=>r.estrategia||'—',groupOrder:STR_ORDER,cols,kind:'sdr'});
+  const table=groupedTable({rows:list,groupBy:r=>r.estrategia||'—',groupOrder:STR_ORDER,cols,kind:'sdr'});
   $('viewArea').innerHTML=`
-    <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d])=>`<div class="kpi"><span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div>
-    <div class="grid g2" style="margin-top:24px">
-      <div class="sec" style="margin-bottom:0"><div class="sec-head"><h2>Estoque do funil SDR</h2><span class="hint">snapshot no fim de cada semana · últimas 16</span></div>
-        <div class="card">${sdrEstoqueHTML(estrF)}</div></div>
-      <div class="sec" style="margin-bottom:0"><div class="sec-head"><h2>Status atual por semana de contato</h2><span class="hint">contatados na semana × situação hoje · últimas 16</span></div>
-        <div class="card">${sdrStatusHTML(estrF)}</div></div>
+    <div class="grid g4">${kpis.map(([l,v,s])=>`<div class="kpi"><span class="rail"></span><div class="lbl">${l}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div>
+    <div class="sec" style="margin-top:24px"><div class="sec-head"><h2>Opps por nível de cliente · últimas 4 semanas</h2></div>
+      <div class="card"><div class="wtgrid g3">${wt}</div></div></div>
+    <div class="grid g2">
+      <div class="sec"><div class="sec-head"><h2>Opp in total · últimas 4 semanas</h2></div><div class="card">${totWt}</div></div>
+      <div class="sec"><div class="sec-head"><h2>Produtividade por FTE</h2><span class="hint">${semanaLabel(week)}</span></div><div class="card" style="padding:0;overflow-x:auto"><table class="tbl">
+        <thead><tr><th>Motor</th><th class="r">FTEs</th><th class="r">Contatados/FTE</th><th class="r">Opp/FTE</th></tr></thead><tbody>${fteTable}</tbody></table></div></div>
     </div>
-    <div class="sec"><div class="sec-head"><h2>Opps por nível de cliente</h2><span class="hint">oportunidades geradas por semana · últimas 8 semanas</span></div>
-      <div class="grid g3">${wt}</div></div>
-    <div class="sec">${prodResumo}</div>
-    <div class="sec"><div class="sec-head"><h2>SDR · por pessoa</h2><span class="hint">Opps e %Conn nas 3 últimas semanas · distribuição acumulada por nível · produtividade diária (opps/dia)</span></div>${table}</div>`;
+    <div class="sec"><div class="sec-head"><h2>SDR · funil de entrada + opp por nível</h2><span class="hint">${semanaLabel(week)}</span></div>${table}</div>`;
   bindRowClicks($('viewArea'));
 }
 function renderAreaClosers(){
@@ -805,17 +712,17 @@ function renderAreaClosers(){
   const totOpps=sum(list,p=>p.opps), totSql=sum(list,p=>p.sql), totCw=sum(list,p=>p.cw);
   const refT=D[state.refArea]?.semanal?.[week]?.total;
   const kpis=[
-    ['Opp in',fN(totOpps),metaSub(totOpps,refT?.opps,'entrada no closer'),'Oportunidades recebidas'],
-    ['Opp → SQL',`${pct(totSql,totOpps)??'—'}%`,`${fN(totSql)} SQL`,'SQL ÷ oportunidades'],
-    ['Win rate (#)',`${pct(totCw,totSql)??'—'}%`,`${fN(totCw)} CW`,'Fechados ÷ SQL'],
-    ['CW in',fN(totCw),metaSub(totCw,refT?.cw,`${base.length} closers`),'Negócios fechados'],
+    ['Opp in',fN(totOpps),metaSub(totOpps,refT?.opps,'entrada no closer')],
+    ['Opp → SQL',`${pct(totSql,totOpps)??'—'}%`,`${fN(totSql)} SQL`],
+    ['Win rate (#)',`${pct(totCw,totSql)??'—'}%`,`${fN(totCw)} CW`],
+    ['CW in',fN(totCw),metaSub(totCw,refT?.cw,`${base.length} closers`)],
   ];
   const wt=NIV.map(n=>weekTrendHTML({label:n,color:NIV_COLOR[n],series:weeklyByNivel(D.semanalPorNivel?.cw,n).slice(-4)})).join('');
   const totWt=weekTrendHTML({label:'Total',color:'var(--accent)',series:weeklyTotals(D.semanalPorNivel?.cw).slice(-4)});
   const cols=[
     {key:'opps',label:'Opp in',render:r=>`<span class="mono">${fN(r.opps)}</span>`},
     {key:'sqlRate',label:'Opp→SQL',align:'r',render:r=>`<span class="mono">${r.sqlRate!=null?pctR(r.sqlRate)+'%':'—'}</span>`},
-    {key:'winRate',label:'Win rate',align:'r',render:r=>`<span class="mono" style="color:${r.winRate!=null&&r.winRate<0.2?'var(--danger)':'inherit'}">${r.winRate!=null?pctR(r.winRate)+'%':'—'}</span>`},
+    {key:'winRate',label:'Win rate',align:'r',render:r=>`<span class="mono" style="color:${r.winRate!=null&&r.winRate<0.2?'var(--danger-text)':'inherit'}">${r.winRate!=null?pctR(r.winRate)+'%':'—'}</span>`},
     {key:'cw',label:'CW in',render:r=>`<span class="mono num-cell">${fN(r.cw)}</span>`},
     {key:'cwNivel',label:'CW por nível',render:r=>ministack(r.cwNivel,NIV.map(n=>NIV_COLOR[n]))},
     {key:'diasOppSql',label:'Ciclo Opp→SQL',align:'r',render:r=>`<span class="mono">${r.diasOppSql!=null?r.diasOppSql+'d':'—'}</span>`},
@@ -823,7 +730,7 @@ function renderAreaClosers(){
   ];
   const table=groupedTable({rows:list,cols,kind:'closer'});
   $('viewArea').innerHTML=`
-    <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d])=>`<div class="kpi"><span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div>
+    <div class="grid g4">${kpis.map(([l,v,s])=>`<div class="kpi"><span class="rail"></span><div class="lbl">${l}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div>
     <div class="sec" style="margin-top:24px"><div class="sec-head"><h2>CW por nível de cliente · últimas 4 semanas</h2></div>
       <div class="card"><div class="wtgrid g3">${wt}</div></div></div>
     <div class="sec"><div class="sec-head"><h2>CW total · últimas 4 semanas</h2></div><div class="card">${totWt}</div></div>
@@ -838,13 +745,13 @@ function renderAreaOnboarding(){
   const port=D.actual?.semanal?.[week]?.total;
   const refT=D[state.refArea]?.semanal?.[week]?.total;
   const kpis=[
-    ['Net Revenue · semana',fBRL(port?.receita),metaSub(port?.receita||0,refT?.receita,'portfólio (sem quebra por pessoa)',true),'Receita do portfólio'],
-    ['GMV · semana',fBRL(port?.gmv),metaSub(port?.gmv||0,refT?.gmv,'portfólio (sem quebra por pessoa)',true),'Volume do portfólio'],
-    ['CW in / Ativados',`${fN(totCwIn)} / ${fN(totAct)}`,refT?`meta ${fN(refT.cw)} / ${fN(refT.activation)}`:`${base.length} onboarders`,'Recebidos vs ativados 10k'],
-    ['Taxa de ativação',`${pct(totAct,totCwIn)??'—'}%`,'ativados 10k ÷ CW recebido','Ativados ÷ CW recebido'],
+    ['Net Revenue · semana',fBRL(port?.receita),metaSub(port?.receita||0,refT?.receita,'portfólio (sem quebra por pessoa)',true)],
+    ['GMV · semana',fBRL(port?.gmv),metaSub(port?.gmv||0,refT?.gmv,'portfólio (sem quebra por pessoa)',true)],
+    ['CW in / Ativados',`${fN(totCwIn)} / ${fN(totAct)}`,refT?`meta ${fN(refT.cw)} / ${fN(refT.activation)}`:`${base.length} onboarders`],
+    ['Taxa de ativação',`${pct(totAct,totCwIn)??'—'}%`,'ativados 10k ÷ CW recebido'],
   ];
   const wt=NIV.map(n=>weekTrendHTML({label:n,color:NIV_COLOR[n],series:weeklyByNivel(D.semanalPorNivel?.activation,n).slice(-4)})).join('');
-  const totWt=weekTrendHTML({label:'Total',color:'var(--accent)',series:weeklyTotals(D.semanalPorNivel?.activation).slice(-4)});
+  const totWt=weekTrendHTML({label:'Total',color:'var(--success)',series:weeklyTotals(D.semanalPorNivel?.activation).slice(-4)});
   const cols=[
     {key:'cwIn',label:'CW in',render:r=>`<span class="mono">${fN(r.cwIn)}</span>`},
     {key:'activated',label:'Ativados 10k',render:r=>`<span class="mono num-cell">${fN(r.activated)}</span>`},
@@ -855,7 +762,7 @@ function renderAreaOnboarding(){
   ];
   const table=groupedTable({rows:list,cols,kind:'onb'});
   $('viewArea').innerHTML=`
-    <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d])=>`<div class="kpi"><span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div>
+    <div class="grid g4">${kpis.map(([l,v,s])=>`<div class="kpi"><span class="rail"></span><div class="lbl">${l}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div>
     <div class="sec" style="margin-top:24px"><div class="sec-head"><h2>Ativações (10k GMV) por nível · últimas 4 semanas</h2></div>
       <div class="card"><div class="wtgrid g3">${wt}</div></div></div>
     <div class="sec"><div class="sec-head"><h2>Ativações total · últimas 4 semanas</h2></div><div class="card">${totWt}</div></div>
@@ -896,9 +803,6 @@ function initWareaControls(){
     renderArea();
   };
   $('selSemanaArea').onchange=e=>{state.semanaArea=e.target.value;renderArea();};
-  $('selEstrArea').innerHTML=`<option value="all">Todas</option>`+STR_ORDER.map(s=>`<option value="${s}">${s}</option>`).join('');
-  $('selEstrArea').value=state.estrArea;
-  $('selEstrArea').onchange=e=>{state.estrArea=e.target.value;renderArea();};
   $('selRefArea').value=state.refArea;
   $('selRefArea').onchange=e=>{state.refArea=e.target.value;renderArea();};
 }
@@ -911,9 +815,9 @@ function weekView(p,week,defaults){
 
 // ================= 1:1 GESTOR =================
 const ROLE_CFG={
-  sdr:{label:'SDR',color:'var(--accent)',metricKey:'opps',metricLabel:'Opps / semana'},
-  closer:{label:'Closer',color:'var(--accent)',metricKey:'cw',metricLabel:'CW / semana'},
-  onb:{label:'Onboarding',color:'var(--accent)',metricKey:'activated',metricLabel:'Ativações / semana'},
+  sdr:{label:'SDR',color:'var(--blue)',metricKey:'opps',metricLabel:'Opps / semana'},
+  closer:{label:'Closer',color:'var(--orange)',metricKey:'cw',metricLabel:'CW / semana'},
+  onb:{label:'Onboarding',color:'var(--success)',metricKey:'activated',metricLabel:'Ativações / semana'},
 };
 function allPeople(){
   // 1:1 Gestor é reunião com quem está na casa hoje — só entra quem a planilha de
@@ -992,7 +896,7 @@ function renderOneOne(){
         <div class="statrow">
           <div class="stat"><div class="eyebrow" style="color:var(--text-faint)">Resultado (período)</div><div class="v">${fN(co.mine)}</div></div>
           <div class="stat"><div class="eyebrow" style="color:var(--text-faint)">Mediana do squad</div><div class="v">${fN(Math.round(co.med))}</div></div>
-          <div class="stat"><div class="eyebrow" style="color:var(--text-faint)">vs mediana</div><div class="v" style="color:${vsMed==null?'inherit':vsMed>=0?'var(--success)':'var(--danger)'}">${vsMed==null?'—':(vsMed>=0?'+':'')+vsMed+'%'}</div></div>
+          <div class="stat"><div class="eyebrow" style="color:var(--text-faint)">vs mediana</div><div class="v" style="color:${vsMed==null?'inherit':vsMed>=0?'var(--success)':'var(--danger-text)'}">${vsMed==null?'—':(vsMed>=0?'+':'')+vsMed+'%'}</div></div>
         </div>
       </div>
       <div class="grid g2">
@@ -1001,9 +905,9 @@ function renderOneOne(){
           ${indicadores(sel.p,sel.kind).map(([k,v])=>`<div class="indic"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('')}</div>
       </div>
       <div class="coachgrid" style="margin-top:16px">
-        <div class="card coachbox"><div class="eyebrow" style="color:var(--success);margin-bottom:10px">Destaques</div><ul>${co.destaques.map(t=>`<li>${t}</li>`).join('')}</ul></div>
-        <div class="card coachbox"><div class="eyebrow" style="color:var(--warn);margin-bottom:10px">A melhorar</div><ul>${co.melhorar.map(t=>`<li>${t}</li>`).join('')}</ul></div>
-        <div class="card coachbox"><div class="eyebrow" style="color:var(--accent);margin-bottom:10px">Ação da semana</div><ul><li>${co.acao}</li></ul></div>
+        <div class="card coachbox" style="border-color:var(--success)"><div class="eyebrow" style="color:var(--success);margin-bottom:10px">Destaques</div><ul>${co.destaques.map(t=>`<li>${t}</li>`).join('')}</ul></div>
+        <div class="card coachbox" style="border-color:var(--warn)"><div class="eyebrow" style="color:var(--warn);margin-bottom:10px">A melhorar</div><ul>${co.melhorar.map(t=>`<li>${t}</li>`).join('')}</ul></div>
+        <div class="card coachbox" style="border-color:var(--accent)"><div class="eyebrow" style="color:var(--accent);margin-bottom:10px">Ação da semana</div><ul><li>${co.acao}</li></ul></div>
       </div>
     </div>
   </div>`;
@@ -1016,29 +920,26 @@ function renderOneOne(){
 // ================= NAV / RENDER =================
 const CTX={mensal:'Mês fechado',wsales:'Semana · estoque do funil + produtividade por nível',warea:'Semana · detalhe por FTE',oneone:'Semana · 1:1 gestor ↔ funcionário'};
 function renderTabs(){
-  $('tabs').innerHTML=MEETINGS.map(t=>`<div class="tab ${state.meeting===t.k?'on':''}" data-k="${t.k}"><span class="ic">${IC[t.k]||''}</span><span>${t.label}</span></div>`).join('');
-  $('tabs').querySelectorAll('.tab').forEach(el=>el.onclick=()=>{state.meeting=el.dataset.k;document.body.classList.remove('side-open');render();});
+  $('tabs').innerHTML=MEETINGS.map(t=>`<div class="tab ${state.meeting===t.k?'on':''}" data-k="${t.k}">${t.label}</div>`).join('');
+  $('tabs').querySelectorAll('.tab').forEach(el=>el.onclick=()=>{state.meeting=el.dataset.k;render();});
   $('subtabs').innerHTML=AREA_TABS.map(t=>`<div class="subtab ${state.area===t.k?'on':''}" data-k="${t.k}">${t.label}</div>`).join('');
   $('subtabs').querySelectorAll('.subtab').forEach(el=>el.onclick=()=>{state.area=el.dataset.k;render();});
 }
 function updateBanner(){
   if(D.funilCompleto===false){
-    $('bannerText').innerHTML=`<b>Dados agregados</b> das bases NB + budget/reforecast. <b class="miss" style="color:var(--danger);font-style:normal">Funil completo (Contatado/Conectado/SQL por mês) parcial</b> — falta reexportar <code>Dados/05_produtividade.csv</code> (ver Dados/README.md).`;
+    $('bannerText').innerHTML=`<b>Dados agregados</b> das bases NB + budget/reforecast. <b class="miss" style="color:var(--danger-text);font-style:normal">Funil completo (Contatado/Conectado/SQL por mês) parcial</b> — falta reexportar <code>Dados/05_produtividade.csv</code> (ver Dados/README.md).`;
   } else {
     $('bannerText').innerHTML=`<b>Dados agregados</b> das bases NB + budget/reforecast. Gerado em <b>${D.geradoEm||'—'}</b>.`;
   }
 }
 function render(){
   renderTabs();
-  const mt=MEETINGS.find(m=>m.k===state.meeting);
-  $('pageTitle').textContent=mt?mt.label:'';
   $('ctxLine').textContent=CTX[state.meeting]+(state.meeting==='mensal'&&state.mesMensal?(' · '+mesLabel(state.mesMensal)):'');
   $('wsalesControls').style.display=state.meeting==='wsales'?'flex':'none';
   $('wareaControls').style.display=state.meeting==='warea'?'flex':'none';
   $('mensalControls').style.display=state.meeting==='mensal'?'flex':'none';
   $('otherControls').style.display=state.meeting==='oneone'?'flex':'none';
   $('subbar').style.display=state.meeting==='warea'?'block':'none';
-  if($('ctlEstrArea')) $('ctlEstrArea').style.display=(state.meeting==='warea'&&state.area==='sdr')?'flex':'none';
   $('viewMensal').style.display=state.meeting==='mensal'?'block':'none';
   $('viewSemanal').style.display=state.meeting==='wsales'?'block':'none';
   $('viewArea').style.display=state.meeting==='warea'?'block':'none';
@@ -1049,10 +950,24 @@ function render(){
   else renderOneOne();
 }
 
-$('genAt').textContent='dados de '+(D.geradoEm||'—');
-$('menuBtn').onclick=()=>document.body.classList.toggle('side-open');
-$('scrim').onclick=()=>document.body.classList.remove('side-open');
+// ---- tema ----
+function initTheme(){
+  const saved=localStorage.getItem('nb-theme');
+  const dark=saved?saved==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;
+  setTheme(dark);
+  const toggle=()=>setTheme(document.documentElement.dataset.theme!=='dark');
+  $('themeBtn').onclick=toggle; $('themeBtn2').onclick=toggle; $('themeBtn3').onclick=toggle; $('themeBtn4').onclick=toggle;
+}
+function setTheme(dark){
+  document.documentElement.dataset.theme=dark?'dark':'light';
+  const label=dark?'☀️ Light':'🌙 Dark';
+  $('themeBtn').textContent=label; $('themeBtn2').textContent=label; $('themeBtn3').textContent=label; $('themeBtn4').textContent=label;
+  localStorage.setItem('nb-theme',dark?'dark':'light');
+}
+
+$('genAt').textContent='· dados de '+(D.geradoEm||'—');
 updateBanner();
+initTheme();
 initWsalesControls();
 initWareaControls();
 initMensalControls();
