@@ -713,10 +713,30 @@ function sdrStatusHTML(estrF){
   return `<div class="estoque">${cols}</div>
     <div class="legend"><span><i class="sw" style="background:#98A2B3"></i>Contacted</span><span><i class="sw" style="background:#344054"></i>Connected</span><span><i class="sw" style="background:var(--accent)"></i>Nurturing</span><span><i class="sw" style="background:var(--success)"></i>Qualified</span><span><i class="sw" style="background:var(--danger)"></i>Unqualified</span></div>`;
 }
-// estoque do funil pós-CW: barras empilhadas (CW/1k/5k) por semana, mesmo padrão visual do
-// estoque de SDR (série D.closerEstoque vinda do build_data.js).
+// estoque do funil de negociação do Closer: barras empilhadas (Opp/SQL/Offer/Contract) por
+// semana, mesmo padrão visual do estoque de SDR (série D.closerEstoque vinda do build_data.js).
 function closerEstoqueHTML(estrF){
   const rows=((D.closerEstoque&&D.closerEstoque[estrF||'all'])||[]).slice(-16);
+  if(!rows.length) return '<span class="miss">Sem série de estoque — regenere o app_data.js com o build_data.js atualizado.</span>';
+  const max=Math.max(...rows.map(r=>r.opp+r.sql+r.offer+r.contract),1), H=190;
+  const h=v=>v>0?Math.max(2,(v/max)*H):0;
+  const cols=rows.map(r=>{
+    const tot=r.opp+r.sql+r.offer+r.contract;
+    return `<div class="ecol" title="${semanaLabel(r.semana)} · total ${fN(tot)} — Opp ${fN(r.opp)} · SQL ${fN(r.sql)} · Offer ${fN(r.offer)} · Contract ${fN(r.contract)}">
+      <div class="etot">${fN(tot)}</div>
+      <div class="eseg" style="height:${h(r.contract)}px;background:var(--accent)"></div>
+      <div class="eseg" style="height:${h(r.offer)}px;background:#344054"></div>
+      <div class="eseg" style="height:${h(r.sql)}px;background:#667085"></div>
+      <div class="eseg" style="height:${h(r.opp)}px;background:#98A2B3"></div>
+      <div class="ecap">${r.semana.replace('2025-','25').replace('2026-','26')}</div></div>`;
+  }).join('');
+  return `<div class="estoque">${cols}</div>
+    <div class="legend"><span><i class="sw" style="background:#98A2B3"></i>Opp</span><span><i class="sw" style="background:#667085"></i>SQL</span><span><i class="sw" style="background:#344054"></i>Offer</span><span><i class="sw" style="background:var(--accent)"></i>Contract</span></div>`;
+}
+// estoque de ativação (Onboarding): barras empilhadas (CW/1k/5k) por semana — mesmo padrão
+// visual, com D.onbEstoque (funil pós-CW: fica com o time de Onboarding, não Closer).
+function onbEstoqueHTML(estrF){
+  const rows=((D.onbEstoque&&D.onbEstoque[estrF||'all'])||[]).slice(-16);
   if(!rows.length) return '<span class="miss">Sem série de estoque — regenere o app_data.js com o build_data.js atualizado.</span>';
   const max=Math.max(...rows.map(r=>r.cw+r.a1k+r.a5k),1), H=190;
   const h=v=>v>0?Math.max(2,(v/max)*H):0;
@@ -889,7 +909,7 @@ function renderAreaClosers(){
   const table=groupedTable({rows:listTbl,cols,kind:'closer'});
   $('viewArea').innerHTML=`
     <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d])=>`<div class="kpi"><span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div>
-    <div class="sec" style="margin-top:24px"><div class="sec-head"><h2>Estoque do funil pós-CW</h2><span class="hint">snapshot no fim de cada semana · últimas 16 · CW → 1k → 5k (sai ao ativar 10k)</span></div>
+    <div class="sec" style="margin-top:24px"><div class="sec-head"><h2>Estoque do funil Closer</h2><span class="hint">snapshot no fim de cada semana · últimas 16 · Opp → SQL → Offer → Contract (sai ao fechar ou perder)</span></div>
       <div class="card">${closerEstoqueHTML('all')}</div></div>
     <div class="sec"><div class="sec-head"><h2>CW por nível de cliente</h2><span class="hint">últimas 8 semanas</span></div>
       <div class="grid g3">${wt}</div></div>
@@ -922,7 +942,9 @@ function renderAreaOnboarding(){
   const table=groupedTable({rows:list,cols,kind:'onb'});
   $('viewArea').innerHTML=`
     <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d])=>`<div class="kpi"><span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div>
-    <div class="sec" style="margin-top:24px"><div class="sec-head"><h2>Ativações (10k GMV) por nível · últimas 4 semanas</h2></div>
+    <div class="sec" style="margin-top:24px"><div class="sec-head"><h2>Estoque de ativação</h2><span class="hint">snapshot no fim de cada semana · últimas 16 · CW → 1k → 5k (sai ao ativar 10k)</span></div>
+      <div class="card">${onbEstoqueHTML('all')}</div></div>
+    <div class="sec"><div class="sec-head"><h2>Ativações (10k GMV) por nível · últimas 4 semanas</h2></div>
       <div class="card"><div class="wtgrid g3">${wt}</div></div></div>
     <div class="sec"><div class="sec-head"><h2>Ativações total · últimas 4 semanas</h2></div><div class="card">${totWt}</div></div>
     <div class="sec"><div class="sec-head"><h2>Onboarding · CW recebido, ativação e ciclo</h2><span class="hint">${semanaLabel(week)} · Net Revenue/GMV por onboarder nomeado não existem na base hoje (só agregado por nível/semana)</span></div>${table}</div>`;
