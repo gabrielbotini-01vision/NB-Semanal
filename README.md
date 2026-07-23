@@ -31,10 +31,12 @@ Pré-requisito: [Node.js](https://nodejs.org) instalado (versão LTS).
 
 1. Atualize `Dados/01_receita_semana_nivel_estrategia.csv` e `Dados/06_operacional_raw.csv`,
    de um dos dois jeitos:
-   - **Automático (recomendado):** `python3 scripts/atualizar_dados.py` — roda as duas
-     queries de `Querys/` direto no Astrobox (datasource `DHI_DATA_PRODUCTION`) e já escreve
-     os CSVs em `Dados/`. Pré-requisito: `ASTROBOX_TOKEN` válido em `~/.env` (gerado pela
-     skill `hotmart-oauth`; expira em ~48h, gere de novo quando o script acusar erro 401/403).
+   - **Automático (recomendado):** `python3 scripts/atualizar_dados.py` (no Windows, use `py`
+     em vez de `python3` se der erro "Python was not found" — é um atalho quebrado da
+     Microsoft Store) — roda as duas queries de `Querys/` direto no Astrobox (datasource
+     `DHI_DATA_PRODUCTION`) e já escreve os CSVs em `Dados/`. Pré-requisito: `ASTROBOX_TOKEN`
+     válido em `~/.env` (pasta pessoal do usuário, **não** dentro da pasta do projeto — ver
+     "Como renovar o token do Astrobox" abaixo).
    - **Manual:** rode as queries no Redshift e exporte substituindo os arquivos com o mesmo
      nome, separador `;` (ver `Dados/README.md` para o contrato exato de cada arquivo).
    Atualize também `budget_oficial.csv`/`reforecast_oficial.csv` (meta mensal) e
@@ -54,6 +56,35 @@ Pré-requisito: [Node.js](https://nodejs.org) instalado (versão LTS).
 faz a bucketização por semana/mês em JS, o que permite trocar o grão de tempo sem precisar
 reescrever a query no Redshift. As antigas `02_safra_contacted.sql`...`05_produtividade.sql`
 ficam em `Querys/` só como referência histórica.
+
+## Como renovar o token do Astrobox
+
+O `ASTROBOX_TOKEN` é pessoal (atrelado ao seu login SSO da Hotmart) e expira em ~48h — não
+tem como automatizar o login em si (é proposital, existe MFA). O que dá pra automatizar é o
+resto: abrir o navegador, extrair o token depois que você logar, e salvar no `.env`.
+
+**Pré-requisito (uma vez só por máquina):**
+```
+npm install -g @playwright/cli
+```
+
+**Toda vez que o token expirar** (o `atualizar_dados.py` avisa com erro 401/403):
+```
+playwright-cli open --headed https://astrobox.hotmart.com
+```
+⚠️ O `--headed` é obrigatório — sem ele o navegador abre invisível e parece que "não abriu nada".
+
+Isso abre uma janela de navegador de verdade na sua tela. Faça login manualmente (e-mail,
+senha, MFA) na tela do SSO que aparecer. Depois de logado:
+```
+playwright-cli localstorage-get astrobox-token --raw
+```
+Copie o valor impresso (começa com `eyJ...`) e cole em `~/.env` (na sua pasta pessoal de
+usuário, ex. `C:\Users\<seu-usuario>\.env` no Windows) como:
+```
+ASTROBOX_TOKEN=<valor copiado>
+```
+Por fim, feche a sessão do navegador: `playwright-cli close`.
 
 ## Abas do dashboard
 

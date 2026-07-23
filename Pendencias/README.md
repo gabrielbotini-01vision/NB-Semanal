@@ -1,6 +1,20 @@
 # Pendências · New Business Cockpit
 
-Notas de handoff para quem continuar o desenvolvimento. Última atualização: 22/07/2026.
+Notas de handoff para quem continuar o desenvolvimento. Última atualização: 23/07/2026.
+
+## Concluído (23/07/2026)
+
+- **Cards "Contacted / FTE" e "Opps / FTE" (Semanal Área › SDR, KPIs do topo e resumo
+  "Produtividade por FTE") agora dividem também por dia útil decorrido na semana**, não só
+  o total semanal bruto. Novo campo `D.diasUteisSemana[semana]` no `app_data.js` (calculado
+  em `build_data.js` via `businessDaysBetweenUTC` + `weekStartUTC`/`weekEndUTC` já
+  existentes): dias úteis (seg-sex) já passados até hoje — 5 numa semana fechada, só os que
+  já ocorreram numa semana em curso. Isso resolve a parte "dias úteis decorridos" do item 2
+  abaixo **só para esses dois cards agregados** — a tabela por pessoa (colunas `Prod/dia
+  sem.`/`Prod/dia 3s`) continua com o `÷5`/`÷15` fixo, não foi tocada.
+- **Card "Contacted → Connected" (coorte contato→conexão na mesma semana) ganhou uma
+  referência fixa de 10%** (constante `COH_META` em `renderAreaSdr()`, não vem de
+  budget/reforecast) com badge de atingimento igual aos outros cards com meta.
 
 ## Estado atual do redesign
 
@@ -31,8 +45,10 @@ Regenerar: `node app/build_data.js` (lê `Dados/*.csv` locais).
    contataram / geraram opp na semana (aproximação). Trocar por base de headcount/escala real
    quando disponível.
 2. **"Produtividade diária" (tabela por pessoa):** hoje = **opps/dia** = `opps da semana ÷ 5`
-   e média 3 semanas = `(W + W-1 + W-2) ÷ 15`. Confirmar se é isso mesmo ou contatados/dia, e
-   se deve usar dias úteis decorridos na semana em curso em vez de fixar 5.
+   e média 3 semanas = `(W + W-1 + W-2) ÷ 15`. Confirmar se é isso mesmo ou contatados/dia.
+   ⚠️ O "usar dias úteis decorridos em vez de fixar 5" **já foi resolvido pros cards
+   agregados** (ver "Concluído" acima, `D.diasUteisSemana`) — falta só aplicar a mesma lógica
+   aqui, nas colunas `Prod/dia sem.`/`Prod/dia 3s` da tabela por pessoa.
 3. **Filtro de Estratégia:** hoje só funciona/aparece na sub-aba **SDR**. Estender para
    Closers e Onboarding (KPIs já dá via `porEstrategia`; tabelas por pessoa precisam de
    dimensão de estratégia por pessoa/semana).

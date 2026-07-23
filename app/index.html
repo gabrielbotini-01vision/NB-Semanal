@@ -735,21 +735,28 @@ function renderAreaSdr(){
   // delta de estoque da semana = entradas − saídas = contatados − opps − unqualifieds
   const deltaEst=totContacted-totOpps-totUnq;
   const deltaPill=`Δ estoque <span class="att ${deltaEst>=0?'hi':'lo'}">${deltaEst>=0?'▲ +':'▼ '}${fN(deltaEst)}</span>`;
-  // Coorte contato→conexão: dos contatados na semana, quantos conectaram na PRÓPRIA semana
+  // Coorte contato→conexão: dos contatados na semana, quantos conectaram na PRÓPRIA semana.
+  // Referência fixa de 10% (não vem de budget — é uma meta operacional combinada à parte).
   const coh=(D.sdrCohort?.[estrF]||{})[week]||null;
   const cohPct=coh&&coh.contacted?Math.round(coh.conn/coh.contacted*100):null;
+  const COH_META=10;
+  const cohAtt=cohPct!=null?pct(cohPct,COH_META):null;
   // FTE — SDRs que de fato contataram / geraram opp na semana (Backlog: usar base de headcount real)
   const contactFteCount=(D.sdrContactFte?.[estrF]||{})[week]||0;
   const oppFteCount=(D.sdrOppFte?.[estrF]||{})[week]||0;
   const contatadosFte=totContacted/Math.max(1,contactFteCount);
   const oppsFte=totOpps/Math.max(1,oppFteCount);
+  // dias úteis já decorridos na semana (fechada = 5; em curso = só os que já passaram)
+  const diasUteis=D.diasUteisSemana?.[week]||0;
+  const contatadosFteDia=diasUteis?contatadosFte/diasUteis:null;
+  const oppsFteDia=diasUteis?oppsFte/diasUteis:null;
   const kpis=[
     ['Entradas',fN(totContacted),metaSub(totContacted,refT?.contacted,`${listF.length} SDRs`),'Contatados'],
     ['Saídas do funil',fN(totSaidas),`${fN(totOpps)} opps · ${fN(totUnq)} unqualifieds`,'Oportunidades geradas + unqualifieds'],
     ['Estoque atual',estTot!=null?fN(estTot):'—',deltaPill,'Funil de SDR atual'],
-    ['Contacted → Connected',cohPct!=null?cohPct+'%':'—',coh?`${fN(coh.conn)} de ${fN(coh.contacted)} contatados`:'sem dado','Coorte: conectou na mesma semana'],
-    ['Contacted / FTE',contatadosFte.toFixed(0),`${contactFteCount} SDRs contataram`,'Contatados ÷ SDRs que contataram'],
-    ['Opps / FTE',oppsFte.toFixed(1),`${oppFteCount} SDRs geraram opp`,'Oportunidades ÷ SDRs com opp'],
+    ['Contacted → Connected',cohPct!=null?cohPct+'%':'—',coh?`${fN(coh.conn)}/${fN(coh.contacted)} · meta ${COH_META}%${cohAtt!=null?` · <span class="att ${attClass(cohAtt)}">${cohAtt}%</span>`:''}`:'sem dado','Coorte: conectou na mesma semana'],
+    ['Contacted / FTE',contatadosFte.toFixed(0),`${contactFteCount} SDRs · ${contatadosFteDia!=null?contatadosFteDia.toFixed(1)+'/dia útil':'—'} (${diasUteis}d)`,'Contatados ÷ SDRs que contataram'],
+    ['Opps / FTE',oppsFte.toFixed(1),`${oppFteCount} SDRs · ${oppsFteDia!=null?oppsFteDia.toFixed(2)+'/dia útil':'—'} (${diasUteis}d)`,'Oportunidades ÷ SDRs com opp'],
   ];
   const oppsNivelSrc=D.sdrOppsNivel?.[estrF]||{};
   const wt=NIV.map((n,i)=>`<div class="card">${weekTrendHTML({label:n,color:NIV_COLOR[n],series:weeklyByNivel(oppsNivelSrc,n).slice(-8)})}</div>`).join('');
@@ -758,8 +765,10 @@ function renderAreaSdr(){
     <span class="eyebrow">Produtividade por FTE · ${semanaLabel(week)}${estrF!=='all'?' · '+estrF:''}</span>
     <span><b style="font-size:16px">${contactFteCount}</b> <span style="color:var(--text-muted);font-size:12px">FTEs (contataram)</span></span>
     <span><b style="font-size:16px">${contatadosFte.toFixed(0)}</b> <span style="color:var(--text-muted);font-size:12px">contatados/FTE</span></span>
+    <span><b style="font-size:16px">${contatadosFteDia!=null?contatadosFteDia.toFixed(1):'—'}</b> <span style="color:var(--text-muted);font-size:12px">contatados/FTE/dia útil (${diasUteis}d)</span></span>
     <span><b style="font-size:16px">${oppFteCount}</b> <span style="color:var(--text-muted);font-size:12px">FTEs (geraram opp)</span></span>
     <span><b style="font-size:16px">${oppsFte.toFixed(1)}</b> <span style="color:var(--text-muted);font-size:12px">opps/FTE</span></span>
+    <span><b style="font-size:16px">${oppsFteDia!=null?oppsFteDia.toFixed(2):'—'}</b> <span style="color:var(--text-muted);font-size:12px">opps/FTE/dia útil (${diasUteis}d)</span></span>
   </div>`;
   // semanas de referência (atual, −1, −2) + lookup do acumulado por pessoa
   const idxW=D.semanas.indexOf(week);

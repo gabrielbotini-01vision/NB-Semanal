@@ -521,6 +521,23 @@ for (const key in funCellSemanal) {
   if (sdrOppsNivel[e]) (sdrOppsNivel[e][w] = sdrOppsNivel[e][w] || {})[b] = (sdrOppsNivel[e][w][b] || 0) + v;
 }
 
+// dias úteis (seg-sex) já DECORRIDOS em cada semana até hoje — pra "produtividade por dia
+// útil" (Contacted/FTE e Opps/FTE por dia). Semana fechada = 5 (ou menos, se for a semana 1
+// parcial); semana em curso = só os dias úteis que já passaram; semana futura = não entra.
+function businessDaysBetweenUTC(start, end) {
+  let n = 0; const d = new Date(start);
+  while (d <= end) { const dow = d.getUTCDay(); if (dow !== 0 && dow !== 6) n++; d.setUTCDate(d.getUTCDate() + 1); }
+  return n;
+}
+const hojeDate = new Date(hojeStr + 'T00:00:00Z');
+const diasUteisSemana = {};
+for (const w of semanas) {
+  const start = weekStartUTC(w);
+  if (start > hojeDate) continue; // semana totalmente futura — sem dia útil decorrido ainda
+  const end = weekEndUTC(w) > hojeDate ? hojeDate : weekEndUTC(w);
+  diasUteisSemana[w] = businessDaysBetweenUTC(start, end);
+}
+
 // ---------- CICLO (médias simples por lead, direto do unpivot acima) ----------
 const avg = arr => arr.length ? +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : null;
 const ciclo = {
@@ -678,6 +695,7 @@ const DATA = {
   semanalPorNivel,
   fte, fteSemanal,
   sdrEstoque, sdrCohort, sdrUnq, sdrOppsNivel, sdrOppFte, sdrCohortStatus, sdrContactFte,
+  diasUteisSemana,
   mesFechado,
 };
 fs.mkdirSync(outDir, { recursive: true });
