@@ -15,6 +15,31 @@ Notas de handoff para quem continuar o desenvolvimento. Última atualização: 2
 - **Card "Contacted → Connected" (coorte contato→conexão na mesma semana) ganhou uma
   referência fixa de 10%** (constante `COH_META` em `renderAreaSdr()`, não vem de
   budget/reforecast) com badge de atingimento igual aos outros cards com meta.
+- **Tabela "SDR · por pessoa"**: a coluna de conexão virou **coorte C2 por pessoa** (novo
+  campo `cohortRate` em `porSemana`, no `build_data.js` — dos leads que a pessoa contatou
+  NAQUELA semana, quantos conectaram na MESMA semana; antes era throughput, podia passar de
+  100%). Distribuição de opps por nível passou a refletir só as 3 últimas semanas (era
+  acumulado desde sempre). As colunas "−1"/"−2" viraram **"Semana N"** com o número real da
+  semana (`Semana 29`, `Semana 28` etc.), calculado a partir da semana selecionada.
+- **Aba Closers redesenhada no mesmo estilo visual do SDR**, usando as métricas que já
+  existiam (opp/sql/cw/sqlRate/winRate/cwNivel/ciclos) — sem inventar cohort/FTE novos pra
+  Closer ainda. CW por nível virou 3 cards lado a lado (8 semanas). Tabela por pessoa ganhou
+  progressão "CW sem./Semana N/Semana N" e "Win rate/Semana N/Semana N", CW por nível na
+  janela de 3 semanas, e produtividade por dia útil (SQL/dia, CW/dia).
+- **Novo "Estoque do funil pós-CW" na aba Closers** (`closerEstoque` no `build_data.js`,
+  `closerEstoqueHTML()` no front) — mesmo padrão visual do estoque de SDR, mas rastreando
+  oportunidades (`opp_id`) fechadas (CW) que ainda não ativaram 1k / ativaram 1k mas não 5k /
+  ativaram 5k mas não 10k (sai do estoque ao ativar 10k). Comparado com as medidas DAX
+  `Carteira_CW_not1k/not5k/not10k` que o Gabriel mandou do Power BI.
+
+  ⚠️ **Mesma limitação do estoque de SDR, mesmo motivo:** o Power BI usa um campo de "baixa"
+  (`lead_end_date` no funil de SDR, `Onboarding_close_date` no funil pós-CW) pra tirar do
+  estoque quem parou de progredir sem cruzar o próximo patamar. **Nenhum dos dois campos
+  existe no nosso `SELECT *`** de `dhmv_sales_touched` (conferido nas 101 colunas do
+  `06_operacional_raw.csv`) — então, nos dois estoques nossos, quem trava numa faixa fica
+  acumulando ali pra sempre, em vez de "envelhecer" pra fora como no Power BI. Os nossos
+  números tendem a ficar **maiores** que os de lá, principalmente nas faixas mais antigas.
+  Se um dia esse(s) campo(s) (ou equivalente) entrar no export, dá pra replicar a baixa exata.
 
 ## Estado atual do redesign
 
@@ -36,6 +61,13 @@ Alimentam a página **Semanal Área › SDR**:
 - `sdrOppFte` / `sdrContactFte` — nº de SDRs distintos que geraram opp / que contataram, por semana.
 - `sdrCohortStatus` — por semana de CONTATO, status atual (hoje) de cada lead:
   contacted/connected/nurturing/qualified/unqualified (data mais recente vence).
+- `diasUteisSemana[semana]` — dias úteis (seg-sex) já decorridos até hoje em cada semana
+  (não indexado por estratégia — é geral). Usado nos cards de produtividade por dia útil.
+
+Alimentam a página **Semanal Área › Closers**:
+
+- `closerEstoque` — estoque pós-CW (cw/a1k/a5k) por `opp_id`, mesmo padrão do `sdrEstoque`.
+- `cohortRate` (dentro de `porPessoa.sdr[].porSemana[semana]`) — coorte C2 por pessoa.
 
 Regenerar: `node app/build_data.js` (lê `Dados/*.csv` locais).
 
@@ -58,6 +90,16 @@ Regenerar: `node app/build_data.js` (lê `Dados/*.csv` locais).
 5. **Chip de ícone nos KPI cards** (estilo Stravix, círculo colorido) — não implementado.
 6. **Definição de "status atual" e "saída do estoque":** hoje um lead sai do estoque de SDR
    quando vira opp/qualificado ou é desqualificado. Confirmar se a regra bate com a operação.
+7. **Validar `sdrEstoque` e `closerEstoque` contra o Power BI.** O Gabriel já comparou a lógica
+   com as medidas DAX (`Carteira_Contacted/Connected/Nurturing` e
+   `Carteira_CW_not1k/not5k/not10k`) — a estrutura bate, mas os números não devem fechar
+   exatamente por causa do `lead_end_date`/`Onboarding_close_date` que não temos (ver
+   "Concluído" acima). Ainda falta comparar número a número numa semana específica pra medir o
+   tamanho real da diferença.
+8. **Estender o filtro de estratégia e as métricas novas (coorte, dia útil) pra Closers e
+   Onboarding** — Closers ganhou hoje o estilo visual do SDR (progressão por semana,
+   produtividade por dia útil), mas ainda sem filtro de estratégia nem um cohort/FTE
+   equivalente ao do SDR. Onboarding não foi tocado.
 
 ## Convenções do projeto (não esquecer)
 

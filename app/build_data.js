@@ -527,6 +527,46 @@ for (const key in funCellSemanal) {
   if (sdrOppsNivel[e]) (sdrOppsNivel[e][w] = sdrOppsNivel[e][w] || {})[b] = (sdrOppsNivel[e][w][b] || 0) + v;
 }
 
+// ---------- ESTOQUE DO FUNIL CLOSER/ATIVAÇÃO (snapshot no FIM de cada semana) ----------
+// Mesmo conceito do estoque de SDR, só que no funil pós-CW: quantas oportunidades (opp_id)
+// fechadas (CW) estão paradas em cada faixa de ativação — CW mas ainda não 1k / 1k mas ainda
+// não 5k / 5k mas ainda não 10k — no fim de cada semana. Sai do estoque ao ativar 10k (fora
+// do escopo do Closer). Contagem por opp_id (não lead_id), igual à métrica de referência.
+// ⚠️ Diferente do estoque de SDR, aqui NÃO existe no SELECT * um campo equivalente a
+// "Onboarding_close_date" (data em que a Hotmart para de rastrear a oportunidade mesmo sem
+// ela ter avançado) — então, ao contrário do Power BI, aqui uma oportunidade parada não
+// "envelhece" pra fora do estoque; ela acumula na faixa indefinidamente. Os números tendem a
+// ficar MAIORES que o Power BI pra faixas antigas — se um dia expusermos esse campo (ou
+// equivalente) no export, dá pra replicar o comportamento de baixa exata.
+const closerLeadsMap = new Map();
+for (const r of fop) {
+  const cw = cleanDate(r.closed_won_date); if (!cw) continue;
+  const oppId = (r.opp_id || '').trim(); if (!oppId || closerLeadsMap.has(oppId)) continue;
+  closerLeadsMap.set(oppId, {
+    estr: estr(r.sales_strategy), cw,
+    a1k: cleanDate(r.activation_date_1k), a5k: cleanDate(r.activation_date_5k), a10k: cleanDate(r.activation_date_10k),
+  });
+}
+const closerLeads = [...closerLeadsMap.values()];
+const closerEstoque = {}; ESTOQUE_KEYS.forEach(k => closerEstoque[k] = []); // estr -> [{semana,cw,a1k,a5k}]
+for (const w of semanas) {
+  const startStr = weekStartUTC(w).toISOString().slice(0, 10);
+  if (startStr > hojeStr) continue;
+  let T = weekEndUTC(w).toISOString().slice(0, 10);
+  if (T > hojeStr) T = hojeStr;
+  const acc = {}; ESTOQUE_KEYS.forEach(k => acc[k] = { cw: 0, a1k: 0, a5k: 0 });
+  for (const l of closerLeads) {
+    if (l.cw > T) continue;                                 // ainda não fechou até T
+    if (l.a10k && l.a10k <= T) continue;                     // já ativou 10k — saiu do estoque
+    let best = l.cw, stage = 'cw';                           // etapa mais recente até T
+    if (l.a1k && l.a1k <= T && l.a1k >= best) { best = l.a1k; stage = 'a1k'; }
+    if (l.a5k && l.a5k <= T && l.a5k >= best) { best = l.a5k; stage = 'a5k'; }
+    acc.all[stage]++;
+    if (l.estr) acc[l.estr][stage]++;
+  }
+  ESTOQUE_KEYS.forEach(k => closerEstoque[k].push({ semana: w, ...acc[k] }));
+}
+
 // dias úteis (seg-sex) já DECORRIDOS em cada semana até hoje — pra "produtividade por dia
 // útil" (Contacted/FTE e Opps/FTE por dia). Semana fechada = 5 (ou menos, se for a semana 1
 // parcial); semana em curso = só os dias úteis que já passaram; semana futura = não entra.
@@ -703,7 +743,7 @@ const DATA = {
   semanalPorNivel,
   fte, fteSemanal,
   sdrEstoque, sdrCohort, sdrUnq, sdrOppsNivel, sdrOppFte, sdrCohortStatus, sdrContactFte,
-  diasUteisSemana,
+  diasUteisSemana, closerEstoque,
   mesFechado,
 };
 fs.mkdirSync(outDir, { recursive: true });
