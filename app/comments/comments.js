@@ -214,6 +214,11 @@
     body.querySelectorAll('[data-reply]').forEach(t => t.onkeydown = (e) => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); const root = findRoot(t.dataset.reply); if (root) postReply(root, t.value); }
     });
+    body.querySelectorAll('[data-replybtn]').forEach(b => b.onclick = () => {
+      const root = findRoot(b.dataset.replybtn); if (!root) return;
+      const ta = body.querySelector('textarea[data-reply="' + b.dataset.replybtn + '"]');
+      if (ta) postReply(root, ta.value);
+    });
     body.querySelectorAll('[data-res]').forEach(b => b.onclick = () => { const r = findRoot(b.dataset.res); if (r) toggleResolve(r); });
     body.querySelectorAll('[data-del]').forEach(b => b.onclick = () => del(b.dataset.del));
   }
@@ -232,7 +237,8 @@
       '<span class="nb-anchor" data-anchor="' + esc(t.root.ancora || 'Geral') + '">📍 ' + esc(t.root.ancora || 'Geral') + (t.root.resolvido ? ' · resolvido' : '') + '</span>' +
       comments +
       '<textarea class="nb-reply" data-reply="' + t.root.thread_id + '" placeholder="Responder… (Enter envia)"></textarea>' +
-      '<div class="nb-row">' + (canRes ? '<button class="nb-mini" data-res="' + t.root.thread_id + '">' + (t.root.resolvido ? 'reabrir' : 'resolver') + '</button>' : '') + '</div>' +
+      '<div class="nb-row"><button class="nb-btn ghost" data-replybtn="' + t.root.thread_id + '">Responder</button>' +
+      (canRes ? '<button class="nb-mini" data-res="' + t.root.thread_id + '">' + (t.root.resolvido ? 'reabrir' : 'resolver') + '</button>' : '') + '</div>' +
       '</div>';
   }
 
