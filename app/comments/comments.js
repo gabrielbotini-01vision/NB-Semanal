@@ -157,12 +157,9 @@
   }
 
   // ---------- composição ----------
-  function sectionTitles() {
-    return [...document.querySelectorAll('.content .sec .sec-head h2')].map(h => h.textContent.trim()).filter(Boolean);
-  }
   function renderNew() {
     const el = document.getElementById('nbNew'); if (!el || !session) return;
-    const titles = sectionTitles(); const opts = ['Geral', ...titles];
+    const titles = containerAnchors(); const opts = ['Geral', ...titles];
     el.innerHTML = '<select id="nbAnchorSel">' + opts.map(t => '<option' + (t === activeAnchor ? ' selected' : '') + '>' + esc(t) + '</option>').join('') + '</select>' +
       '<textarea id="nbNewTxt" placeholder="Novo comentário nesta semana…"></textarea>' +
       '<button class="nb-btn" id="nbPost">Comentar</button>';
@@ -242,33 +239,54 @@
       '</div>';
   }
 
-  // ---------- pins nas seções ----------
+  // ---------- pins por container (cada card/kpi branco) ----------
+  function cardsIn(scope) { return [...(scope || document).querySelectorAll('.card, .kpi')]; }
+  function contentCards() { return [...document.querySelectorAll('.content .card, .content .kpi')]; }
+  // rótulo legível e razoavelmente estável do container (o próprio label + a seção pai)
+  function containerAnchor(el) {
+    let label = '';
+    if (el.classList.contains('kpi')) { const l = el.querySelector('.lbl'); label = l ? l.textContent.trim() : ''; }
+    if (!label) { const w = el.querySelector('.wtlabel'); if (w) label = w.textContent.trim(); }
+    if (!label) { const e = el.querySelector('.eyebrow'); if (e) label = e.textContent.trim(); }
+    const sec = el.closest('.sec');
+    const secTitle = sec ? (((sec.querySelector('.sec-head h2') || {}).textContent) || '').trim() : '';
+    if (!label) {
+      const sibs = cardsIn(sec || document.querySelector('.content'));
+      if (sibs.length === 1 && secTitle) return secTitle;   // card único da seção → usa o título dela
+      label = 'bloco ' + (sibs.indexOf(el) + 1);
+    }
+    return (secTitle ? secTitle + ' › ' : '') + label;
+  }
+  function containerAnchors() {
+    const seen = new Set(), out = [];
+    contentCards().forEach(el => { const a = containerAnchor(el); if (a && !seen.has(a)) { seen.add(a); out.push(a); } });
+    return out;
+  }
   function renderPins() {
-    document.querySelectorAll('.content .sec').forEach(sec => {
-      const h2 = sec.querySelector('.sec-head h2'); if (!h2) return;
-      const title = h2.textContent.trim();
-      if (getComputedStyle(sec).position === 'static') sec.style.position = 'relative';
-      let pin = sec.querySelector(':scope > .nb-pin');
+    contentCards().forEach(el => {
+      if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+      let pin = el.querySelector(':scope > .nb-pin');
       if (!pin) {
         pin = document.createElement('button'); pin.className = 'nb-pin';
-        pin.innerHTML = '💬<span class="n"></span>'; sec.appendChild(pin);
+        pin.innerHTML = '<span class="ic">💬</span><span class="n"></span>'; el.appendChild(pin);
         pin.addEventListener('click', (e) => { e.stopPropagation(); openAnchor(pin.dataset.anchor); });
       }
-      pin.dataset.anchor = title;
-      const n = (byAnchor[title] || []).length;
+      const anchor = containerAnchor(el);
+      pin.dataset.anchor = anchor;
+      const n = (byAnchor[anchor] || []).length;
       pin.querySelector('.n').textContent = n || '';
       pin.classList.toggle('has', n > 0);
     });
   }
-  function openAnchor(title) {
-    activeAnchor = title; document.body.classList.add('nb-open');
+  function openAnchor(anchor) {
+    activeAnchor = anchor; document.body.classList.add('nb-open');
     renderPanel();
-    const sel = document.getElementById('nbAnchorSel'); if (sel) sel.value = title;
+    const sel = document.getElementById('nbAnchorSel'); if (sel) sel.value = anchor;
     const txt = document.getElementById('nbNewTxt'); if (txt) txt.focus();
   }
-  function scrollToAnchor(title) {
-    const sec = [...document.querySelectorAll('.content .sec')].find(s => { const h = s.querySelector('.sec-head h2'); return h && h.textContent.trim() === title; });
-    if (sec) { sec.scrollIntoView({ behavior: 'smooth', block: 'center' }); sec.classList.add('nb-hl'); setTimeout(() => sec.classList.remove('nb-hl'), 1600); }
+  function scrollToAnchor(anchor) {
+    const el = contentCards().find(x => containerAnchor(x) === anchor);
+    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('nb-hl'); setTimeout(() => el.classList.remove('nb-hl'), 1600); }
   }
 
   // ---------- utils ----------

@@ -47,12 +47,12 @@ body.nb-open .nb-panel{transform:translateX(0)}
 
 /* pins nas seções (aparecem no hover; laranja quando já há comentário) */
 .nb-pin{position:absolute;top:8px;right:8px;z-index:6;background:var(--surface,#fff);border:1px solid var(--border-2,#e4e6e4);
-  border-radius:999px;width:30px;height:30px;cursor:pointer;display:none;align-items:center;justify-content:center;
+  border-radius:999px;min-width:30px;height:30px;padding:0 8px;cursor:pointer;display:none;align-items:center;justify-content:center;gap:4px;
   font-size:13px;box-shadow:0 1px 3px rgba(16,24,40,.12);color:var(--text-muted,#667085)}
-.sec:hover > .nb-pin{display:flex}
-.nb-pin.has{display:flex;background:var(--accent,#FF4000);color:#fff;border-color:var(--accent,#FF4000)}
-.nb-pin .n{position:absolute;top:-6px;right:-6px;background:var(--ink,#101828);color:#fff;border-radius:999px;
-  font-size:9px;font-weight:700;padding:0 4px;min-width:15px;text-align:center;line-height:15px}
+.card:hover > .nb-pin,.kpi:hover > .nb-pin,.sec:hover > .nb-pin{display:inline-flex}
+.nb-pin.has{display:inline-flex;background:var(--accent,#FF4000);color:#fff;border-color:var(--accent,#FF4000)}
+.nb-pin .n{font-size:11px;font-weight:700}
+.nb-pin .n:empty{display:none}
 .nb-hl{outline:2px solid var(--accent,#FF4000);outline-offset:3px;border-radius:6px}
 
 @media(max-width:700px){.nb-panel{width:100vw}}
