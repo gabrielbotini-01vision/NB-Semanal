@@ -198,6 +198,23 @@ const sdrOppFteSet = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} }; // est
 const sdrCohortStatus = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} }; // estr -> W(contato) -> {status: n}
 const sdrContactFteSet = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} }; // estr -> W -> Set(owner SDR real que contatou)
 const sdrOppsNivelAcc = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} }; // opps por nível×semana, só SDR real
+// coorte de negociação POR SEMANA (funil Closer): dos leads que viraram opp na semana W,
+// quantos chegaram a SQL na PRÓPRIA semana W (C1); e, do sub-coorte que chegou a SQL na
+// mesma semana, quantos chegaram a Offer também na mesma semana (C2, encadeado — mesmo
+// padrão do C2 de SDR: sempre a partir do sub-coorte do estágio anterior, não do total).
+const closerCohort = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} }; // estr -> W -> { opp, sql, offer }
+// saídas do funil de Closer por perda (Lost Deal) — mesmo papel do sdrUnq pro SDR.
+const closerLost = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} };   // estr -> W -> nº de lost deals
+// throughput semanal de CW (fechado ganho), só de leads com closer atribuído — denominador
+// junto com closerLost pra "Saídas do funil" da página de Closer (mesmo grão de sdrOppsNivelAcc).
+const closerCwAcc = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} };  // estr -> W -> nº de CW
+// closers distintos que RECEBERAM opp / que FECHARAM (CW) na semana — denominador do
+// "Opp/FTE" e "CW/FTE" do Closer (mesmo papel do sdrContactFteSet/sdrOppFteSet).
+const closerOppFteSet = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} };
+const closerCwFteSet = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} };
+// coorte por semana de ENTRADA NO CLOSER (opp) × status ATUAL (hoje) do lead — situação mais
+// recente entre opp/sql/offer/contract/closed_won/lost_deal (data mais recente vence).
+const closerCohortStatus = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} }; // estr -> W(opp) -> {status: n}
 
 function pushCiclo(key, dateA, dateB) {
   if (!dateA || !dateB) return null;
@@ -254,6 +271,35 @@ for (const r of fop) {
     for (const k of ['connected', 'nurturing', 'qualified', 'unqualified']) if (sd[k] && sd[k] >= bestD) { bestD = sd[k]; status = k; }
     const bumpSt = o => { const cc = o[wc] || (o[wc] = { contacted: 0, connected: 0, nurturing: 0, qualified: 0, unqualified: 0 }); cc[status]++; };
     if (ownerReal) { bumpSt(sdrCohortStatus.all); if (_estrLead) bumpSt(sdrCohortStatus[_estrLead]); }
+  }
+
+  // coorte semanal de negociação (Closer): denom = virou opp em W; C1 = chegou a SQL em W;
+  // C2 (encadeado) = do sub-coorte que chegou a SQL em W, chegou a Offer também em W.
+  // status atual (hoje) do lead, por semana de ENTRADA no closer (opp) — mesma lógica do
+  // status de SDR, com os estágios da negociação.
+  const _offerD = cleanDate(r.offer_presented_date), _contractD = cleanDate(r.contract_sent_date), _lostD = cleanDate(r.lost_deal_date);
+  if (dates.opportunity_create_date && closer) {
+    const wo = anoSemana(dates.opportunity_create_date);
+    const sqlSame = dates.sql_date && anoSemana(dates.sql_date) === wo;
+    const offerSame = sqlSame && _offerD && anoSemana(_offerD) === wo;
+    const bumpCloCoh = o => { const cc = o[wo] || (o[wo] = { opp: 0, sql: 0, offer: 0 }); cc.opp++; if (sqlSame) cc.sql++; if (offerSame) cc.offer++; };
+    bumpCloCoh(closerCohort.all); if (e) bumpCloCoh(closerCohort[e]);
+    const pw = wk(getP(porPessoaCloser, closer), wo);
+    pw.cohOpp = (pw.cohOpp || 0) + 1;
+    if (sqlSame) pw.cohSql = (pw.cohSql || 0) + 1;
+
+    const sd2 = { opp: dates.opportunity_create_date, sql: dates.sql_date, offer: _offerD, contract: _contractD, closed_won: dates.closed_won_date, lost_deal: _lostD };
+    let status2 = 'opp', bestD2 = sd2.opp;
+    for (const k of ['sql', 'offer', 'contract', 'closed_won', 'lost_deal']) if (sd2[k] && sd2[k] >= bestD2) { bestD2 = sd2[k]; status2 = k; }
+    const bumpCloSt = o => { const cc = o[wo] || (o[wo] = { opp: 0, sql: 0, offer: 0, contract: 0, closed_won: 0, lost_deal: 0 }); cc[status2]++; };
+    bumpCloSt(closerCohortStatus.all); if (e) bumpCloSt(closerCohortStatus[e]);
+
+    (closerOppFteSet.all[wo] = closerOppFteSet.all[wo] || new Set()).add(closer);
+    if (e) (closerOppFteSet[e][wo] = closerOppFteSet[e][wo] || new Set()).add(closer);
+  }
+  if (_lostD && closer) {
+    const wl = anoSemana(_lostD);
+    closerLost.all[wl] = (closerLost.all[wl] || 0) + 1; if (e) closerLost[e][wl] = (closerLost[e][wl] || 0) + 1;
   }
 
   if (e) {
@@ -336,7 +382,7 @@ for (const r of fop) {
           if (e) (sdrOppFteSet[e][w] = sdrOppFteSet[e][w] || new Set()).add(owner); }
       }
       if (closer) {
-        const p = getP(porPessoaCloser, closer); p.opps = (p.opps || 0) + 1;
+        const p = getP(porPessoaCloser, closer); p.opps = (p.opps || 0) + 1; p.estrategia = e || p.estrategia;
         wk(p, w).opps = (wk(p, w).opps || 0) + 1;
       }
       if (e) {
@@ -358,6 +404,9 @@ for (const r of fop) {
         p.semanal = p.semanal || {}; p.semanal[w] = (p.semanal[w] || 0) + 1;
         const pw = wk(p, w); pw.cw = (pw.cw || 0) + 1; pw.cwNivel = pw.cwNivel || {}; pw.cwNivel[b] = (pw.cwNivel[b] || 0) + 1;
         rankCw[closer] = rankCw[closer] || { email: closer, cw: 0, ativados: 0 }; rankCw[closer].cw += 1;
+        (closerCwFteSet.all[w] = closerCwFteSet.all[w] || new Set()).add(closer);
+        if (e) (closerCwFteSet[e][w] = closerCwFteSet[e][w] || new Set()).add(closer);
+        closerCwAcc.all[w] = (closerCwAcc.all[w] || 0) + 1; if (e) closerCwAcc[e][w] = (closerCwAcc[e][w] || 0) + 1;
       }
       if (onb) {
         const p = getP(porPessoaOnb, onb); p.cwIn = (p.cwIn || 0) + 1;
@@ -548,6 +597,12 @@ const sdrContactFte = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} };
 for (const k of ESTOQUE_KEYS) for (const w in sdrContactFteSet[k]) sdrContactFte[k][w] = sdrContactFteSet[k][w].size;
 // opps por nível × semana (por estratégia), já acumulado no loop SÓ com SDR real (página).
 const sdrOppsNivel = sdrOppsNivelAcc;
+// closers distintos que receberam opp / que fecharam (CW) por semana — denominador do
+// "Opp/FTE" e "CW/FTE" do Closer.
+const closerOppFte = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} };
+for (const k of ESTOQUE_KEYS) for (const w in closerOppFteSet[k]) closerOppFte[k][w] = closerOppFteSet[k][w].size;
+const closerCwFte = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} };
+for (const k of ESTOQUE_KEYS) for (const w in closerCwFteSet[k]) closerCwFte[k][w] = closerCwFteSet[k][w].size;
 
 // ---------- ESTOQUE DO FUNIL CLOSER (snapshot no FIM de cada semana) ----------
 // Mesmo conceito do estoque de SDR, aplicado ao funil de negociação: quantos leads (que já
@@ -702,6 +757,8 @@ function buildPessoaSemanaCloser(p) {
       cwNivel: NIVEIS.map(n => Math.round((pw.cwNivel || {})[n] || 0)),
       diasOppSql: pw.dOSn ? +(pw.dOSsum / pw.dOSn).toFixed(1) : null,
       diasSqlWon: pw.dSWn ? +(pw.dSWsum / pw.dSWn).toFixed(1) : null,
+      // coorte: dos que viraram opp NESSA semana, quantos chegaram a SQL na MESMA semana.
+      cohOpp: Math.round(pw.cohOpp || 0), cohSql: Math.round(pw.cohSql || 0),
     };
   }
   return out;
@@ -732,7 +789,7 @@ const sdrList = Object.values(porPessoaSdr).map(p => enrichPessoa({
 })).sort((a, b) => b.opps - a.opps);
 
 const closerList = Object.values(porPessoaCloser).map(p => enrichPessoa({
-  email: p.email,
+  email: p.email, estrategia: p.estrategia || null,
   opps: Math.round(p.opps || 0), sql: Math.round(p.sql || 0), cw: Math.round(p.cw || 0),
   sqlRate: p.opps ? +(p.sql / p.opps).toFixed(3) : null,
   winRate: p.sql ? +(p.cw / p.sql).toFixed(3) : null,
@@ -797,6 +854,7 @@ const DATA = {
   fte, fteSemanal,
   sdrEstoque, sdrCohort, sdrOwnerCohort, sdrUnq, sdrOppsNivel, sdrOppFte, sdrCohortStatus, sdrContactFte,
   diasUteisSemana, closerEstoque, onbEstoque,
+  closerCohort, closerLost, closerCw: closerCwAcc, closerCohortStatus, closerOppFte, closerCwFte,
   mesFechado,
 };
 fs.mkdirSync(outDir, { recursive: true });

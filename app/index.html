@@ -216,6 +216,7 @@
   .legend span{display:inline-flex;align-items:center;gap:6px}
   .legend .sw{width:12px;height:12px;border-radius:4px;flex:none}
   .miss{color:var(--text-faint);font-style:italic}
+  .mockbadge{font-weight:700;font-family:var(--font-sans);font-size:10.5px;padding:2px 8px;border-radius:var(--r-pill);display:inline-flex;align-items:center;gap:3px;white-space:nowrap;color:#B54708;background:var(--warn-bg);cursor:help}
 
   /* 1:1 Gestor */
   .oneone{display:grid;grid-template-columns:260px 1fr;gap:18px;align-items:start}
@@ -341,7 +342,7 @@ function avatarHTML(p,size){
 function median(arr){const a=[...arr].filter(v=>v!=null).sort((x,y)=>x-y);const n=a.length;if(!n)return 0;return n%2?a[(n-1)/2]:(a[n/2-1]+a[n/2])/2;}
 
 // ---- estado ----
-let state={meeting:'wsales',area:'sdr',mes:null,semana:null,estr:'all',ref:'budget',mesArea:null,semanaArea:null,refArea:'budget',estrArea:'all',mesMensal:null,estrMensal:'all',pessoa:null,sdrSort:null};
+let state={meeting:'wsales',area:'sdr',mes:null,semana:null,estr:'all',ref:'budget',mesArea:null,semanaArea:null,refArea:'budget',estrArea:'all',mesMensal:null,estrMensal:'all',pessoa:null,sdrSort:null,closerSort:null};
 
 const IC={
   mensal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>',
@@ -764,6 +765,28 @@ function sdrStatusHTML(estrF){
   return `${legend}<div class="estoque">${cols}</div>
     <div class="edata-lbl">Conversão da safra · qualified / total contatados</div><div class="edata">${data}</div>`;
 }
+// status ATUAL (hoje) dos leads, agrupados pela SEMANA DE ENTRADA NO CLOSER (opp): barras
+// empilhadas (opp/sql/offer/contract/closed_won/lost_deal) — mesmo padrão do sdrStatusHTML,
+// aplicado ao funil de negociação (D.closerCohortStatus vindo do build_data.js).
+function closerStatusHTML(estrF){
+  const src=(D.closerCohortStatus&&D.closerCohortStatus[estrF||'all'])||{};
+  const weeks=Object.keys(src).sort().slice(-16);
+  if(!weeks.length) return '<span class="miss">Sem dado.</span>';
+  const ST=[['lost_deal','#FDA29B'],['closed_won','#6CE9A6'],['contract','#FEC6A1'],['offer','#B0B7C3'],['sql','#98A2B3'],['opp','#E4E7EC']];
+  const totW=s=>s.opp+s.sql+s.offer+s.contract+s.closed_won+s.lost_deal;
+  const max=Math.max(...weeks.map(w=>totW(src[w])),1), H=180, h=v=>v>0?Math.max(2,(v/max)*H):0;
+  const cols=weeks.map(w=>{
+    const s=src[w], tot=totW(s);
+    const segs=ST.map(([k,c])=>{const hh=h(s[k]);return `<div class="eseg" style="height:${hh}px;background:${c}">${hh>=13?`<span class="eseglbl">${fN(s[k])}</span>`:''}</div>`;}).join('');
+    return `<div class="ecol" title="${semanaLabel(w)} · ${fN(tot)} viraram opp — closed_won ${fN(s.closed_won)} · lost ${fN(s.lost_deal)} · contract ${fN(s.contract)} · offer ${fN(s.offer)} · sql ${fN(s.sql)} · opp ${fN(s.opp)}">
+      <div class="etot">${fN(tot)}</div>${segs}
+      <div class="ecap">${w.replace('2025-','25').replace('2026-','26')}</div></div>`;
+  }).join('');
+  const legend=`<div class="legend" style="margin:0 0 10px"><span><i class="sw" style="background:#E4E7EC"></i>Opp</span><span><i class="sw" style="background:#98A2B3"></i>SQL</span><span><i class="sw" style="background:#B0B7C3"></i>Offer</span><span><i class="sw" style="background:#FEC6A1"></i>Contract</span><span><i class="sw" style="background:#6CE9A6"></i>Closed Won</span><span><i class="sw" style="background:#FDA29B"></i>Lost</span></div>`;
+  const data=weeks.map(w=>{const s=src[w],t=totW(s);const c=t?Math.round(s.closed_won/t*100):null;return `<div class="edcell">${c!=null?c+'%':'—'}</div>`;}).join('');
+  return `${legend}<div class="estoque">${cols}</div>
+    <div class="edata-lbl">Conversão da safra · closed won / total que virou opp</div><div class="edata">${data}</div>`;
+}
 // estoque do funil de negociação do Closer: barras empilhadas (Opp/SQL/Offer/Contract) por
 // semana, mesmo padrão visual do estoque de SDR (série D.closerEstoque vinda do build_data.js).
 function closerEstoqueHTML(estrF){
@@ -803,6 +826,19 @@ function onbEstoqueHTML(estrF){
   return `<div class="estoque">${cols}</div>
     <div class="legend"><span><i class="sw" style="background:#98A2B3"></i>CW (ainda não 1k)</span><span><i class="sw" style="background:#344054"></i>1k+ (ainda não 5k)</span><span><i class="sw" style="background:var(--accent)"></i>5k+ (ainda não 10k)</span></div>`;
 }
+// ícones de KPI (chip) — compartilhados entre SDR e Closer.
+const KIC={
+  entradas:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></svg>',
+  saidas:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>',
+  estoque:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>',
+  link:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>',
+  users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  target:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
+};
+// badge de alerta pra métrica com valor MOCADO/estimado — meta ou regra ainda não confirmada
+// com o time de negócio. Sempre visível ao lado do valor, pra não confundir com dado validado.
+const mockBadge=title=>`<span class="mockbadge" title="${title||'Métrica ainda não validada com o time — valor estimado, favor confirmar a regra correta.'}">⚠ a validar</span>`;
 function renderAreaSdr(){
   const week=state.semanaArea;
   const base=D.porPessoa?.sdr||[];
@@ -849,15 +885,6 @@ function renderAreaSdr(){
   const bdPill=(val,tgt)=>tgt?` <span class="att ${val!=null&&val>=tgt?'hi':'lo'}">${val!=null?Math.round(val/tgt*100):0}%</span>`:'';
   const contBD=(bdt.contacted?`meta ${bdt.contacted}/BD${bdPill(contatadosFteDia,bdt.contacted)} · `:'')+`média ${contatadosFte.toFixed(0)}/FTE · ${contactFteCount} SDRs · ${diasUteis} BD`;
   const oppBD=(bdt.opps?`meta ${bdt.opps}/BD${bdPill(oppsFteDia,bdt.opps)} · `:'')+`média ${oppsFte.toFixed(1)}/FTE · ${oppFteCount} SDRs · ${diasUteis} BD`;
-  const KIC={
-    entradas:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></svg>',
-    saidas:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>',
-    estoque:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>',
-    link:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
-    check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>',
-    users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
-    target:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
-  };
   const kpis=[
     ['Entradas',fN(totContacted),metaSub(totContacted,refT?.contacted,`${listF.length} SDRs`),'Contatados',null,KIC.entradas],
     ['Saídas do funil',fN(totSaidas),`${fN(totOpps)} opps · ${fN(totUnq)} unqualifieds`,'Oportunidades geradas + unqualifieds',null,KIC.saidas],
@@ -968,61 +995,138 @@ function renderAreaSdr(){
   bindRowClicks($('viewArea'));
   $('viewArea').querySelectorAll('.tbl th.sortable').forEach(th=>th.onclick=()=>{const k=th.dataset.k,c=state.sdrSort;state.sdrSort={key:k,dir:(c&&c.key===k&&c.dir==='desc')?'asc':'desc'};renderArea();});
 }
+// metas de produtividade por dia útil do Closer (Opp/BD, CW/BD), por estratégia — AINDA NÃO
+// CONFIRMADAS com o time de Closer (diferente do BD_TGT de SDR, que veio de meta combinada).
+// Mantido vazio de propósito: enquanto ficar {}, toda célula de produtividade/BD da página
+// mostra o valor calculado + badge "⚠ a validar" em vez de % de atingimento (ver bdCellClo).
+const BD_TGT_CLOSER={};
 function renderAreaClosers(){
   const week=state.semanaArea;
   const base=D.porPessoa?.closer||[];
   const list=base.map(p=>weekView(p,week,CLOSER_DEF)).sort((a,b)=>b.cw-a.cw);
-  const totOpps=sum(list,p=>p.opps), totSql=sum(list,p=>p.sql), totCw=sum(list,p=>p.cw);
-  const refT=D[state.refArea]?.semanal?.[week]?.total;
+  // ===== filtro de sales_strategy (Outbound/Inbound/Hunting) — mesmo padrão da página SDR =====
+  const estrF=state.estrArea||'all';
+  const listF=estrF==='all'?list:list.filter(p=>p.estrategia===estrF);
+  // Entradas/saídas vêm das estruturas já gateadas por closer atribuído (lead-level, não soma
+  // de pessoa) — mesmo padrão do SDR (sdrCohort/sdrOppsNivel em vez de somar a lista).
+  const coh=(D.closerCohort?.[estrF]||{})[week]||null;
+  const totOpps=coh?.opp||0;
+  const totCw=(D.closerCw?.[estrF]||{})[week]||0;
+  const totLost=(D.closerLost?.[estrF]||{})[week]||0;
+  const refAgg=estrF==='all'?D[state.refArea]?.semanal?.[week]?.total:D[state.refArea]?.semanal?.[week]?.porEstrategia?.[estrF];
+  const refT=refAgg;
+  // Estoque do funil na POSIÇÃO da semana selecionada (snapshot), na estratégia filtrada
+  const eCur=(D.closerEstoque?.[estrF]||[]).find(e=>e.semana===week);
+  const estTot=eCur?eCur.opp+eCur.sql+eCur.offer+eCur.contract:null;
+  const totSaidas=totCw+totLost;
+  const winRatePct=totSaidas?Math.round(totCw/totSaidas*100):null;
+  // delta de estoque da semana = entradas − saídas = virou opp − (fechou ganho + perdeu)
+  const deltaEst=totOpps-totCw-totLost;
+  const deltaPill=`Δ estoque <span class="att ${deltaEst>=0?'hi':'lo'}">${deltaEst>=0?'▲ +':'▼ '}${fN(deltaEst)}</span>`;
+  // Coorte Opp→SQL (C1) e SQL→Offer (C2, encadeado) na MESMA semana — mesmo conceito do C1/C2
+  // de SDR, aplicado ao funil de negociação. ⚠️ Sem meta de negócio confirmada ainda (o COH_META
+  // de SDR veio de uma meta combinada à parte; aqui não temos equivalente) — mostramos o valor
+  // real e avisamos em vez de simular um número de atingimento.
+  const cohPct=coh&&coh.opp?Math.round(coh.sql/coh.opp*100):null;
+  const c2Pct=coh&&coh.sql?Math.round((coh.offer||0)/coh.sql*100):null;
+  // FTE — closers que de fato receberam opp / fecharam CW na semana (mesma aproximação do SDR)
+  const oppFteCount=(D.closerOppFte?.[estrF]||{})[week]||0;
+  const cwFteCount=(D.closerCwFte?.[estrF]||{})[week]||0;
+  const oppsFte=totOpps/Math.max(1,oppFteCount);
+  const cwFte=totCw/Math.max(1,cwFteCount);
+  const diasUteis=D.diasUteisSemana?.[week]||0;
+  const oppsFteDia=diasUteis?oppsFte/diasUteis:null;
+  const cwFteDia=diasUteis?cwFte/diasUteis:null;
+  const bdt=BD_TGT_CLOSER[estrF]||{};
+  const bdPill=(val,tgt)=>tgt?` <span class="att ${val!=null&&val>=tgt?'hi':'lo'}">${val!=null?Math.round(val/tgt*100):0}%</span>`:` ${mockBadge('Meta de Opp/BD e CW/BD do Closer ainda não confirmada com o time — favor validar o valor certo.')}`;
+  const oppBD=(bdt.opps?`meta ${bdt.opps}/BD`:'sem meta')+bdPill(oppsFteDia,bdt.opps)+` · média ${oppsFte.toFixed(2)}/FTE · ${oppFteCount} closers · ${diasUteis} BD`;
+  const cwBD=(bdt.cw?`meta ${bdt.cw}/BD`:'sem meta')+bdPill(cwFteDia,bdt.cw)+` · média ${cwFte.toFixed(2)}/FTE · ${cwFteCount} closers · ${diasUteis} BD`;
   const kpis=[
-    ['Opp in',fN(totOpps),metaSub(totOpps,refT?.opps,'entrada no closer'),'Oportunidades recebidas'],
-    ['Opp → SQL',`${pct(totSql,totOpps)??'—'}%`,`${fN(totSql)} SQL`,'SQL ÷ oportunidades'],
-    ['Win rate (#)',`${pct(totCw,totSql)??'—'}%`,`${fN(totCw)} CW`,'Fechados ÷ SQL'],
-    ['CW in',fN(totCw),metaSub(totCw,refT?.cw,`${base.length} closers`),'Negócios fechados'],
+    ['Entradas',fN(totOpps),metaSub(totOpps,refT?.opps,`${listF.length} closers`),'Oportunidades recebidas (Opp in)',null,KIC.entradas],
+    ['Saídas do funil',fN(totSaidas),`${fN(totCw)} CW · ${fN(totLost)} lost${winRatePct!=null?` · win rate ${winRatePct}%`:''}`,'Fechados: ganhos + perdidos',null,KIC.saidas],
+    ['Estoque atual',estTot!=null?fN(estTot):'—',deltaPill,'Funil de negociação atual (Opp/SQL/Offer/Contract)',null,KIC.estoque],
+    ['C1 · Opp→SQL',cohPct!=null?cohPct+'%':'—',coh?`${fN(coh.sql)}/${fN(coh.opp)} · sem meta ${mockBadge('Meta de coorte Opp→SQL ainda não confirmada com o time de Closer.')}`:'sem dado','Coorte: chegou a SQL na mesma semana',null,KIC.link],
+    ['C2 · SQL→Offer',c2Pct!=null?c2Pct+'%':'—',coh&&coh.sql?`${fN(coh.offer||0)}/${fN(coh.sql)} em SQL`:'sem dado','Do coorte do C1 · chegou a Offer na mesma semana',null,KIC.check],
+    ['Opp / FTE / BD',oppsFteDia!=null?oppsFteDia.toFixed(2):'—',oppBD,'Oportunidades por FTE / dia útil',null,KIC.users],
+    ['CW / FTE / BD',cwFteDia!=null?cwFteDia.toFixed(2):'—',cwBD,'Negócios fechados por FTE / dia útil','kpi-accent',KIC.target],
   ];
-  // mesmo estilo do SDR: pequenos múltiplos por nível, 8 últimas semanas, um card por nível.
-  const wt=NIV.map(n=>`<div class="card">${weekTrendHTML({label:n,color:NIV_COLOR[n],series:weeklyByNivel(D.semanalPorNivel?.cw,n).slice(-8)})}</div>`).join('');
+  const cwNivelSrc=D.semanalPorNivel?.cw||{};
+  // target line = meta de CW do budget diário (semanal), por nível×estratégia.
+  const tgtCw=(w,n)=>{ const b=D.budget?.semanal?.[w]; if(!b) return null;
+    const cell=estrF==='all'?b.porNivel?.[n]:b.porNivelEstrategia?.[n]?.[estrF]; return cell?cell.cw:null; };
+  const wt=NIV.map((n,i)=>{ const ser=weeklyByNivel(cwNivelSrc,n).slice(-8); const tg=ser.map(s=>tgtCw(s.semana,n));
+    return `<div class="card">${weekTrendHTML({label:n,color:'#667085',series:ser,targets:tg,flat:true,accentLabel:true})}</div>`; }).join('');
+  // resumo de produtividade por FTE (uma linha) — mesmo padrão do SDR.
+  const prodResumo=`<div class="card" style="display:flex;gap:30px;flex-wrap:wrap;align-items:center;padding:16px 22px">
+    <span class="eyebrow">Produtividade por FTE · ${semanaLabel(week)}${estrF!=='all'?' · '+estrF:''}</span>
+    <span><b style="font-size:16px">${oppFteCount}</b> <span style="color:var(--text-muted);font-size:12px">FTEs (receberam opp)</span></span>
+    <span><b style="font-size:16px">${oppsFte.toFixed(2)}</b> <span style="color:var(--text-muted);font-size:12px">opps/FTE</span></span>
+    <span><b style="font-size:16px">${oppsFteDia!=null?oppsFteDia.toFixed(2):'—'}</b> <span style="color:var(--text-muted);font-size:12px">opps/FTE/dia útil (${diasUteis}d)</span></span>
+    <span><b style="font-size:16px">${cwFteCount}</b> <span style="color:var(--text-muted);font-size:12px">FTEs (fecharam CW)</span></span>
+    <span><b style="font-size:16px">${cwFte.toFixed(2)}</b> <span style="color:var(--text-muted);font-size:12px">CW/FTE</span></span>
+    <span><b style="font-size:16px">${cwFteDia!=null?cwFteDia.toFixed(2):'—'}</b> <span style="color:var(--text-muted);font-size:12px">CW/FTE/dia útil (${diasUteis}d)</span></span>
+  </div>`;
   // semanas de referência (atual, −1, −2) — mesmo padrão da tabela SDR.
   const idxW=D.semanas.indexOf(week);
   const wB=D.semanas[idxW-1]||null, wC=D.semanas[idxW-2]||null;
   const wkNum=w=>w?('Semana '+ +w.split('-W')[1]):'−';
   const lblB=wkNum(wB), lblC=wkNum(wC);
+  const wkShort=w=>w?('S'+ +w.split('-W')[1]):'−'; const sB=wkShort(wB), sC=wkShort(wC);
   const cwAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return x?(x.cw||0):0;};
-  const sqlAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return x?(x.sql||0):0;};
-  const winAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return (x&&x.winRate!=null)?Math.round(x.winRate*100):null;};
-  // CW por nível só nas 3 últimas semanas (mesma janela das outras colunas), não acumulado.
+  const oppsAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return x?(x.opps||0):0;};
+  // C1 por pessoa: dos que a pessoa recebeu como opp NA semana W, quantos chegaram a SQL na
+  // MESMA semana. Lê direto de porSemana (sem mapa auxiliar — closer, ao contrário do SDR, não
+  // tem o problema de atribuição tardia que motivou o sdrOwnerCohort).
+  const cohAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return (x&&x.cohOpp)?Math.round(x.cohSql/x.cohOpp*100):null;};
   const cwNivel3=r=>{
     const a=[0,0,0];
     [week,wB,wC].forEach(w=>{const x=w&&(r.porSemana||{})[w]; if(x&&x.cwNivel) x.cwNivel.forEach((v,j)=>a[j]+=v||0);});
     return a;
   };
   const diasUteis3=[week,wB,wC].reduce((s,w)=>s+(w?(D.diasUteisSemana?.[w]||0):0),0);
+  const sumBy=(rows,f)=>rows.reduce((s,r)=>s+(f(r)||0),0);
+  const cohAgg=(rows,w)=>{let co=0,cs=0;rows.forEach(r=>{const x=w&&(r.porSemana||{})[w];if(x){co+=x.cohOpp||0;cs+=x.cohSql||0;}});return co?Math.round(cs/co*100)+'%':'—';};
+  const nivAgg=(rows,i)=>{const a=[0,0,0];rows.forEach(r=>[week,wB,wC].forEach(w=>{const x=w&&(r.porSemana||{})[w];if(x&&x.cwNivel)x.cwNivel.forEach((v,j)=>a[j]+=v||0);}));const t=(a[0]+a[1]+a[2])||1;return Math.round((a[i]||0)/t*100)+'%';};
+  // produtividade/dia útil (3 sem.) por pessoa + agregador = MÉDIA por closer (não soma).
+  const pdOppFn=r=>diasUteis3?(oppsAt(r,week)+oppsAt(r,wB)+oppsAt(r,wC))/diasUteis3:null;
+  const pdCwFn=r=>diasUteis3?(cwAt(r,week)+cwAt(r,wB)+cwAt(r,wC))/diasUteis3:null;
+  const mediaAgg=(rows,f,dec)=>{const v=rows.map(f).filter(x=>x!=null);return v.length?(v.reduce((s,x)=>s+x,0)/v.length).toFixed(dec):'—';};
+  // célula BD SEM meta confirmada: valor + badge de alerta (em vez de simular % de atingimento
+  // com um número inventado). Assim que o time passar a meta certa, trocar por bdCell (SDR).
+  const bdCellClo=(v,dec)=>`<span class="mono">${v!=null?v.toFixed(dec):'—'}</span> ${mockBadge('Meta de produtividade/BD do Closer ainda não confirmada — valor exibido sem comparação com meta.')}`;
+  const TI={pd:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',c:KIC.users,conn:KIC.link,opp:KIC.target,niv:KIC.estoque};
   const cols=[
-    {key:'opps',label:'Opp in',align:'r',render:r=>`<span class="mono">${fN(r.opps)}</span>`},
-    {key:'sqlRate',label:'Opp→SQL',align:'r',render:r=>`<span class="mono">${r.sqlRate!=null?pctR(r.sqlRate)+'%':'—'}</span>`},
-    {key:'cwA',label:'CW sem.',align:'r',render:r=>`<span class="mono num-cell">${fN(cwAt(r,week))}</span>`},
-    {key:'cwB',label:lblB,align:'r',render:r=>`<span class="mono">${fN(cwAt(r,wB))}</span>`},
-    {key:'cwC',label:lblC,align:'r',render:r=>`<span class="mono">${fN(cwAt(r,wC))}</span>`},
-    {key:'winA',label:'Win rate',align:'r',render:r=>`<span class="mono">${winAt(r,week)!=null?winAt(r,week)+'%':'—'}</span>`},
-    {key:'winB',label:lblB,align:'r',render:r=>`<span class="mono">${winAt(r,wB)!=null?winAt(r,wB)+'%':'—'}</span>`},
-    {key:'winC',label:lblC,align:'r',render:r=>`<span class="mono">${winAt(r,wC)!=null?winAt(r,wC)+'%':'—'}</span>`},
-    {key:'cwNivel',label:'CW por nível',render:r=>ministack(cwNivel3(r),NIV.map(n=>NIV_COLOR[n]))},
-    {key:'sqlDia',label:'SQL/dia (3s)',align:'r',render:r=>{const t=sqlAt(r,week)+sqlAt(r,wB)+sqlAt(r,wC);return `<span class="mono">${diasUteis3?(t/diasUteis3).toFixed(2):'—'}</span>`;}},
-    {key:'cwDia',label:'CW/dia (3s)',align:'r',render:r=>{const t=cwAt(r,week)+cwAt(r,wB)+cwAt(r,wC);return `<span class="mono">${diasUteis3?(t/diasUteis3).toFixed(2):'—'}</span>`;}},
+    {key:'pdOpp',label:'Opps/BD · 3s',align:'r',icon:TI.pd,render:r=>bdCellClo(pdOppFn(r),2),agg:rows=>mediaAgg(rows,pdOppFn,2),sort:pdOppFn},
+    {key:'pdCw',label:'CW/BD · 3s',align:'r',icon:TI.pd,render:r=>bdCellClo(pdCwFn(r),2),agg:rows=>mediaAgg(rows,pdCwFn,2),sort:pdCwFn},
+    {key:'contA',label:'Opp in · sem.',align:'r',icon:TI.c,render:r=>`<span class="mono">${fN(oppsAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>oppsAt(r,week))),sort:r=>oppsAt(r,week)},
+    {key:'connA',label:'C1 · sem.',align:'r',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,week)!=null?cohAt(r,week)+'%':'—'}</span>`,agg:rows=>cohAgg(rows,week),sort:r=>cohAt(r,week)},
+    {key:'connB',label:'C1 · '+sB,align:'r',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,wB)!=null?cohAt(r,wB)+'%':'—'}</span>`,agg:rows=>cohAgg(rows,wB),sort:r=>cohAt(r,wB)},
+    {key:'connC',label:'C1 · '+sC,align:'r',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,wC)!=null?cohAt(r,wC)+'%':'—'}</span>`,agg:rows=>cohAgg(rows,wC),sort:r=>cohAt(r,wC)},
+    {key:'cwA',label:'CW · sem.',align:'r',icon:TI.opp,render:r=>`<span class="mono">${fN(cwAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>cwAt(r,week))),sort:r=>cwAt(r,week)},
+    {key:'cwB',label:'CW · '+sB,align:'r',icon:TI.opp,render:r=>`<span class="mono">${fN(cwAt(r,wB))}</span>`,agg:rows=>fN(sumBy(rows,r=>cwAt(r,wB))),sort:r=>cwAt(r,wB)},
+    {key:'cwC',label:'CW · '+sC,align:'r',icon:TI.opp,render:r=>`<span class="mono">${fN(cwAt(r,wC))}</span>`,agg:rows=>fN(sumBy(rows,r=>cwAt(r,wC))),sort:r=>cwAt(r,wC)},
+    {key:'cwNivel',label:'CW por nível',icon:TI.niv,render:r=>ministack(cwNivel3(r),NIV.map(n=>NIV_COLOR[n]))},
     {key:'diasOppSql',label:'Ciclo Opp→SQL',align:'r',render:r=>`<span class="mono">${r.diasOppSql!=null?r.diasOppSql+'d':'—'}</span>`},
     {key:'diasSqlWon',label:'Ciclo SQL→CW',align:'r',render:r=>`<span class="mono">${r.diasSqlWon!=null?r.diasSqlWon+'d':'—'}</span>`},
   ];
-  // só closers com pelo menos 1 CW em uma das 3 últimas semanas (atual, −1, −2)
-  const listTbl=list.filter(r=>(cwAt(r,week)+cwAt(r,wB)+cwAt(r,wC))>0);
-  const table=groupedTable({rows:listTbl,cols,kind:'closer'});
+  // só closers com pelo menos 1 CW ou Opp in em uma das 3 últimas semanas (atual, −1, −2)
+  let listTbl=list.filter(r=>(cwAt(r,week)+cwAt(r,wB)+cwAt(r,wC)+oppsAt(r,week)+oppsAt(r,wB)+oppsAt(r,wC))>0);
+  if(estrF!=='all') listTbl=listTbl.filter(r=>r.estrategia===estrF);
+  const table=groupedTable({rows:listTbl,groupBy:r=>r.estrategia||'Sem estratégia',groupOrder:[...STR_ORDER,'Sem estratégia'],cols,kind:'closer',totals:true,sort:state.closerSort,hd:cardHd(KIC.users,'Closers · por pessoa','opps, C1, mix por nível e produtividade/BD')});
   $('viewArea').innerHTML=`
-    <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d,cls,icon])=>`<div class="kpi ${cls||''}">${icon?`<span class="kpi-ic">${icon}</span>`:''}<span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div>
-    <div class="sec" style="margin-top:24px"><div class="sec-head"><h2>Estoque do funil Closer</h2><span class="hint">snapshot no fim de cada semana · últimas 16 · Opp → SQL → Offer → Contract (sai ao fechar ou perder)</span></div>
-      <div class="card">${closerEstoqueHTML('all')}</div></div>
-    <div class="sec"><div class="sec-head"><h2>CW por nível de cliente</h2><span class="hint">últimas 8 semanas</span></div>
+    <div class="sec"><div class="sec-head"><h2>Resultado semanal</h2><span class="hint">${semanaLabel(week)}${estrF!=='all'?' · '+estrF:''}</span></div>
+      <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d,cls,icon])=>`<div class="kpi ${cls||''}">${icon?`<span class="kpi-ic">${icon}</span>`:''}<span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div></div>
+    <div class="sec"><div class="sec-head"><h2>Evolução do resultado</h2></div>
+      <div class="grid g2">
+        <div class="card">${cardHd(KIC.estoque,'Estoque do funil Closer','snapshot no fim de cada semana · últ. 16 · Opp → SQL → Offer → Contract')}${closerEstoqueHTML(estrF)}</div>
+        <div class="card">${cardHd(KIC.check,'Status atual por semana de entrada (opp)','virou opp × situação hoje · últ. 16')}${closerStatusHTML(estrF)}</div>
+      </div></div>
+    <div class="sec"><div class="sec-head"><h2>CW por nível de cliente</h2><span class="hint">fechamentos por semana · últimas 8 semanas</span></div>
       <div class="grid g3">${wt}</div></div>
-    <div class="sec"><div class="sec-head"><h2>Closers · por pessoa</h2><span class="hint">CW e win rate nas 3 últimas semanas · CW por nível (3 últimas semanas) · produtividade por dia útil (SQL e CW, 3 últimas semanas)</span></div>${table}</div>`;
+    <div class="sec"><div class="sec-head"><h2>Detalhamento</h2><span class="hint">${semanaLabel(week)}</span></div>
+      ${prodResumo}<div style="margin-top:16px">${table}</div></div>`;
   bindRowClicks($('viewArea'));
+  $('viewArea').querySelectorAll('.tbl th.sortable').forEach(th=>th.onclick=()=>{const k=th.dataset.k,c=state.closerSort;state.closerSort={key:k,dir:(c&&c.key===k&&c.dir==='desc')?'asc':'desc'};renderArea();});
 }
 function renderAreaOnboarding(){
   const week=state.semanaArea;
@@ -1235,7 +1339,7 @@ function render(){
   $('mensalControls').style.display=state.meeting==='mensal'?'flex':'none';
   $('otherControls').style.display=state.meeting==='oneone'?'flex':'none';
   $('subbar').style.display=state.meeting==='warea'?'block':'none';
-  if($('ctlEstrArea')) $('ctlEstrArea').style.display=(state.meeting==='warea'&&state.area==='sdr')?'flex':'none';
+  if($('ctlEstrArea')) $('ctlEstrArea').style.display=(state.meeting==='warea'&&(state.area==='sdr'||state.area==='closers'))?'flex':'none';
   $('viewMensal').style.display=state.meeting==='mensal'?'block':'none';
   $('viewSemanal').style.display=state.meeting==='wsales'?'block':'none';
   $('viewArea').style.display=state.meeting==='warea'?'block':'none';
