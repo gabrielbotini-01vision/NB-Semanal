@@ -57,7 +57,7 @@
   .side-note b{color:var(--text)}
 
   .main{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg)}
-  .appbar{position:sticky;top:0;z-index:40;background:rgba(255,255,255,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:11px 26px;min-height:64px}
+  .appbar{position:sticky;top:0;z-index:40;background:rgba(255,255,255,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:12px 26px;min-height:64px}
   .menu-btn{display:none;background:var(--surface);border:1px solid var(--border-2);border-radius:10px;width:38px;height:38px;font-size:17px;cursor:pointer;color:var(--text);align-items:center;justify-content:center;flex:none}
   .appbar-title h1{font-size:19px;font-weight:700;letter-spacing:-.02em}
   .appbar-title .crumb{font-size:12px;color:var(--text-faint);margin-top:1px}
@@ -73,32 +73,35 @@
   select.sel:focus{border-color:var(--accent)}
   #selSemana,#selSemanaArea{max-width:150px}
 
-  .subbar{padding:14px 26px 0}
+  .subbar{padding:16px 26px 0}
   .subbar #subtabs{display:inline-flex;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:4px}
   .subtab{cursor:pointer;padding:7px 16px;border-radius:9px;font-weight:600;font-size:12.5px;color:var(--text-muted)}
   .subtab:hover{color:var(--text)}
   .subtab.on{background:var(--surface);color:var(--accent);box-shadow:var(--sh-sm)}
 
-  .banner{display:flex;align-items:center;gap:9px;padding:14px 26px 0;font-size:12px;color:var(--text-muted)}
+  .banner{display:flex;align-items:center;gap:8px;padding:16px 26px 0;font-size:12px;color:var(--text-muted)}
   .banner .dotmini{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:none}
   .banner b{color:var(--text)}
 
-  .content{padding:24px 26px 20px;display:flex;flex-direction:column}
+  .content{padding:24px 26px 24px;display:flex;flex-direction:column}
   .pagefoot{padding:20px 26px 40px;color:var(--text-faint);font-size:12px}
 
-  .sec{margin-bottom:30px}
+  .sec{margin-bottom:32px}
+  /* um grid (ex.: linha de KPIs, ou o par estoque/status) não tem margin-bottom próprio;
+     garante respiro antes do bloco seguinte pra o título não colar. */
+  .grid+.sec,.grid+.grid{margin-top:32px}
   .sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}
   .sec-head h2{font-size:17px;font-weight:700;letter-spacing:-.015em}
   .sec-head .hint{font-size:12px;color:var(--text-faint)}
 
-  .grid{display:grid;gap:18px}
-  .g6{grid-template-columns:repeat(6,1fr)} .g5{grid-template-columns:repeat(5,1fr)} .g4{grid-template-columns:repeat(4,1fr)}
+  .grid{display:grid;gap:16px}
+  .g7{grid-template-columns:repeat(7,1fr)} .g6{grid-template-columns:repeat(6,1fr)} .g5{grid-template-columns:repeat(5,1fr)} .g4{grid-template-columns:repeat(4,1fr)}
   .g3{grid-template-columns:repeat(3,1fr)} .g2{grid-template-columns:repeat(2,1fr)}
-  @media(max-width:1180px){.g6,.g5{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:1180px){.g7{grid-template-columns:repeat(4,1fr)}.g6,.g5{grid-template-columns:repeat(3,1fr)}}
   @media(max-width:920px){.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:1fr}}
-  @media(max-width:640px){.g6,.g5,.g4,.g2{grid-template-columns:1fr}}
+  @media(max-width:640px){.g7,.g6,.g5,.g4,.g2{grid-template-columns:1fr}}
 
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:22px;box-shadow:var(--sh-card);position:relative;overflow:hidden}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:20px;box-shadow:var(--sh-card);position:relative;overflow:hidden}
 
   /* KPI stat */
   /* estrutura fixa título / corpo / rodapé — evita os componentes "sambarem" entre cards:
@@ -150,18 +153,38 @@
   .estoque{display:flex;align-items:flex-end;gap:4px;min-height:236px;padding-top:8px;padding-bottom:2px}
   .ecol{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center}
   .etot{font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text-muted);margin-bottom:4px;white-space:nowrap}
-  .eseg{width:100%;max-width:30px}
+  .eseg{width:100%;max-width:30px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .eseglbl{font-size:8.5px;font-weight:700;color:#101828;line-height:1}
   .eseg:first-of-type{border-radius:5px 5px 0 0}
   .ecap{font-size:8.5px;color:var(--text-faint);font-family:var(--font-mono);white-space:nowrap;transform:rotate(-45deg);transform-origin:center;margin-top:8px}
+  .edata-lbl{font-size:10px;font-weight:700;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-top:14px;border-top:1px solid var(--border);padding-top:8px}
+  .edata{display:flex;gap:4px;margin-top:4px}
+  .edcell{flex:1;min-width:0;text-align:center;font-family:var(--font-mono);font-size:9.5px;font-weight:700;color:var(--text-muted)}
 
   /* weektrend */
   .wtgrid{display:grid;gap:18px} .wt{min-width:0}
   .wttop{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:8px;flex-wrap:wrap}
   .wtlabel{font-size:12.5px;font-weight:600} .wtsub{color:var(--text-faint);font-weight:500;font-size:11px}
+  .nivpill{background:var(--accent);color:#fff;padding:3px 11px;border-radius:8px;font-weight:700;display:inline-block}
+  /* card KPI em destaque (laranja, igual ao item ativo do menu) */
+  .kpi.kpi-accent{background:var(--accent);border-color:var(--accent)}
+  .kpi.kpi-accent .lbl,.kpi.kpi-accent .sub2,.kpi.kpi-accent .num,.kpi.kpi-accent .num.n,.kpi.kpi-accent .sub,.kpi.kpi-accent .sub>span{color:#fff}
+  .kpi-ic{position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:9px;background:var(--orange-050);color:var(--accent);display:flex;align-items:center;justify-content:center;pointer-events:none}
+  .kpi-ic svg{width:17px;height:17px}
+  .kpi.kpi-accent .kpi-ic{background:rgba(255,255,255,.22);color:#fff}
+  .kpi:has(.kpi-ic) .lbl,.kpi:has(.kpi-ic) .sub2{padding-right:40px}
+  .card-hd{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .card-ic{width:28px;height:28px;border-radius:8px;background:var(--orange-050);color:var(--accent);display:flex;align-items:center;justify-content:center;flex:none}
+  .card-ic svg{width:16px;height:16px}
+  .card-hd h3{font-size:14px;font-weight:700;margin:0;letter-spacing:-.01em}
+  .card-hd .card-sub{font-size:11px;color:var(--text-faint);margin-left:auto;text-align:right;max-width:50%;line-height:1.3}
+  .tbl-hd{padding:16px 18px 0}
   .wtwow{font-family:var(--font-sans);font-size:11px;font-weight:700;padding:2px 8px;border-radius:var(--r-pill)}
   .wtwow.up{color:var(--success);background:var(--success-bg)} .wtwow.down{color:var(--danger);background:var(--danger-bg)}
-  .wtchart{display:flex;align-items:flex-end;gap:7px;height:100px;border-bottom:1px solid var(--border)}
-  .wtcol{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100px;min-width:0}
+  .wtchart{display:flex;align-items:flex-end;gap:7px}
+  .wtcol{flex:1;display:flex;flex-direction:column;align-items:center;min-width:0}
+  .wtplot{position:relative;width:100%;height:100px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;border-bottom:1px solid var(--border)}
+  .wttgt{position:absolute;left:-4px;right:-4px;height:0;border-top:2px dashed var(--text);opacity:.55;pointer-events:none}
   .wtval{font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--text-muted);margin-bottom:3px;white-space:nowrap}
   .wtval.cur{font-weight:700;color:var(--text)}
   .wtbar{width:100%;max-width:28px;border-radius:5px 5px 0 0}
@@ -173,6 +196,10 @@
   /* table */
   table.tbl{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;font-size:13.5px;box-shadow:var(--sh-card)}
   table.tbl thead th{background:var(--surface);color:var(--text-faint);text-align:left;font-weight:700;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;padding:12px 16px;white-space:nowrap;border-bottom:1px solid var(--border)}
+  table.tbl thead th.sortable{cursor:pointer;user-select:none}
+  .th-ic{display:inline-flex;vertical-align:-2px;margin-right:4px}
+  .th-ic svg{width:12px;height:12px}
+  table.tbl thead th.sortable:hover{color:var(--accent)}
   table.tbl th.r,table.tbl td.r{text-align:right}
   table.tbl td{padding:12px 16px;border-top:1px solid var(--border)}
   table.tbl tbody tr:first-child td{border-top:none}
@@ -287,6 +314,10 @@ const NIV=D.niveis||['N2-N3','N4-N5','N6+'];
 // categorias: laranja (o que importa) + rampa de cinza (Stravix minimalista)
 const STR_COLOR={Outbound:'var(--accent)',Inbound:'#344054',Hunting:'#98A2B3'};
 const NIV_COLOR={'N2-N3':'#98A2B3','N4-N5':'#344054','N6+':'var(--accent)'};
+// Donos que NÃO são SDR (pessoas mal-classificadas + contas de time/cadência). Fonte única
+// usada pra classificar/filtrar em toda a página SDR. Adicionar aqui conforme aparecerem.
+const NAO_SDR=new Set(['camila.harumi@hotmart.com','gustavo.duarte@hotmart.com','bubr_bizops@hotmart.com','bkf-team@hotmart.com']);
+const ehNaoSdr=email=>NAO_SDR.has((email||'').toLowerCase());
 
 // ---- formatação ----
 const nf=new Intl.NumberFormat('pt-BR');
@@ -310,7 +341,7 @@ function avatarHTML(p,size){
 function median(arr){const a=[...arr].filter(v=>v!=null).sort((x,y)=>x-y);const n=a.length;if(!n)return 0;return n%2?a[(n-1)/2]:(a[n/2-1]+a[n/2])/2;}
 
 // ---- estado ----
-let state={meeting:'wsales',area:'sdr',mes:null,semana:null,estr:'all',ref:'budget',mesArea:null,semanaArea:null,refArea:'budget',estrArea:'all',mesMensal:null,estrMensal:'all',pessoa:null};
+let state={meeting:'wsales',area:'sdr',mes:null,semana:null,estr:'all',ref:'budget',mesArea:null,semanaArea:null,refArea:'budget',estrArea:'all',mesMensal:null,estrMensal:'all',pessoa:null,sdrSort:null};
 
 const IC={
   mensal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>',
@@ -324,23 +355,26 @@ const AREA_TABS=[{k:'sdr',label:'SDR'},{k:'closers',label:'Closers'},{k:'onboard
 function mesLabel(m){if(!m)return '—';const [y,mm]=m.split('-');const nomes=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];return nomes[+mm-1]+'/'+y;}
 
 // ---- WeekTrend: pequeno múltiplo de 4 semanas (Últ. em destaque) ----
-function weekTrendHTML({label,sub,color,series,fmt}){
+function weekTrendHTML({label,sub,color,series,fmt,targets,flat,accentLabel}){
   fmt=fmt||fN;
   const vals=(series||[]).map(s=>s.valor);
-  const max=(Math.max(...vals,1))*1.18;
+  const tvals=(targets||[]).filter(v=>v!=null&&v>0);
+  const max=(Math.max(...vals,...tvals,1))*1.18;
   const last=vals.length?vals[vals.length-1]:null;
   const prior=vals.length>1?vals[vals.length-2]:null;
   const wow=(prior!=null&&prior>0&&last!=null)?Math.round((last-prior)/prior*100):null;
   const cols=(series||[]).map((s,i)=>{
     const h=Math.max(2,(s.valor/max)*100);
     const isLast=i===series.length-1;
-    return `<div class="wtcol" title="${s.semana}: ${fmt(s.valor)}">
-      <div class="wtval ${isLast?'cur':''}">${fmt(s.valor)}</div>
-      <div class="wtbar" style="height:${h}px;background:${color};opacity:${isLast?1:.4}"></div>
-      <div class="wtlbl ${isLast?'cur':''}">${s.semana.replace(/^\d{4}-/,'')}</div></div>`;
+    const t=targets?targets[i]:null;
+    const tgt=(t!=null&&t>0)?`<div class="wttgt" style="bottom:${Math.min(100,(t/max)*100)}px"></div>`:'';
+    return `<div class="wtcol" title="${s.semana}: ${fmt(s.valor)}${(t!=null&&t>0)?' · meta '+fmt(t):''}">
+      <div class="wtplot"><div class="wtval ${!flat&&isLast?'cur':''}">${fmt(s.valor)}</div>
+      <div class="wtbar" style="height:${h}px;background:${color};opacity:${flat?1:(isLast?1:.4)}"></div>${tgt}</div>
+      <div class="wtlbl ${!flat&&isLast?'cur':''}">${s.semana.replace(/^\d{4}-/,'')}</div></div>`;
   }).join('');
   return `<div class="wt">
-    <div class="wttop"><span class="wtlabel">${label}${sub?` <span class="wtsub">· ${sub}</span>`:''}</span>
+    <div class="wttop"><span class="wtlabel">${accentLabel?`<span class="nivpill">${label}</span>`:label}${sub?` <span class="wtsub">· ${sub}</span>`:''}</span>
     ${wow!=null?`<span class="wtwow ${wow>=0?'up':'down'}">${wow>=0?'▲':'▼'} ${Math.abs(wow)}% WoW</span>`:''}</div>
     <div class="wtchart">${cols||'<span class="miss">sem dado</span>'}</div>
   </div>`;
@@ -355,8 +389,14 @@ function weeklyByNivel(metricObj,nivel){
 }
 
 // ---- tabela agrupada / ranking ----
-function groupedTable({rows,groupBy,groupOrder,groupLabel,cols,kind}){
+function groupedTable({rows,groupBy,groupOrder,groupLabel,cols,kind,totals,sort,hd}){
   if(!rows||!rows.length) return '<div class="card"><span class="miss">Sem pessoas com dado no período.</span></div>';
+  // ordenação (clicável) por qualquer coluna com fn `sort` — ordena DENTRO de cada grupo.
+  const sc=sort&&sort.key?cols.find(c=>c.key===sort.key&&c.sort):null;
+  const num=v=>(v==null||isNaN(v))?-Infinity:v;
+  const sortItems=arr=>sc?arr.slice().sort((a,b)=>{const d=num(sc.sort(a))-num(sc.sort(b));return sort.dir==='asc'?d:-d;}):arr;
+  const aggRow=(label,items,strong)=>{const st=strong?' style="border-top:2px solid var(--text)"':'';
+    return `<tr class="grouprow"><td${st}>${label}</td>${cols.map(c=>`<td class="${c.align==='r'?'r':''}"${st}>${c.agg?`<span class="mono">${c.agg(items)}</span>`:''}</td>`).join('')}</tr>`;};
   let body='';
   if(groupBy){
     const groups={};
@@ -364,14 +404,18 @@ function groupedTable({rows,groupBy,groupOrder,groupLabel,cols,kind}){
     const order=(groupOrder||Object.keys(groups)).filter(g=>groups[g]&&groups[g].length);
     order.forEach(g=>{
       const items=groups[g];
-      body+=`<tr class="grouprow"><td>${groupLabel?groupLabel(g):g} <span class="miss">· ${items.length}</span></td>${cols.map(()=>'<td></td>').join('')}</tr>`;
-      body+=items.map((r,i)=>rowHTML(r,i,cols,kind)).join('');
+      const gcells=cols.map(c=>`<td class="${c.align==='r'?'r':''}">${totals&&c.agg?`<span class="mono">${c.agg(items)}</span>`:''}</td>`).join('');
+      body+=`<tr class="grouprow"><td>${groupLabel?groupLabel(g):g} <span class="miss">· ${items.length}</span></td>${gcells}</tr>`;
+      body+=sortItems(items).map((r,i)=>rowHTML(r,i,cols,kind)).join('');
     });
+    if(totals) body+=aggRow('Total geral', rows, true);
   } else {
-    body=rows.map((r,i)=>rowHTML(r,i,cols,kind)).join('');
+    body=sortItems(rows).map((r,i)=>rowHTML(r,i,cols,kind)).join('');
+    if(totals) body+=aggRow('Total geral', rows, true);
   }
-  return `<div class="card" style="padding:0;overflow-x:auto"><table class="tbl">
-    <thead><tr><th>Pessoa</th>${cols.map(c=>`<th class="${c.align==='r'?'r':''}">${c.label}</th>`).join('')}</tr></thead>
+  const ind=c=>(sort&&sort.key===c.key)?(sort.dir==='asc'?' ▲':' ▼'):'';
+  return `<div class="card" style="padding:0;overflow-x:auto">${hd?`<div class="tbl-hd">${hd}</div>`:''}<table class="tbl">
+    <thead><tr><th>Pessoa</th>${cols.map(c=>`<th class="${c.align==='r'?'r':''}${c.sort?' sortable':''}" data-k="${c.key||''}">${c.icon?`<span class="th-ic">${c.icon}</span>`:''}${c.label}${ind(c)}</th>`).join('')}</tr></thead>
     <tbody>${body}</tbody></table></div>`;
 }
 function rowHTML(r,i,cols,kind){
@@ -677,22 +721,27 @@ const CLOSER_DEF={opps:0,sql:0,cw:0,sqlRate:null,winRate:null,cwNivel:[0,0,0],di
 const ONB_DEF={cwIn:0,activated:0,actRate:null,actNivel:[0,0,0],diasWonAtivacao:null};
 // estoque histórico do funil SDR: barras empilhadas (contacted/connected/nurturing) por
 // semana, snapshot no fim de cada semana (série D.sdrEstoque vinda do build_data.js).
+// cabeçalho interno de card (chip de ícone + título + hint) — pra títulos que eram de seção
+// virarem título do próprio card.
+function cardHd(icon,title,hint){return `<div class="card-hd"><span class="card-ic">${icon||''}</span><h3>${title}</h3>${hint?`<span class="card-sub">${hint}</span>`:''}</div>`;}
 function sdrEstoqueHTML(estrF){
   const rows=((D.sdrEstoque&&D.sdrEstoque[estrF||'all'])||[]).slice(-16);
   if(!rows.length) return '<span class="miss">Sem série de estoque — regenere o app_data.js com o build_data.js atualizado.</span>';
-  const max=Math.max(...rows.map(r=>r.contacted+r.connected+r.nurturing),1), H=190;
+  const tots=rows.map(r=>r.contacted+r.connected+r.nurturing);
+  const max=Math.max(...tots,1), H=180;
   const h=v=>v>0?Math.max(2,(v/max)*H):0;
+  const ES=[['nurturing','#667085','#fff'],['connected','#98A2B3','#fff'],['contacted','#CBD1D8','#475467']];
   const cols=rows.map(r=>{
     const tot=r.contacted+r.connected+r.nurturing;
+    const segs=ES.map(([k,c,lc])=>{const hh=h(r[k]);return `<div class="eseg" style="height:${hh}px;background:${c}">${hh>=13?`<span class="eseglbl" style="color:${lc}">${fN(r[k])}</span>`:''}</div>`;}).join('');
     return `<div class="ecol" title="${semanaLabel(r.semana)} · total ${fN(tot)} — contacted ${fN(r.contacted)} · connected ${fN(r.connected)} · nurturing ${fN(r.nurturing)}">
-      <div class="etot">${fN(tot)}</div>
-      <div class="eseg" style="height:${h(r.nurturing)}px;background:var(--accent)"></div>
-      <div class="eseg" style="height:${h(r.connected)}px;background:#344054"></div>
-      <div class="eseg" style="height:${h(r.contacted)}px;background:#98A2B3"></div>
+      <div class="etot">${fN(tot)}</div>${segs}
       <div class="ecap">${r.semana.replace('2025-','25').replace('2026-','26')}</div></div>`;
   }).join('');
-  return `<div class="estoque">${cols}</div>
-    <div class="legend"><span><i class="sw" style="background:#98A2B3"></i>Contacted</span><span><i class="sw" style="background:#344054"></i>Connected</span><span><i class="sw" style="background:var(--accent)"></i>Nurturing</span></div>`;
+  const legend=`<div class="legend" style="margin:0 0 10px"><span><i class="sw" style="background:#CBD1D8"></i>Contacted</span><span><i class="sw" style="background:#98A2B3"></i>Connected</span><span><i class="sw" style="background:#667085"></i>Nurturing</span></div>`;
+  const data=rows.map((r,i)=>{const d=i>0?tots[i]-tots[i-1]:null;const col=d==null?'':(d>0?'var(--success)':d<0?'var(--danger)':'var(--text-faint)');return `<div class="edcell" style="${col?'color:'+col+';font-weight:700':''}">${d==null?'—':(d>0?'+':d<0?'−':'')+fN(Math.abs(d))}</div>`;}).join('');
+  return `${legend}<div class="estoque">${cols}</div>
+    <div class="edata-lbl">Variação do estoque · WoW</div><div class="edata">${data}</div>`;
 }
 // status ATUAL (hoje) dos leads, agrupados pela SEMANA DE CONTATO: barras empilhadas
 // (contacted/connected/nurturing/qualified/unqualified) por semana — coorte × situação de hoje.
@@ -700,18 +749,20 @@ function sdrStatusHTML(estrF){
   const src=(D.sdrCohortStatus&&D.sdrCohortStatus[estrF||'all'])||{};
   const weeks=Object.keys(src).sort().slice(-16);
   if(!weeks.length) return '<span class="miss">Sem dado.</span>';
-  const ST=[['unqualified','var(--danger)'],['qualified','var(--success)'],['nurturing','var(--accent)'],['connected','#344054'],['contacted','#98A2B3']];
+  const ST=[['unqualified','#FDA29B'],['qualified','#6CE9A6'],['nurturing','#FEC6A1'],['connected','#B0B7C3'],['contacted','#E4E7EC']];
   const totW=s=>s.contacted+s.connected+s.nurturing+s.qualified+s.unqualified;
-  const max=Math.max(...weeks.map(w=>totW(src[w])),1), H=190, h=v=>v>0?Math.max(2,(v/max)*H):0;
+  const max=Math.max(...weeks.map(w=>totW(src[w])),1), H=180, h=v=>v>0?Math.max(2,(v/max)*H):0;
   const cols=weeks.map(w=>{
     const s=src[w], tot=totW(s);
-    const segs=ST.map(([k,c])=>`<div class="eseg" style="height:${h(s[k])}px;background:${c}"></div>`).join('');
+    const segs=ST.map(([k,c])=>{const hh=h(s[k]);return `<div class="eseg" style="height:${hh}px;background:${c}">${hh>=13?`<span class="eseglbl">${fN(s[k])}</span>`:''}</div>`;}).join('');
     return `<div class="ecol" title="${semanaLabel(w)} · ${fN(tot)} contatados — qualified ${fN(s.qualified)} · nurturing ${fN(s.nurturing)} · connected ${fN(s.connected)} · contacted ${fN(s.contacted)} · unqualified ${fN(s.unqualified)}">
       <div class="etot">${fN(tot)}</div>${segs}
       <div class="ecap">${w.replace('2025-','25').replace('2026-','26')}</div></div>`;
   }).join('');
-  return `<div class="estoque">${cols}</div>
-    <div class="legend"><span><i class="sw" style="background:#98A2B3"></i>Contacted</span><span><i class="sw" style="background:#344054"></i>Connected</span><span><i class="sw" style="background:var(--accent)"></i>Nurturing</span><span><i class="sw" style="background:var(--success)"></i>Qualified</span><span><i class="sw" style="background:var(--danger)"></i>Unqualified</span></div>`;
+  const legend=`<div class="legend" style="margin:0 0 10px"><span><i class="sw" style="background:#E4E7EC"></i>Contacted</span><span><i class="sw" style="background:#B0B7C3"></i>Connected</span><span><i class="sw" style="background:#FEC6A1"></i>Nurturing</span><span><i class="sw" style="background:#6CE9A6"></i>Qualified</span><span><i class="sw" style="background:#FDA29B"></i>Unqualified</span></div>`;
+  const data=weeks.map(w=>{const s=src[w],t=totW(s);const c=t?Math.round(s.qualified/t*100):null;return `<div class="edcell">${c!=null?c+'%':'—'}</div>`;}).join('');
+  return `${legend}<div class="estoque">${cols}</div>
+    <div class="edata-lbl">Conversão da safra · qualified / total contatados</div><div class="edata">${data}</div>`;
 }
 // estoque do funil de negociação do Closer: barras empilhadas (Opp/SQL/Offer/Contract) por
 // semana, mesmo padrão visual do estoque de SDR (série D.closerEstoque vinda do build_data.js).
@@ -759,10 +810,11 @@ function renderAreaSdr(){
   // ===== filtro de sales_strategy (Outbound/Inbound/Hunting) — vale pra página SDR inteira =====
   const estrF=state.estrArea||'all';
   const listF=estrF==='all'?list:list.filter(p=>p.estrategia===estrF);
-  // KPIs de entrada/conexão/opps vêm do agregado por estratégia (preciso, por lead)
-  const semAgg=D.actual?.semanal?.[week];
-  const agg=estrF==='all'?semAgg?.total:semAgg?.porEstrategia?.[estrF];
-  const totContacted=agg?.contacted||0, totConnected=agg?.connected||0, totOpps=agg?.opps||0;
+  // PÁGINA = só SDR real (gate no build). Entradas/opps/C2 vêm das estruturas já gateadas.
+  const cohNow=(D.sdrCohort?.[estrF]||{})[week]||{contacted:0,conn:0};
+  const oppsNivelNow=(D.sdrOppsNivel?.[estrF]||{})[week]||{};
+  const totContacted=cohNow.contacted||0, totConnected=cohNow.conn||0;
+  const totOpps=NIV.reduce((s,n)=>s+(oppsNivelNow[n]||0),0);
   const refAgg=estrF==='all'?D[state.refArea]?.semanal?.[week]?.total:D[state.refArea]?.semanal?.[week]?.porEstrategia?.[estrF];
   const refT=refAgg;
   // Estoque do funil na POSIÇÃO da semana selecionada (snapshot), na estratégia filtrada
@@ -780,6 +832,8 @@ function renderAreaSdr(){
   const cohPct=coh&&coh.contacted?Math.round(coh.conn/coh.contacted*100):null;
   const COH_META=10;
   const cohAtt=cohPct!=null?pct(cohPct,COH_META):null;
+  // C2 encadeado: do MESMO coorte do C1 (contatou+conectou em W), quantos qualificaram em W.
+  const c2Pct=coh&&coh.conn?Math.round((coh.qual||0)/coh.conn*100):null;
   // FTE — SDRs que de fato contataram / geraram opp na semana (Backlog: usar base de headcount real)
   const contactFteCount=(D.sdrContactFte?.[estrF]||{})[week]||0;
   const oppFteCount=(D.sdrOppFte?.[estrF]||{})[week]||0;
@@ -789,16 +843,36 @@ function renderAreaSdr(){
   const diasUteis=D.diasUteisSemana?.[week]||0;
   const contatadosFteDia=diasUteis?contatadosFte/diasUteis:null;
   const oppsFteDia=diasUteis?oppsFte/diasUteis:null;
+  // metas de produtividade por dia útil, por estratégia (delta verde/vermelho como nos outros cards).
+  const BD_TGT={Outbound:{contacted:4,opps:0.75},Inbound:{opps:1.41}};
+  const bdt=BD_TGT[estrF]||{};
+  const bdPill=(val,tgt)=>tgt?` <span class="att ${val!=null&&val>=tgt?'hi':'lo'}">${val!=null?Math.round(val/tgt*100):0}%</span>`:'';
+  const contBD=(bdt.contacted?`meta ${bdt.contacted}/BD${bdPill(contatadosFteDia,bdt.contacted)} · `:'')+`média ${contatadosFte.toFixed(0)}/FTE · ${contactFteCount} SDRs · ${diasUteis} BD`;
+  const oppBD=(bdt.opps?`meta ${bdt.opps}/BD${bdPill(oppsFteDia,bdt.opps)} · `:'')+`média ${oppsFte.toFixed(1)}/FTE · ${oppFteCount} SDRs · ${diasUteis} BD`;
+  const KIC={
+    entradas:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></svg>',
+    saidas:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>',
+    estoque:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>',
+    link:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
+    check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>',
+    users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+    target:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
+  };
   const kpis=[
-    ['Entradas',fN(totContacted),metaSub(totContacted,refT?.contacted,`${listF.length} SDRs`),'Contatados'],
-    ['Saídas do funil',fN(totSaidas),`${fN(totOpps)} opps · ${fN(totUnq)} unqualifieds`,'Oportunidades geradas + unqualifieds'],
-    ['Estoque atual',estTot!=null?fN(estTot):'—',deltaPill,'Funil de SDR atual'],
-    ['Contacted → Connected',cohPct!=null?cohPct+'%':'—',coh?`${fN(coh.conn)}/${fN(coh.contacted)} · meta ${COH_META}%${cohAtt!=null?` · <span class="att ${attClass(cohAtt)}">${cohAtt}%</span>`:''}`:'sem dado','Coorte: conectou na mesma semana'],
-    ['Contacted / FTE',contatadosFte.toFixed(0),`${contactFteCount} SDRs · ${contatadosFteDia!=null?contatadosFteDia.toFixed(1)+'/dia útil':'—'} (${diasUteis}d)`,'Contatados ÷ SDRs que contataram'],
-    ['Opps / FTE',oppsFte.toFixed(1),`${oppFteCount} SDRs · ${oppsFteDia!=null?oppsFteDia.toFixed(2)+'/dia útil':'—'} (${diasUteis}d)`,'Oportunidades ÷ SDRs com opp'],
+    ['Entradas',fN(totContacted),metaSub(totContacted,refT?.contacted,`${listF.length} SDRs`),'Contatados',null,KIC.entradas],
+    ['Saídas do funil',fN(totSaidas),`${fN(totOpps)} opps · ${fN(totUnq)} unqualifieds`,'Oportunidades geradas + unqualifieds',null,KIC.saidas],
+    ['Estoque atual',estTot!=null?fN(estTot):'—',deltaPill,'Funil de SDR atual',null,KIC.estoque],
+    ['C1 · Contato→Conexão',cohPct!=null?cohPct+'%':'—',coh?`${fN(coh.conn)}/${fN(coh.contacted)} · meta ${COH_META}%${cohAtt!=null?` · <span class="att ${attClass(cohAtt)}">${cohAtt}%</span>`:''}`:'sem dado','Coorte: conectou na mesma semana',null,KIC.link],
+    ['C2 · Conexão→Qualif.',c2Pct!=null?c2Pct+'%':'—',coh&&coh.conn?`${fN(coh.qual||0)}/${fN(coh.conn)} conectados`:'sem dado','Do coorte do C1 · qualificou na mesma semana',null,KIC.check],
+    ['Contacted / FTE / BD',contatadosFteDia!=null?contatadosFteDia.toFixed(1):'—',contBD,'Contatados por FTE / dia útil',null,KIC.users],
+    ['Opps / FTE / BD',oppsFteDia!=null?oppsFteDia.toFixed(2):'—',oppBD,'Oportunidades por FTE / dia útil','kpi-accent',KIC.target],
   ];
   const oppsNivelSrc=D.sdrOppsNivel?.[estrF]||{};
-  const wt=NIV.map((n,i)=>`<div class="card">${weekTrendHTML({label:n,color:NIV_COLOR[n],series:weeklyByNivel(oppsNivelSrc,n).slice(-8)})}</div>`).join('');
+  // target line = meta de opps do budget diário (semanal), por nível×estratégia, só de jul/2026 em diante.
+  const tgtOpps=(w,n)=>{ if((D.semanaMes?.[w]||'')<'2026-07') return null; const b=D.budget?.semanal?.[w]; if(!b) return null;
+    const cell=estrF==='all'?b.porNivel?.[n]:b.porNivelEstrategia?.[n]?.[estrF]; return cell?cell.opps:null; };
+  const wt=NIV.map((n,i)=>{ const ser=weeklyByNivel(oppsNivelSrc,n).slice(-8); const tg=ser.map(s=>tgtOpps(s.semana,n));
+    return `<div class="card">${weekTrendHTML({label:n,color:'#667085',series:ser,targets:tg,flat:true,accentLabel:true})}</div>`; }).join('');
   // resumo de produtividade por FTE (uma linha)
   const prodResumo=`<div class="card" style="display:flex;gap:30px;flex-wrap:wrap;align-items:center;padding:16px 22px">
     <span class="eyebrow">Produtividade por FTE · ${semanaLabel(week)}${estrF!=='all'?' · '+estrF:''}</span>
@@ -815,9 +889,12 @@ function renderAreaSdr(){
   const baseByEmail={}; base.forEach(p=>baseByEmail[p.email]=p);
   const oppsAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return x?(x.opps||0):0;};
   const contactedAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return x?(x.contacted||0):0;};
-  // coorte C2 por pessoa: dos contatados por essa pessoa NA semana W, quantos conectaram na
-  // MESMA semana (não é throughput — vem de cohortRate, calculado no build_data.js).
-  const cohAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return (x&&x.cohortRate!=null)?Math.round(x.cohortRate*100):null;};
+  // coorte C2 por pessoa: dos leads que a pessoa CONTATOU (owner_email) na semana W, quantos
+  // conectaram na MESMA semana. Usa owner_email (não sdr_email_sf, que só é preenchido pós-conexão,
+  // o que dava 100% falso pra todos). Mesma medida do card do topo, aberta por analista.
+  const cohAt=(r,w)=>{const c=w&&(D.sdrOwnerCohort?.[r.email]||{})[w];return (c&&c.contacted)?Math.round(c.conn/c.contacted*100):null;};
+  // contatados da semana por analista, também via owner_email (mesma base do C2, denominador real).
+  const contOwnerAt=(r,w)=>{const c=w&&(D.sdrOwnerCohort?.[r.email]||{})[w];return c?(c.contacted||0):0;};
   // distribuição de opps por nível SÓ nas 3 últimas semanas (mesma janela das outras colunas),
   // em vez do acumulado desde sempre.
   const nivelPct=(r,i)=>{
@@ -830,35 +907,66 @@ function renderAreaSdr(){
   // rótulo das colunas de semana anterior: "Semana 29"/"Semana 28" em vez de "−1"/"−2".
   const wkNum=w=>w?('Semana '+ +w.split('-W')[1]):'−';
   const lblB=wkNum(wB), lblC=wkNum(wC);
+  const wkShort=w=>w?('S'+ +w.split('-W')[1]):'−'; const sB=wkShort(wB), sC=wkShort(wC);
+  // agregadores pro subtotal/total: soma pra contagem; recálculo correto pra taxas (não média de %).
+  const sumBy=(rows,f)=>rows.reduce((s,r)=>s+(f(r)||0),0);
+  const c2Agg=(rows,w)=>{let cc=0,co=0;rows.forEach(r=>{const c=(D.sdrOwnerCohort?.[r.email]||{})[w];if(c){cc+=c.contacted||0;co+=c.conn||0;}});return cc?Math.round(co/cc*100)+'%':'—';};
+  const nivAgg=(rows,i)=>{const a=[0,0,0];rows.forEach(r=>[week,wB,wC].forEach(w=>{const x=w&&(r.porSemana||{})[w];if(x&&x.oppNivel)x.oppNivel.forEach((v,j)=>a[j]+=v||0);}));const t=(a[0]+a[1]+a[2])||1;return Math.round((a[i]||0)/t*100)+'%';};
+  // produtividade/dia útil (3 sem.) por pessoa + agregador = MÉDIA por SDR (não soma).
+  const pdCont=r=>diasUteis3?(contOwnerAt(r,week)+contOwnerAt(r,wB)+contOwnerAt(r,wC))/diasUteis3:null;
+  const pdOppFn=r=>diasUteis3?(oppsAt(r,week)+oppsAt(r,wB)+oppsAt(r,wC))/diasUteis3:null;
+  const mediaAgg=(rows,f,dec)=>{const v=rows.map(f).filter(x=>x!=null);return v.length?(v.reduce((s,x)=>s+x,0)/v.length).toFixed(dec):'—';};
+  // célula BD: valor colorido + pill de variação % vs meta (fundo tingido, igual aos cards de cima).
+  const bdDelta=(v,t)=>` <span class="att ${v>=t?'hi':'lo'}">${v>=t?'+':''}${Math.round((v/t-1)*100)}%</span>`;
+  const bdCell=(v,t,dec)=>`<span class="mono">${v!=null?v.toFixed(dec):'—'}</span>${(v!=null&&t)?bdDelta(v,t):''}`;
+  const bdAgg=(rows,f,dec,pick)=>{const st=rows[0]?.estrategia,t=rows.every(r=>r.estrategia===st)?pick(BD_TGT[st]):null,v=mediaAgg(rows,f,dec),n=parseFloat(v);return (t&&!isNaN(n))?`${v}${bdDelta(n,t)}`:v;};
+  // ícones dos headers (só o SVG, sem chip) — reusa KIC + um de produtividade.
+  const TI={pd:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',c:KIC.users,conn:KIC.link,opp:KIC.target,niv:KIC.estoque};
   const cols=[
-    {key:'oppsA',label:'Opps sem.',align:'r',render:r=>`<span class="mono num-cell">${fN(oppsAt(r,week))}</span>`},
-    {key:'oppsB',label:lblB,align:'r',render:r=>`<span class="mono">${fN(oppsAt(r,wB))}</span>`},
-    {key:'oppsC',label:lblC,align:'r',render:r=>`<span class="mono">${fN(oppsAt(r,wC))}</span>`},
-    {key:'connA',label:'C2 (coorte)',align:'r',render:r=>`<span class="mono">${cohAt(r,week)!=null?cohAt(r,week)+'%':'—'}</span>`},
-    {key:'connB',label:lblB,align:'r',render:r=>`<span class="mono">${cohAt(r,wB)!=null?cohAt(r,wB)+'%':'—'}</span>`},
-    {key:'connC',label:lblC,align:'r',render:r=>`<span class="mono">${cohAt(r,wC)!=null?cohAt(r,wC)+'%':'—'}</span>`},
-    {key:'n1',label:'N2-N3',align:'r',render:r=>`<span class="mono">${nivelPct(r,0)}%</span>`},
-    {key:'n2',label:'N4-N5',align:'r',render:r=>`<span class="mono">${nivelPct(r,1)}%</span>`},
-    {key:'n3',label:'N6+',align:'r',render:r=>`<span class="mono">${nivelPct(r,2)}%</span>`},
-    {key:'pdContacted',label:'Contacted/dia (3s)',align:'r',render:r=>{const t=contactedAt(r,week)+contactedAt(r,wB)+contactedAt(r,wC);return `<span class="mono">${diasUteis3?(t/diasUteis3).toFixed(1):'—'}</span>`;}},
-    {key:'pdOpp',label:'Opp/dia (3s)',align:'r',render:r=>{const t=oppsAt(r,week)+oppsAt(r,wB)+oppsAt(r,wC);return `<span class="mono">${diasUteis3?(t/diasUteis3).toFixed(2):'—'}</span>`;}},
+    // PRODUTIVIDADE por dia útil (média das 3 últimas semanas) — agregador = média por SDR
+    {key:'pdContacted',label:'Contat./BD · 3s',align:'r',icon:TI.pd,render:r=>bdCell(pdCont(r),BD_TGT[r.estrategia]?.contacted,1),agg:rows=>bdAgg(rows,pdCont,1,tg=>tg?.contacted),sort:pdCont},
+    {key:'pdOpp',label:'Opps/BD · 3s',align:'r',icon:TI.pd,render:r=>bdCell(pdOppFn(r),BD_TGT[r.estrategia]?.opps,2),agg:rows=>bdAgg(rows,pdOppFn,2,tg=>tg?.opps),sort:pdOppFn},
+    // ENTRADA
+    {key:'contA',label:'Contatados · sem.',align:'r',icon:TI.c,render:r=>`<span class="mono">${fN(contOwnerAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>contOwnerAt(r,week))),sort:r=>contOwnerAt(r,week)},
+    // CONVERSÃO C1 (contato→conexão na mesma semana) · atual e 2 anteriores
+    {key:'connA',label:'C1 · sem.',align:'r',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,week)!=null?cohAt(r,week)+'%':'—'}</span>`,agg:rows=>c2Agg(rows,week),sort:r=>cohAt(r,week)},
+    {key:'connB',label:'C1 · '+sB,align:'r',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,wB)!=null?cohAt(r,wB)+'%':'—'}</span>`,agg:rows=>c2Agg(rows,wB),sort:r=>cohAt(r,wB)},
+    {key:'connC',label:'C1 · '+sC,align:'r',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,wC)!=null?cohAt(r,wC)+'%':'—'}</span>`,agg:rows=>c2Agg(rows,wC),sort:r=>cohAt(r,wC)},
+    // OUTPUT (Opps geradas) · atual e 2 anteriores
+    {key:'oppsA',label:'Opps · sem.',align:'r',icon:TI.opp,render:r=>`<span class="mono">${fN(oppsAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>oppsAt(r,week))),sort:r=>oppsAt(r,week)},
+    {key:'oppsB',label:'Opps · '+sB,align:'r',icon:TI.opp,render:r=>`<span class="mono">${fN(oppsAt(r,wB))}</span>`,agg:rows=>fN(sumBy(rows,r=>oppsAt(r,wB))),sort:r=>oppsAt(r,wB)},
+    {key:'oppsC',label:'Opps · '+sC,align:'r',icon:TI.opp,render:r=>`<span class="mono">${fN(oppsAt(r,wC))}</span>`,agg:rows=>fN(sumBy(rows,r=>oppsAt(r,wC))),sort:r=>oppsAt(r,wC)},
+    // MIX das opps por nível de cliente (acumulado 3 semanas)
+    {key:'n1',label:'% N2-N3',align:'r',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,0)}%</span>`,agg:rows=>nivAgg(rows,0),sort:r=>nivelPct(r,0)},
+    {key:'n2',label:'% N4-N5',align:'r',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,1)}%</span>`,agg:rows=>nivAgg(rows,1),sort:r=>nivelPct(r,1)},
+    {key:'n3',label:'% N6+',align:'r',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,2)}%</span>`,agg:rows=>nivAgg(rows,2),sort:r=>nivelPct(r,2)},
   ];
-  // só SDRs com pelo menos 1 opp em uma das 3 últimas semanas (atual, −1, −2)
-  const listTbl=listF.filter(r=>(oppsAt(r,week)+oppsAt(r,wB)+oppsAt(r,wC))>0);
-  const table=groupedTable({rows:listTbl,groupBy:r=>r.estrategia||'—',groupOrder:STR_ORDER,cols,kind:'sdr'});
+  // TODOS que contataram (por owner_email) na janela de 3 semanas — mescla com os dados de
+  // opp/nível do SDR correspondente quando existe. Assim a tabela reconcilia com o card Entradas.
+  // (depois corrigir: excluir contas de time/cadência tipo bubr_bizops/bkf-team, e estratégia por owner.)
+  const ownerC=D.sdrOwnerCohort||{};
+  const sdrMap={}; base.forEach(p=>sdrMap[p.email.toLowerCase()]=p);
+  const ownerSet=new Set();
+  [week,wB,wC].forEach(w=>{ if(w) for(const o in ownerC){ if((ownerC[o][w]?.contacted||0)>0) ownerSet.add(o); } });
+  let rowsOwner=[...ownerSet].map(o=>{ const p=sdrMap[o.toLowerCase()];
+    return p ? {...p, email:o} : {email:o, nome:null, foto:null, ativo:false, estrategia:null, porSemana:{}, oppNivel:[0,0,0]}; });
+  if(estrF!=='all') rowsOwner=rowsOwner.filter(r=>r.estrategia===estrF); // filtro de estratégia: só SDRs atribuídos
+  rowsOwner.sort((a,b)=>contOwnerAt(b,week)-contOwnerAt(a,week));
+  const table=groupedTable({rows:rowsOwner,groupBy:r=>ehNaoSdr(r.email)?'Outros':(r.estrategia||'Outros'),groupOrder:[...STR_ORDER,'Outros'],cols,kind:'sdr',totals:true,sort:state.sdrSort,hd:cardHd(KIC.users,'SDR · por pessoa','opps, C1, mix por nível e produtividade/BD')});
   $('viewArea').innerHTML=`
-    <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d])=>`<div class="kpi"><span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div>
-    <div class="grid g2" style="margin-top:24px">
-      <div class="sec" style="margin-bottom:0"><div class="sec-head"><h2>Estoque do funil SDR</h2><span class="hint">snapshot no fim de cada semana · últimas 16</span></div>
-        <div class="card">${sdrEstoqueHTML(estrF)}</div></div>
-      <div class="sec" style="margin-bottom:0"><div class="sec-head"><h2>Status atual por semana de contato</h2><span class="hint">contatados na semana × situação hoje · últimas 16</span></div>
-        <div class="card">${sdrStatusHTML(estrF)}</div></div>
-    </div>
-    <div class="sec"><div class="sec-head"><h2>Opps por nível de cliente</h2><span class="hint">oportunidades geradas por semana · últimas 8 semanas</span></div>
+    <div class="sec"><div class="sec-head"><h2>Resultado semanal</h2><span class="hint">${semanaLabel(week)}${estrF!=='all'?' · '+estrF:''}</span></div>
+      <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d,cls,icon])=>`<div class="kpi ${cls||''}">${icon?`<span class="kpi-ic">${icon}</span>`:''}<span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div></div>
+    <div class="sec"><div class="sec-head"><h2>Evolução do resultado</h2></div>
+      <div class="grid g2">
+        <div class="card">${cardHd(KIC.estoque,'Estoque do funil SDR','snapshot no fim de cada semana · últ. 16')}${sdrEstoqueHTML(estrF)}</div>
+        <div class="card">${cardHd(KIC.check,'Status atual por semana de contato','contatados × situação hoje · últ. 16')}${sdrStatusHTML(estrF)}</div>
+      </div></div>
+    <div class="sec"><div class="sec-head"><h2>Abertura por nível</h2><span class="hint">oportunidades geradas por semana · últimas 8 semanas</span></div>
       <div class="grid g3">${wt}</div></div>
-    <div class="sec">${prodResumo}</div>
-    <div class="sec"><div class="sec-head"><h2>SDR · por pessoa</h2><span class="hint">Opps e C2 (coorte contato→conexão na semana) nas 3 últimas semanas · distribuição de opps por nível (3 últimas semanas) · produtividade por dia útil (contacted e opp, 3 últimas semanas)</span></div>${table}</div>`;
+    <div class="sec"><div class="sec-head"><h2>Detalhamento</h2><span class="hint">${semanaLabel(week)}</span></div>
+      ${prodResumo}<div style="margin-top:16px">${table}</div></div>`;
   bindRowClicks($('viewArea'));
+  $('viewArea').querySelectorAll('.tbl th.sortable').forEach(th=>th.onclick=()=>{const k=th.dataset.k,c=state.sdrSort;state.sdrSort={key:k,dir:(c&&c.key===k&&c.dir==='desc')?'asc':'desc'};renderArea();});
 }
 function renderAreaClosers(){
   const week=state.semanaArea;
@@ -908,7 +1016,7 @@ function renderAreaClosers(){
   const listTbl=list.filter(r=>(cwAt(r,week)+cwAt(r,wB)+cwAt(r,wC))>0);
   const table=groupedTable({rows:listTbl,cols,kind:'closer'});
   $('viewArea').innerHTML=`
-    <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d])=>`<div class="kpi"><span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div>
+    <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d,cls,icon])=>`<div class="kpi ${cls||''}">${icon?`<span class="kpi-ic">${icon}</span>`:''}<span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div>
     <div class="sec" style="margin-top:24px"><div class="sec-head"><h2>Estoque do funil Closer</h2><span class="hint">snapshot no fim de cada semana · últimas 16 · Opp → SQL → Offer → Contract (sai ao fechar ou perder)</span></div>
       <div class="card">${closerEstoqueHTML('all')}</div></div>
     <div class="sec"><div class="sec-head"><h2>CW por nível de cliente</h2><span class="hint">últimas 8 semanas</span></div>
@@ -941,7 +1049,7 @@ function renderAreaOnboarding(){
   ];
   const table=groupedTable({rows:list,cols,kind:'onb'});
   $('viewArea').innerHTML=`
-    <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d])=>`<div class="kpi"><span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div>
+    <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d,cls,icon])=>`<div class="kpi ${cls||''}">${icon?`<span class="kpi-ic">${icon}</span>`:''}<span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div>
     <div class="sec" style="margin-top:24px"><div class="sec-head"><h2>Estoque de ativação</h2><span class="hint">snapshot no fim de cada semana · últimas 16 · CW → 1k → 5k (sai ao ativar 10k)</span></div>
       <div class="card">${onbEstoqueHTML('all')}</div></div>
     <div class="sec"><div class="sec-head"><h2>Ativações (10k GMV) por nível · últimas 4 semanas</h2></div>
@@ -1110,10 +1218,11 @@ function renderTabs(){
   $('subtabs').querySelectorAll('.subtab').forEach(el=>el.onclick=()=>{state.area=el.dataset.k;render();});
 }
 function updateBanner(){
+  const dm=D.dataMax; const dmF=dm?dm.split('-').reverse().join('/'):'—';
   if(D.funilCompleto===false){
-    $('bannerText').innerHTML=`<b>Dados agregados</b> das bases NB + budget/reforecast. <b class="miss" style="color:var(--danger);font-style:normal">Funil completo (Contatado/Conectado/SQL por mês) parcial</b> — falta reexportar <code>Dados/05_produtividade.csv</code> (ver Dados/README.md).`;
+    $('bannerText').innerHTML=`Dados atualizados até <b>${dmF}</b>. <b class="miss" style="color:var(--danger);font-style:normal">Funil completo (Contatado/Conectado/SQL por mês) parcial</b> — falta reexportar <code>Dados/05_produtividade.csv</code> (ver Dados/README.md).`;
   } else {
-    $('bannerText').innerHTML=`<b>Dados agregados</b> das bases NB + budget/reforecast. Gerado em <b>${D.geradoEm||'—'}</b>.`;
+    $('bannerText').innerHTML=`Dados atualizados até <b>${dmF}</b>.`;
   }
 }
 function render(){
