@@ -342,7 +342,7 @@ function avatarHTML(p,size){
 function median(arr){const a=[...arr].filter(v=>v!=null).sort((x,y)=>x-y);const n=a.length;if(!n)return 0;return n%2?a[(n-1)/2]:(a[n/2-1]+a[n/2])/2;}
 
 // ---- estado ----
-let state={meeting:'wsales',area:'sdr',mes:null,semana:null,estr:'all',ref:'budget',mesArea:null,semanaArea:null,refArea:'budget',estrArea:'all',mesMensal:null,estrMensal:'all',pessoa:null,sdrSort:null,closerSort:null};
+let state={meeting:'wsales',area:'sdr',mes:null,semana:null,estr:'all',ref:'budget',mesArea:null,semanaArea:null,refArea:'budget',estrArea:'all',mesMensal:null,estrMensal:'all',pessoa:null,sdrSort:null,closerSort:null,onbSort:null};
 
 const IC={
   mensal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>',
@@ -826,6 +826,28 @@ function onbEstoqueHTML(estrF){
   return `<div class="estoque">${cols}</div>
     <div class="legend"><span><i class="sw" style="background:#98A2B3"></i>CW (ainda não 1k)</span><span><i class="sw" style="background:#344054"></i>1k+ (ainda não 5k)</span><span><i class="sw" style="background:var(--accent)"></i>5k+ (ainda não 10k)</span></div>`;
 }
+// status ATUAL (hoje) dos leads, agrupados pela SEMANA DE ENTRADA NO ONBOARDING (CW): barras
+// empilhadas (cw/a1k/a5k/ativado_10k) — mesmo padrão do closerStatusHTML, aplicado ao funil de
+// ativação (D.onbCohortStatus vindo do build_data.js). Sem "lost" — não há saída por perda aqui.
+function onbStatusHTML(estrF){
+  const src=(D.onbCohortStatus&&D.onbCohortStatus[estrF||'all'])||{};
+  const weeks=Object.keys(src).sort().slice(-16);
+  if(!weeks.length) return '<span class="miss">Sem dado.</span>';
+  const ST=[['ativado_10k','#6CE9A6'],['a5k','#FEC6A1'],['a1k','#B0B7C3'],['cw','#E4E7EC']];
+  const totW=s=>s.cw+s.a1k+s.a5k+s.ativado_10k;
+  const max=Math.max(...weeks.map(w=>totW(src[w])),1), H=180, h=v=>v>0?Math.max(2,(v/max)*H):0;
+  const cols=weeks.map(w=>{
+    const s=src[w], tot=totW(s);
+    const segs=ST.map(([k,c])=>{const hh=h(s[k]);return `<div class="eseg" style="height:${hh}px;background:${c}">${hh>=13?`<span class="eseglbl">${fN(s[k])}</span>`:''}</div>`;}).join('');
+    return `<div class="ecol" title="${semanaLabel(w)} · ${fN(tot)} fecharam (CW) — ativado 10k ${fN(s.ativado_10k)} · 5k+ ${fN(s.a5k)} · 1k+ ${fN(s.a1k)} · CW ${fN(s.cw)}">
+      <div class="etot">${fN(tot)}</div>${segs}
+      <div class="ecap">${w.replace('2025-','25').replace('2026-','26')}</div></div>`;
+  }).join('');
+  const legend=`<div class="legend" style="margin:0 0 10px"><span><i class="sw" style="background:#E4E7EC"></i>CW</span><span><i class="sw" style="background:#B0B7C3"></i>1k+</span><span><i class="sw" style="background:#FEC6A1"></i>5k+</span><span><i class="sw" style="background:#6CE9A6"></i>Ativado 10k</span></div>`;
+  const data=weeks.map(w=>{const s=src[w],t=totW(s);const c=t?Math.round(s.ativado_10k/t*100):null;return `<div class="edcell">${c!=null?c+'%':'—'}</div>`;}).join('');
+  return `${legend}<div class="estoque">${cols}</div>
+    <div class="edata-lbl">Conversão da safra · ativado 10k / total que fechou (CW)</div><div class="edata">${data}</div>`;
+}
 // ícones de KPI (chip) — compartilhados entre SDR e Closer.
 const KIC={
   entradas:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></svg>',
@@ -1128,39 +1150,133 @@ function renderAreaClosers(){
   bindRowClicks($('viewArea'));
   $('viewArea').querySelectorAll('.tbl th.sortable').forEach(th=>th.onclick=()=>{const k=th.dataset.k,c=state.closerSort;state.closerSort={key:k,dir:(c&&c.key===k&&c.dir==='desc')?'asc':'desc'};renderArea();});
 }
+// metas de produtividade por dia útil do Onboarding (CW/BD, Ativado/BD), por estratégia —
+// AINDA NÃO CONFIRMADAS com o time (mesmo tratamento do BD_TGT_CLOSER). Mantido vazio de
+// propósito: enquanto ficar {}, toda célula de produtividade/BD mostra o valor calculado +
+// badge "⚠ a validar" em vez de % de atingimento.
+const BD_TGT_ONB={};
 function renderAreaOnboarding(){
   const week=state.semanaArea;
   const base=D.porPessoa?.onboarding||[];
   const list=base.map(p=>weekView(p,week,ONB_DEF)).sort((a,b)=>b.activated-a.activated);
-  const totCwIn=sum(list,p=>p.cwIn), totAct=sum(list,p=>p.activated);
-  const port=D.actual?.semanal?.[week]?.total;
-  const refT=D[state.refArea]?.semanal?.[week]?.total;
+  // ===== filtro de sales_strategy (Outbound/Inbound/Hunting) — mesmo padrão de SDR/Closers =====
+  const estrF=state.estrArea||'all';
+  const listF=estrF==='all'?list:list.filter(p=>p.estrategia===estrF);
+  // Entradas/saídas vêm das estruturas gateadas por onboarder atribuído (lead-level), mesmo
+  // padrão de SDR/Closer (onbCohort/onbAct em vez de somar a lista de pessoas).
+  const coh=(D.onbCohort?.[estrF]||{})[week]||null;
+  const totCwIn=coh?.cw||0;
+  const totAct=(D.onbAct?.[estrF]||{})[week]||0;
+  const refAgg=estrF==='all'?D[state.refArea]?.semanal?.[week]?.total:D[state.refArea]?.semanal?.[week]?.porEstrategia?.[estrF];
+  const refT=refAgg;
+  // Estoque do funil na POSIÇÃO da semana selecionada (snapshot), na estratégia filtrada
+  const eCur=(D.onbEstoque?.[estrF]||[]).find(e=>e.semana===week);
+  const estTot=eCur?eCur.cw+eCur.a1k+eCur.a5k:null;
+  // delta de estoque da semana = entradas − saídas = fechou (CW) − ativou 10k (única saída
+  // conhecida aqui — não há "lost"/churn documentado no funil de ativação).
+  const deltaEst=totCwIn-totAct;
+  const deltaPill=`Δ estoque <span class="att ${deltaEst>=0?'hi':'lo'}">${deltaEst>=0?'▲ +':'▼ '}${fN(deltaEst)}</span>`;
+  // Coorte CW→1k (C1) e 1k→5k (C2, encadeado) na MESMA semana — mesmo conceito do C1/C2 de
+  // SDR/Closer. ⚠️ O ciclo médio CW→Ativação é de ~50 dias (ver card de ciclo na Semanal
+  // Sales), então esses % tendem a ficar bem baixos por natureza (a maioria só cruza o próximo
+  // patamar em semanas futuras) — não é sinal de erro, é esperado dado o ciclo longo.
+  const cohPct=coh&&coh.cw?Math.round(coh.a1k/coh.cw*100):null;
+  const c2Pct=coh&&coh.a1k?Math.round((coh.a5k||0)/coh.a1k*100):null;
+  // FTE — onboarders que de fato receberam CW / ativaram 10k na semana (mesma aproximação do SDR/Closer)
+  const cwFteCount=(D.onbCwFte?.[estrF]||{})[week]||0;
+  const actFteCount=(D.onbActFte?.[estrF]||{})[week]||0;
+  const cwFte=totCwIn/Math.max(1,cwFteCount);
+  const actFte=totAct/Math.max(1,actFteCount);
+  const diasUteis=D.diasUteisSemana?.[week]||0;
+  const cwFteDia=diasUteis?cwFte/diasUteis:null;
+  const actFteDia=diasUteis?actFte/diasUteis:null;
+  const bdt=BD_TGT_ONB[estrF]||{};
+  const bdPill=(val,tgt)=>tgt?` <span class="att ${val!=null&&val>=tgt?'hi':'lo'}">${val!=null?Math.round(val/tgt*100):0}%</span>`:` ${mockBadge('Meta de CW/BD e Ativado/BD do Onboarding ainda não confirmada com o time — favor validar o valor certo.')}`;
+  const cwBD=(bdt.cw?`meta ${bdt.cw}/BD`:'sem meta')+bdPill(cwFteDia,bdt.cw)+` · média ${cwFte.toFixed(2)}/FTE · ${cwFteCount} onboarders · ${diasUteis} BD`;
+  const actBD=(bdt.act?`meta ${bdt.act}/BD`:'sem meta')+bdPill(actFteDia,bdt.act)+` · média ${actFte.toFixed(2)}/FTE · ${actFteCount} onboarders · ${diasUteis} BD`;
   const kpis=[
-    ['Net Revenue · semana',fBRL(port?.receita),metaSub(port?.receita||0,refT?.receita,'portfólio (sem quebra por pessoa)',true),'Receita do portfólio'],
-    ['GMV · semana',fBRL(port?.gmv),metaSub(port?.gmv||0,refT?.gmv,'portfólio (sem quebra por pessoa)',true),'Volume do portfólio'],
-    ['CW in / Ativados',`${fN(totCwIn)} / ${fN(totAct)}`,refT?`meta ${fN(refT.cw)} / ${fN(refT.activation)}`:`${base.length} onboarders`,'Recebidos vs ativados 10k'],
-    ['Taxa de ativação',`${pct(totAct,totCwIn)??'—'}%`,'ativados 10k ÷ CW recebido','Ativados ÷ CW recebido'],
+    ['Entradas',fN(totCwIn),metaSub(totCwIn,refT?.cw,`${listF.length} onboarders`),'Negócios recebidos (CW in)',null,KIC.entradas],
+    ['Saídas do funil',fN(totAct),'Ativados 10k (única saída conhecida)','Contas que ativaram 10k GMV',null,KIC.saidas],
+    ['Estoque atual',estTot!=null?fN(estTot):'—',deltaPill,'Funil de ativação atual (CW/1k/5k)',null,KIC.estoque],
+    ['C1 · CW→1k',cohPct!=null?cohPct+'%':'—',coh?`${fN(coh.a1k)}/${fN(coh.cw)} · sem meta ${mockBadge('Meta de coorte CW→1k ainda não confirmada — e tende a ficar baixa por natureza (ciclo médio ~50 dias).')}`:'sem dado','Coorte: chegou a 1k na mesma semana',null,KIC.link],
+    ['C2 · 1k→5k',c2Pct!=null?c2Pct+'%':'—',coh&&coh.a1k?`${fN(coh.a5k||0)}/${fN(coh.a1k)} em 1k`:'sem dado','Do coorte do C1 · chegou a 5k na mesma semana',null,KIC.check],
+    ['CW / FTE / BD',cwFteDia!=null?cwFteDia.toFixed(2):'—',cwBD,'Negócios recebidos por FTE / dia útil',null,KIC.users],
+    ['Ativado / FTE / BD',actFteDia!=null?actFteDia.toFixed(2):'—',actBD,'Ativações 10k por FTE / dia útil','kpi-accent',KIC.target],
   ];
-  const wt=NIV.map(n=>weekTrendHTML({label:n,color:NIV_COLOR[n],series:weeklyByNivel(D.semanalPorNivel?.activation,n).slice(-4)})).join('');
-  const totWt=weekTrendHTML({label:'Total',color:'var(--accent)',series:weeklyTotals(D.semanalPorNivel?.activation).slice(-4)});
+  const actNivelSrc=D.semanalPorNivel?.activation||{};
+  // target line = meta de ativação do budget diário (semanal), por nível×estratégia.
+  const tgtAct=(w,n)=>{ const b=D.budget?.semanal?.[w]; if(!b) return null;
+    const cell=estrF==='all'?b.porNivel?.[n]:b.porNivelEstrategia?.[n]?.[estrF]; return cell?cell.activation:null; };
+  const wt=NIV.map((n,i)=>{ const ser=weeklyByNivel(actNivelSrc,n).slice(-8); const tg=ser.map(s=>tgtAct(s.semana,n));
+    return `<div class="card">${weekTrendHTML({label:n,color:'#667085',series:ser,targets:tg,flat:true,accentLabel:true})}</div>`; }).join('');
+  // resumo de produtividade por FTE (uma linha) — mesmo padrão do SDR/Closer.
+  const prodResumo=`<div class="card" style="display:flex;gap:30px;flex-wrap:wrap;align-items:center;padding:16px 22px">
+    <span class="eyebrow">Produtividade por FTE · ${semanaLabel(week)}${estrF!=='all'?' · '+estrF:''}</span>
+    <span><b style="font-size:16px">${cwFteCount}</b> <span style="color:var(--text-muted);font-size:12px">FTEs (receberam CW)</span></span>
+    <span><b style="font-size:16px">${cwFte.toFixed(2)}</b> <span style="color:var(--text-muted);font-size:12px">CW/FTE</span></span>
+    <span><b style="font-size:16px">${cwFteDia!=null?cwFteDia.toFixed(2):'—'}</b> <span style="color:var(--text-muted);font-size:12px">CW/FTE/dia útil (${diasUteis}d)</span></span>
+    <span><b style="font-size:16px">${actFteCount}</b> <span style="color:var(--text-muted);font-size:12px">FTEs (ativaram)</span></span>
+    <span><b style="font-size:16px">${actFte.toFixed(2)}</b> <span style="color:var(--text-muted);font-size:12px">ativados/FTE</span></span>
+    <span><b style="font-size:16px">${actFteDia!=null?actFteDia.toFixed(2):'—'}</b> <span style="color:var(--text-muted);font-size:12px">ativados/FTE/dia útil (${diasUteis}d)</span></span>
+  </div>`;
+  // semanas de referência (atual, −1, −2) — mesmo padrão da tabela SDR/Closer.
+  const idxW=D.semanas.indexOf(week);
+  const wB=D.semanas[idxW-1]||null, wC=D.semanas[idxW-2]||null;
+  const wkNum=w=>w?('Semana '+ +w.split('-W')[1]):'−';
+  const lblB=wkNum(wB), lblC=wkNum(wC);
+  const wkShort=w=>w?('S'+ +w.split('-W')[1]):'−'; const sB=wkShort(wB), sC=wkShort(wC);
+  const cwAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return x?(x.cwIn||0):0;};
+  const actAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return x?(x.activated||0):0;};
+  // C1 por pessoa: dos que o onboarder recebeu como CW NA semana W, quantos chegaram a 1k na
+  // MESMA semana. Lê direto de porSemana, sem mapa auxiliar (mesmo padrão do Closer).
+  const cohAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return (x&&x.cohCw)?Math.round(x.coh1k/x.cohCw*100):null;};
+  const actNivel3=r=>{
+    const a=[0,0,0];
+    [week,wB,wC].forEach(w=>{const x=w&&(r.porSemana||{})[w]; if(x&&x.actNivel) x.actNivel.forEach((v,j)=>a[j]+=v||0);});
+    return a;
+  };
+  const diasUteis3=[week,wB,wC].reduce((s,w)=>s+(w?(D.diasUteisSemana?.[w]||0):0),0);
+  const sumBy=(rows,f)=>rows.reduce((s,r)=>s+(f(r)||0),0);
+  const cohAgg=(rows,w)=>{let co=0,cs=0;rows.forEach(r=>{const x=w&&(r.porSemana||{})[w];if(x){co+=x.cohCw||0;cs+=x.coh1k||0;}});return co?Math.round(cs/co*100)+'%':'—';};
+  const nivAgg=(rows,i)=>{const a=[0,0,0];rows.forEach(r=>[week,wB,wC].forEach(w=>{const x=w&&(r.porSemana||{})[w];if(x&&x.actNivel)x.actNivel.forEach((v,j)=>a[j]+=v||0);}));const t=(a[0]+a[1]+a[2])||1;return Math.round((a[i]||0)/t*100)+'%';};
+  // produtividade/dia útil (3 sem.) por pessoa + agregador = MÉDIA por onboarder (não soma).
+  const pdCwFn=r=>diasUteis3?(cwAt(r,week)+cwAt(r,wB)+cwAt(r,wC))/diasUteis3:null;
+  const pdActFn=r=>diasUteis3?(actAt(r,week)+actAt(r,wB)+actAt(r,wC))/diasUteis3:null;
+  const mediaAgg=(rows,f,dec)=>{const v=rows.map(f).filter(x=>x!=null);return v.length?(v.reduce((s,x)=>s+x,0)/v.length).toFixed(dec):'—';};
+  // célula BD SEM meta confirmada: valor + badge de alerta (mesmo padrão do Closer).
+  const bdCellOnb=(v,dec)=>`<span class="mono">${v!=null?v.toFixed(dec):'—'}</span> ${mockBadge('Meta de produtividade/BD do Onboarding ainda não confirmada — valor exibido sem comparação com meta.')}`;
+  const TI={pd:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',c:KIC.users,conn:KIC.link,opp:KIC.target,niv:KIC.estoque};
   const cols=[
-    {key:'cwIn',label:'CW in',render:r=>`<span class="mono">${fN(r.cwIn)}</span>`},
-    {key:'activated',label:'Ativados 10k',render:r=>`<span class="mono num-cell">${fN(r.activated)}</span>`},
-    {key:'actRate',label:'Taxa ativação',align:'r',render:r=>`<span class="mono">${r.actRate!=null?pctR(r.actRate)+'%':'—'}</span>`},
-    {key:'actNivel',label:'Ativação por nível',render:r=>ministack(r.actNivel,NIV.map(n=>NIV_COLOR[n]))},
+    {key:'pdCw',label:'CW/BD · 3s',align:'r',icon:TI.pd,render:r=>bdCellOnb(pdCwFn(r),2),agg:rows=>mediaAgg(rows,pdCwFn,2),sort:pdCwFn},
+    {key:'pdAct',label:'Ativ./BD · 3s',align:'r',icon:TI.pd,render:r=>bdCellOnb(pdActFn(r),2),agg:rows=>mediaAgg(rows,pdActFn,2),sort:pdActFn},
+    {key:'contA',label:'CW in · sem.',align:'r',icon:TI.c,render:r=>`<span class="mono">${fN(cwAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>cwAt(r,week))),sort:r=>cwAt(r,week)},
+    {key:'connA',label:'C1 · sem.',align:'r',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,week)!=null?cohAt(r,week)+'%':'—'}</span>`,agg:rows=>cohAgg(rows,week),sort:r=>cohAt(r,week)},
+    {key:'connB',label:'C1 · '+sB,align:'r',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,wB)!=null?cohAt(r,wB)+'%':'—'}</span>`,agg:rows=>cohAgg(rows,wB),sort:r=>cohAt(r,wB)},
+    {key:'connC',label:'C1 · '+sC,align:'r',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,wC)!=null?cohAt(r,wC)+'%':'—'}</span>`,agg:rows=>cohAgg(rows,wC),sort:r=>cohAt(r,wC)},
+    {key:'actA',label:'Ativ. · sem.',align:'r',icon:TI.opp,render:r=>`<span class="mono">${fN(actAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>actAt(r,week))),sort:r=>actAt(r,week)},
+    {key:'actB',label:'Ativ. · '+sB,align:'r',icon:TI.opp,render:r=>`<span class="mono">${fN(actAt(r,wB))}</span>`,agg:rows=>fN(sumBy(rows,r=>actAt(r,wB))),sort:r=>actAt(r,wB)},
+    {key:'actC',label:'Ativ. · '+sC,align:'r',icon:TI.opp,render:r=>`<span class="mono">${fN(actAt(r,wC))}</span>`,agg:rows=>fN(sumBy(rows,r=>actAt(r,wC))),sort:r=>actAt(r,wC)},
+    {key:'actNivel',label:'Ativação por nível',icon:TI.niv,render:r=>ministack(actNivel3(r),NIV.map(n=>NIV_COLOR[n]))},
     {key:'diasWonAtivacao',label:'Ciclo CW→Ativação',align:'r',render:r=>`<span class="mono">${r.diasWonAtivacao!=null?r.diasWonAtivacao+'d':'—'}</span>`},
-    {key:'nr',label:'Net Revenue',align:'r',render:()=>'<span class="miss">sem dado por pessoa</span>'},
   ];
-  const table=groupedTable({rows:list,cols,kind:'onb'});
+  // só onboarders com pelo menos 1 CW ou Ativação em uma das 3 últimas semanas (atual, −1, −2)
+  let listTbl=list.filter(r=>(cwAt(r,week)+cwAt(r,wB)+cwAt(r,wC)+actAt(r,week)+actAt(r,wB)+actAt(r,wC))>0);
+  if(estrF!=='all') listTbl=listTbl.filter(r=>r.estrategia===estrF);
+  const table=groupedTable({rows:listTbl,groupBy:r=>r.estrategia||'Sem estratégia',groupOrder:[...STR_ORDER,'Sem estratégia'],cols,kind:'onb',totals:true,sort:state.onbSort,hd:cardHd(KIC.users,'Onboarding · por pessoa','CW recebido, coorte C1, mix por nível e produtividade/BD')});
   $('viewArea').innerHTML=`
-    <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d,cls,icon])=>`<div class="kpi ${cls||''}">${icon?`<span class="kpi-ic">${icon}</span>`:''}<span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div>
-    <div class="sec" style="margin-top:24px"><div class="sec-head"><h2>Estoque de ativação</h2><span class="hint">snapshot no fim de cada semana · últimas 16 · CW → 1k → 5k (sai ao ativar 10k)</span></div>
-      <div class="card">${onbEstoqueHTML('all')}</div></div>
-    <div class="sec"><div class="sec-head"><h2>Ativações (10k GMV) por nível · últimas 4 semanas</h2></div>
-      <div class="card"><div class="wtgrid g3">${wt}</div></div></div>
-    <div class="sec"><div class="sec-head"><h2>Ativações total · últimas 4 semanas</h2></div><div class="card">${totWt}</div></div>
-    <div class="sec"><div class="sec-head"><h2>Onboarding · CW recebido, ativação e ciclo</h2><span class="hint">${semanaLabel(week)} · Net Revenue/GMV por onboarder nomeado não existem na base hoje (só agregado por nível/semana)</span></div>${table}</div>`;
+    <div class="sec"><div class="sec-head"><h2>Resultado semanal</h2><span class="hint">${semanaLabel(week)}${estrF!=='all'?' · '+estrF:''}</span></div>
+      <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d,cls,icon])=>`<div class="kpi ${cls||''}">${icon?`<span class="kpi-ic">${icon}</span>`:''}<span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div></div>
+    <div class="sec"><div class="sec-head"><h2>Evolução do resultado</h2></div>
+      <div class="grid g2">
+        <div class="card">${cardHd(KIC.estoque,'Estoque de ativação','snapshot no fim de cada semana · últ. 16 · CW → 1k → 5k')}${onbEstoqueHTML(estrF)}</div>
+        <div class="card">${cardHd(KIC.check,'Status atual por semana de entrada (CW)','fechou × situação hoje · últ. 16')}${onbStatusHTML(estrF)}</div>
+      </div></div>
+    <div class="sec"><div class="sec-head"><h2>Ativação por nível de cliente</h2><span class="hint">ativações 10k por semana · últimas 8 semanas</span></div>
+      <div class="grid g3">${wt}</div></div>
+    <div class="sec"><div class="sec-head"><h2>Detalhamento</h2><span class="hint">${semanaLabel(week)} · Net Revenue/GMV por onboarder nomeado não existem na base hoje — ver Semanal Sales para o portfólio agregado</span></div>
+      ${prodResumo}<div style="margin-top:16px">${table}</div></div>`;
   bindRowClicks($('viewArea'));
+  $('viewArea').querySelectorAll('.tbl th.sortable').forEach(th=>th.onclick=()=>{const k=th.dataset.k,c=state.onbSort;state.onbSort={key:k,dir:(c&&c.key===k&&c.dir==='desc')?'asc':'desc'};renderArea();});
 }
 function renderArea(){
   if(state.area==='sdr') renderAreaSdr();
@@ -1339,7 +1455,7 @@ function render(){
   $('mensalControls').style.display=state.meeting==='mensal'?'flex':'none';
   $('otherControls').style.display=state.meeting==='oneone'?'flex':'none';
   $('subbar').style.display=state.meeting==='warea'?'block':'none';
-  if($('ctlEstrArea')) $('ctlEstrArea').style.display=(state.meeting==='warea'&&(state.area==='sdr'||state.area==='closers'))?'flex':'none';
+  if($('ctlEstrArea')) $('ctlEstrArea').style.display=state.meeting==='warea'?'flex':'none';
   $('viewMensal').style.display=state.meeting==='mensal'?'block':'none';
   $('viewSemanal').style.display=state.meeting==='wsales'?'block':'none';
   $('viewArea').style.display=state.meeting==='warea'?'block':'none';

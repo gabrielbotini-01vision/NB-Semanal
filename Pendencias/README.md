@@ -1,6 +1,43 @@
 # Pendências · New Business Cockpit
 
-Notas de handoff para quem continuar o desenvolvimento. Última atualização: 24/07/2026.
+Notas de handoff para quem continuar o desenvolvimento. Última atualização: 26/07/2026.
+
+## Concluído (26/07/2026)
+
+- **Aba Onboarding ganhou a mesma paridade que a de Closers ganhou dia 24/07** (funil de
+  ativação CW → 1k → 5k → 10k):
+  - **7 KPIs no mesmo padrão de SDR/Closer**: Entradas (CW in), Saídas do funil (Ativados
+    10k — única saída conhecida aqui, não existe "lost"/churn documentado), Estoque atual
+    (com Δ estoque), **C1 · CW→1k** e **C2 · 1k→5k** (coortes na mesma semana), **CW/FTE/BD**
+    e **Ativado/FTE/BD**.
+  - ⚠️ **C1/C2 do Onboarding tendem a ficar baixos por natureza** (tipo ~5-10%, não é bug):
+    o ciclo médio CW→Ativação é de **~50 dias** (`D.ciclo.dias_won_ativacao`), então a imensa
+    maioria só cruza 1k/5k em semanas futuras, não na mesma semana do CW. É bem diferente do
+    C1 de SDR/Closer, onde o ciclo é de poucos dias.
+  - **Novo card "Status atual por semana de entrada (CW)"** (`onbStatusHTML()`), mesmo padrão
+    do `closerStatusHTML` — barras empilhadas por semana de fechamento × situação hoje
+    (cw/a1k/a5k/ativado_10k, sem "lost").
+  - **"Ativação por nível de cliente" ganhou linha de meta** (do budget diário) e foi de 4
+    para 8 semanas, igual ao padrão de SDR/Closer.
+  - **Tabela "Onboarding · por pessoa" reformulada**: produtividade por dia útil (CW/BD e
+    Ativado/BD, média 3 semanas), coorte C1 por pessoa em 3 semanas, agrupada por estratégia
+    com totais, e agora **ordenável**.
+  - **Filtro de Estratégia, que já existia em SDR e havia sido estendido a Closers, agora
+    cobre as 3 sub-abas de Semanal Área** (KPIs, estoque, status, tabela por pessoa).
+  - **Removidos os KPIs "Net Revenue · semana" e "GMV · semana"** que existiam antes no topo
+    da aba — eram números de portfólio agregado (explicitamente "sem quebra por pessoa"),
+    duplicados do que já aparece em Semanal Sales/Mensal Sales. Tirados pra manter os 7 cards
+    no mesmo padrão operacional/produtividade das outras duas abas (o grid CSS só suporta até
+    7 colunas — `g7` — então não dava pra manter os 4 KPIs antigos + os 7 novos juntos).
+  - Novos campos em `build_data.js`: `onbCohort` (C1/C2), `onbCohortStatus`, `onbAct`,
+    `onbCwFte`, `onbActFte`, `cohCw`/`coh1k` (em `porPessoa.onboarding[].porSemana`), e
+    rastreamento de `estrategia` por onboarder (não existia).
+  - ⚠️ **Mesmas duas coisas mocadas de propósito, com badge `⚠ a validar`**, pelo mesmo motivo
+    de Closers: meta da coorte C1 (CW→1k) e metas de produtividade CW/BD e Ativado/BD
+    (`BD_TGT_ONB = {}` vazio em `index.html` — preencher no mesmo formato do `BD_TGT`/
+    `BD_TGT_CLOSER` assim que o time passar os números certos).
+  - **Com isso, SDR/Closers/Onboarding agora têm a mesma estrutura de página** (item 8 do
+    Backlog anterior, agora resolvido).
 
 ## Concluído (24/07/2026)
 
@@ -121,6 +158,17 @@ Alimenta a página **Semanal Área › Closers**:
 Alimenta a página **Semanal Área › Onboarding**:
 
 - `onbEstoque` — estoque de ativação pós-CW (cw/a1k/a5k) por `opp_id` (sai ao ativar 10k).
+- `onbCohort` — coorte de ativação: fechou (CW) na semana × chegou a 1k na mesma semana (C1)
+  × chegou a 5k na mesma semana, do sub-coorte que chegou a 1k (C2, encadeado — mesmo padrão
+  do `closerCohort`). Tende a ficar baixo por natureza (ciclo médio CW→Ativação ~50 dias).
+- `onbAct` — nº de ativações 10k por semana, só de leads com onboarder atribuído (mesmo papel
+  do `closerCw` — throughput de saída do funil).
+- `onbCwFte` / `onbActFte` — nº de onboarders distintos que receberam CW / que ativaram 10k
+  na semana (denominador do "CW/FTE" e "Ativado/FTE").
+- `onbCohortStatus` — por semana de ENTRADA no onboarding (CW), status atual (hoje) de cada
+  lead: cw/a1k/a5k/ativado_10k (data mais recente vence, sem "lost").
+- `cohCw`/`coh1k` (dentro de `porPessoa.onboarding[].porSemana`) — coorte C1 por pessoa (mesma
+  lógica do `onbCohort`, só que por onboarder individual em vez do agregado).
 
 Regenerar: `node app/build_data.js` (lê `Dados/*.csv` locais).
 
@@ -132,15 +180,17 @@ Regenerar: `node app/build_data.js` (lê `Dados/*.csv` locais).
 2. ~~"Produtividade diária" (tabela por pessoa) usa ÷5/÷15 fixo~~ — **resolvido**: a tabela de
    SDR (`pdContacted`/`pdOpp`) e agora também a de Closer (`pdOpp`/`pdCw`) já usam
    `D.diasUteisSemana` (dias úteis realmente decorridos) em vez de dividir por 5/15 fixo.
-3. ~~Filtro de Estratégia só na sub-aba SDR~~ — **resolvido pra Closers** (24/07): agora
-   filtra KPIs, estoque, status e tabela por pessoa igual à SDR. **Ainda falta em Onboarding.**
+3. ~~Filtro de Estratégia só na sub-aba SDR~~ — **resolvido pra Closers** (24/07) **e pra
+   Onboarding** (26/07): agora filtra KPIs, estoque, status e tabela por pessoa nas 3 sub-abas.
 4. **Tabela por pessoa × estratégia:** o filtro de estratégia nas tabelas de SDR e Closer usa a
    **estratégia primária** da pessoa (aprox., o último valor visto). Preciso por lead/semana
    exigiria quebrar o `porSemana` por estratégia no build.
 5. **Chip de ícone nos KPI cards** (estilo Stravix, círculo colorido) — não implementado.
 6. **Definição de "status atual" e "saída do estoque":** hoje um lead sai do estoque de SDR
    quando vira opp/qualificado ou é desqualificado; sai do estoque de Closer quando fecha
-   (ganho ou perdido). Confirmar se as duas regras batem com a operação.
+   (ganho ou perdido); sai do estoque de Onboarding quando ativa 10k (única saída conhecida —
+   não há campo de "perda"/churn no funil de ativação). Confirmar se as três regras batem com
+   a operação.
 7. **Validar `sdrEstoque` e `onbEstoque` contra o Power BI.** O Gabriel já comparou a lógica
    com as medidas DAX (`Carteira_Contacted/Connected/Nurturing` pro SDR e
    `Carteira_CW_not1k/not5k/not10k` pro Onboarding) — a estrutura bate, mas os números não
@@ -148,21 +198,23 @@ Regenerar: `node app/build_data.js` (lê `Dados/*.csv` locais).
    (ver "Concluído" 23/07 acima). Ainda falta comparar número a número numa semana específica
    pra medir o tamanho real da diferença. **`closerEstoque` (Opp/SQL/Offer/Contract) ainda não
    tem medida DAX equivalente enviada pra comparar.**
-8. **Onboarding ainda sem paridade com SDR/Closer** — ganhou só o estoque de ativação (23/07);
-   sem filtro de estratégia, sem coorte/FTE, sem "status atual", sem KPIs no padrão
-   Entradas/Saídas/Estoque. Replicar o mesmo trabalho feito em Closers hoje, adaptado ao funil
-   de ativação (CW → 1k → 5k → 10k).
-9. **Validar com o time de Closer as metas mocadas (24/07)** — hoje aparecem com badge
-   "⚠ a validar" em vez de simular um número:
-   - Meta da coorte **C1 · Opp→SQL** (equivalente ao `COH_META=10%` fixo do SDR — precisa de um
-     valor real de negócio, hoje não existe nenhum).
-   - Metas de produtividade **Opp/BD e CW/BD** por estratégia (`BD_TGT_CLOSER` em `index.html`,
-     hoje `{}` vazio — preencher no mesmo formato do `BD_TGT` de SDR assim que o time passar
-     os números certos).
-10. **`closerCohort`/`closerCohortStatus`/`closerLost`/`closerCw` ainda não foram validados
-    contra nenhuma medida DAX do Power BI** (diferente do `sdrCohort`/`sdrCohortStatus`, que já
-    foram comparados na lógica, ver item 7). Se o time de Closer tiver medida equivalente,
-    comparar número a número antes de confiar 100% nos valores.
+8. ~~Onboarding sem paridade com SDR/Closer~~ — **resolvido (26/07)**: mesma estrutura de
+   página das outras duas abas, adaptada ao funil de ativação (CW → 1k → 5k → 10k).
+9. **Validar com o time de Closer e de Onboarding as metas mocadas** — hoje aparecem com
+   badge "⚠ a validar" em vez de simular um número:
+   - Meta da coorte **C1 · Opp→SQL** (Closer, 24/07) e **C1 · CW→1k** (Onboarding, 26/07) —
+     equivalente ao `COH_META=10%` fixo do SDR, mas sem valor real de negócio confirmado ainda
+     pras outras duas áreas.
+   - Metas de produtividade **Opp/BD e CW/BD** (Closer, `BD_TGT_CLOSER`) e **CW/BD e
+     Ativado/BD** (Onboarding, `BD_TGT_ONB`) por estratégia — ambas `{}` vazias em
+     `index.html` hoje; preencher no mesmo formato do `BD_TGT` de SDR assim que o time passar
+     os números certos.
+10. **`closerCohort`/`closerCohortStatus`/`closerLost`/`closerCw` e `onbCohort`/
+    `onbCohortStatus`/`onbAct` ainda não foram validados contra nenhuma medida DAX do Power
+    BI** (diferente do `sdrCohort`/`sdrCohortStatus`, que já foram comparados na lógica, ver
+    item 7). Se o time tiver medida equivalente, comparar número a número antes de confiar
+    100% nos valores. Vale sobretudo pro C1/C2 do Onboarding, que — pelo ciclo longo
+    (~50 dias) — só vai ficar realmente sólido comparando várias semanas seguidas.
 
 ## Convenções do projeto (não esquecer)
 
