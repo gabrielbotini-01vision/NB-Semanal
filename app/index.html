@@ -287,7 +287,10 @@
           <div class="ctl"><label>Mês</label><select id="selMesMensal" class="sel"></select></div>
           <div class="ctl"><label>Estratégia</label><select id="selEstrMensal" class="sel"></select></div>
         </div>
-        <div class="controls" id="otherControls" style="display:none"></div>
+        <div class="controls" id="otherControls" style="display:none">
+          <div class="ctl"><label>Mês</label><select id="selMesOneOne" class="sel"></select></div>
+          <div class="ctl"><label>Semana</label><select id="selSemanaOneOne" class="sel"></select></div>
+        </div>
         <div class="profile"><div class="avatar" style="width:36px;height:36px"><span class="avatar-fallback" style="font-size:13px">GB</span></div><div class="pf"><b>Guilherme</b><small>New Business</small></div></div>
       </div>
     </header>
@@ -342,7 +345,7 @@ function avatarHTML(p,size){
 function median(arr){const a=[...arr].filter(v=>v!=null).sort((x,y)=>x-y);const n=a.length;if(!n)return 0;return n%2?a[(n-1)/2]:(a[n/2-1]+a[n/2])/2;}
 
 // ---- estado ----
-let state={meeting:'wsales',area:'sdr',mes:null,semana:null,estr:'all',ref:'budget',mesArea:null,semanaArea:null,refArea:'budget',estrArea:'all',mesMensal:null,estrMensal:'all',pessoa:null,sdrSort:null,closerSort:null,onbSort:null};
+let state={meeting:'wsales',area:'sdr',mes:null,semana:null,estr:'all',ref:'budget',mesArea:null,semanaArea:null,refArea:'budget',estrArea:'all',mesMensal:null,estrMensal:'all',pessoa:null,sdrSort:null,closerSort:null,onbSort:null,mesOneOne:null,semanaOneOne:null};
 
 const IC={
   mensal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>',
@@ -1318,6 +1321,37 @@ function initWareaControls(){
   $('selRefArea').value=state.refArea;
   $('selRefArea').onchange=e=>{state.refArea=e.target.value;renderArea();};
 }
+// mesmo modelo de cascata Mês → Semana das outras abas, com estado próprio (mesOneOne/
+// semanaOneOne) — o 1:1 Gestor passou a mostrar o resultado DAQUELA semana em vez do
+// acumulado histórico da pessoa.
+function initOneOneControls(){
+  const semanasAtivas=D.semanas.filter(w=>D.actual.semanal[w]);
+  const mesesAtivos=[...new Set(semanasAtivas.map(w=>D.semanaMes[w]))].filter(m=>m.startsWith(FILTRO_ANO)).sort();
+  const comFunil=Object.keys(D.actual.semanal).filter(w=>D.actual.semanal[w].total.contacted>0).sort();
+  const def=comFunil.pop()||semanasAtivas[semanasAtivas.length-1];
+  state.semanaOneOne=def&&semanasAtivas.includes(def)?def:semanasAtivas[semanasAtivas.length-1];
+  state.mesOneOne=D.semanaMes[state.semanaOneOne]||mesesAtivos[mesesAtivos.length-1];
+
+  function renderSemanaOptions(){
+    const ws=weeksInMonth(state.mesOneOne,semanasAtivas);
+    $('selSemanaOneOne').innerHTML=ws.map(w=>`<option value="${w}">${semanaLabel(w)}</option>`).join('');
+    if(!ws.includes(state.semanaOneOne)) state.semanaOneOne=ws[ws.length-1];
+    $('selSemanaOneOne').value=state.semanaOneOne;
+  }
+
+  $('selMesOneOne').innerHTML=mesesAtivos.map(m=>`<option value="${m}">${mesLabel(m)}</option>`).join('');
+  $('selMesOneOne').value=state.mesOneOne;
+  renderSemanaOptions();
+
+  $('selMesOneOne').onchange=e=>{
+    state.mesOneOne=e.target.value;
+    const ws=weeksInMonth(state.mesOneOne,semanasAtivas);
+    state.semanaOneOne=ws[ws.length-1]||state.semanaOneOne;
+    renderSemanaOptions();
+    render(); // não só renderOneOne() — precisa atualizar o ctxLine com a semana nova também
+  };
+  $('selSemanaOneOne').onchange=e=>{state.semanaOneOne=e.target.value;render();};
+}
 // projeta uma pessoa nos números DAQUELA semana (fallback nos defaults se não tiver
 // atividade na semana) — os totais acumulados de p ficam só pra ordenação/1:1 Gestor.
 function weekView(p,week,defaults){
@@ -1372,7 +1406,21 @@ function coaching(p,kind,squadArr,squadKey){
   if(!m.length)m.push('Sem gargalo relevante identificado no período.');
   return {destaques:d,melhorar:m,acao,med,mine};
 }
+const ONE_ONE_DEF={sdr:SDR_DEF,closer:CLOSER_DEF,onb:ONB_DEF};
+// série de 4 pontos terminando NA semana selecionada (não mais "as 4 últimas semanas com dado
+// no geral" — agora acompanha o seletor Mês/Semana do 1:1, igual às outras abas semanais).
+function last4WeeklyAt(p,week,metricKey){
+  const idx=D.semanas.indexOf(week);
+  if(idx<0) return [];
+  const ws=D.semanas.slice(Math.max(0,idx-3),idx+1);
+  return ws.map(w=>({semana:w,valor:Math.round((p.porSemana||{})[w]?.[metricKey]||0)}));
+}
 function renderOneOne(){
+  // a busca re-renderiza a página inteira a cada tecla (innerHTML recria o <input>, que perde
+  // foco/cursor) — guarda se o campo estava focado e a posição do cursor pra restaurar depois.
+  const searchEl0=document.getElementById('oneoneSearch');
+  const hadFocus=document.activeElement===searchEl0;
+  const caret=hadFocus?searchEl0.selectionStart:null;
   const people=allPeople();
   if(!people.length){ $('viewOneOne').innerHTML='<div class="card"><span class="miss">Sem pessoas com dado — rode build_data.js com os CSVs atualizados.</span></div>'; return; }
   if(!state.pessoa||!people.find(x=>x.p.email===state.pessoa.email&&x.kind===state.pessoa.kind)){
@@ -1388,11 +1436,19 @@ function renderOneOne(){
       items.map(x=>`<div class="oneone-item ${state.pessoa.email===x.p.email&&state.pessoa.kind===x.kind?'on':''}" data-email="${x.p.email}" data-kind="${x.kind}">${avatarHTML(x.p,24)}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${displayName(x.p)}</span></div>`).join('');
   }).join('');
 
+  const week=state.semanaOneOne;
   const cfg=ROLE_CFG[sel.kind];
-  const squadArr=sel.kind==='sdr'?D.porPessoa.sdr:sel.kind==='closer'?D.porPessoa.closer:D.porPessoa.onboarding;
-  const co=coaching(sel.p,sel.kind,squadArr,cfg.metricKey);
+  const defs=ONE_ONE_DEF[sel.kind];
+  // projeta a pessoa E o squad inteiro na semana selecionada (mesmo weekView usado na Semanal
+  // Área) — indicadores/coaching passam a refletir a semana, não mais o acumulado histórico.
+  const selProj=weekView(sel.p,week,defs);
+  // squad = só quem está ativo hoje (mesma população da lista lateral) — comparar contra o
+  // histórico inteiro (ex-funcionários, gente que nunca teve atividade naquela semana) fazia
+  // a mediana colapsar pra 0 em semanas normais, já que a maioria do roster fica de fora.
+  const squadArr=people.filter(x=>x.kind===sel.kind).map(x=>weekView(x.p,week,defs));
+  const co=coaching(selProj,sel.kind,squadArr,cfg.metricKey);
   const vsMed=co.med?Math.round((co.mine-co.med)/co.med*100):null;
-  const wt=weekTrendHTML({label:displayName(sel.p).split(' ')[0],color:cfg.color,series:sel.p.semanal||[]});
+  const wt=weekTrendHTML({label:displayName(sel.p).split(' ')[0],color:cfg.color,series:last4WeeklyAt(sel.p,week,cfg.metricKey)});
 
   $('viewOneOne').innerHTML=`<div class="oneone">
     <div class="oneone-side">
@@ -1406,15 +1462,15 @@ function renderOneOne(){
           <div><div class="eyebrow">${cfg.label} · ${sel.p.email}</div><div style="font-size:22px;font-weight:700;margin-top:2px">${displayName(sel.p)}</div></div>
         </div>
         <div class="statrow">
-          <div class="stat"><div class="eyebrow" style="color:var(--text-faint)">Resultado (período)</div><div class="v">${fN(co.mine)}</div></div>
+          <div class="stat"><div class="eyebrow" style="color:var(--text-faint)">Resultado (${semanaLabel(week)})</div><div class="v">${fN(co.mine)}</div></div>
           <div class="stat"><div class="eyebrow" style="color:var(--text-faint)">Mediana do squad</div><div class="v">${fN(Math.round(co.med))}</div></div>
           <div class="stat"><div class="eyebrow" style="color:var(--text-faint)">vs mediana</div><div class="v" style="color:${vsMed==null?'inherit':vsMed>=0?'var(--success)':'var(--danger)'}">${vsMed==null?'—':(vsMed>=0?'+':'')+vsMed+'%'}</div></div>
         </div>
       </div>
       <div class="grid g2">
-        <div class="card"><div class="eyebrow" style="margin-bottom:14px">${cfg.metricLabel} · últimas 4 semanas</div>${wt}</div>
-        <div class="card"><div class="eyebrow" style="margin-bottom:8px">Indicadores do período</div>
-          ${indicadores(sel.p,sel.kind).map(([k,v])=>`<div class="indic"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('')}</div>
+        <div class="card"><div class="eyebrow" style="margin-bottom:14px">${cfg.metricLabel} · 4 semanas até ${semanaLabel(week)}</div>${wt}</div>
+        <div class="card"><div class="eyebrow" style="margin-bottom:8px">Indicadores da semana</div>
+          ${indicadores(selProj,sel.kind).map(([k,v])=>`<div class="indic"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('')}</div>
       </div>
       <div class="coachgrid" style="margin-top:16px">
         <div class="card coachbox"><div class="eyebrow" style="color:var(--success);margin-bottom:10px">Destaques</div><ul>${co.destaques.map(t=>`<li>${t}</li>`).join('')}</ul></div>
@@ -1427,6 +1483,11 @@ function renderOneOne(){
   $('viewOneOne').querySelectorAll('.oneone-item').forEach(el=>{
     el.onclick=()=>{state.pessoa={email:el.dataset.email,kind:el.dataset.kind};renderOneOne();};
   });
+  if(hadFocus){
+    const searchEl=$('oneoneSearch');
+    searchEl.focus();
+    searchEl.setSelectionRange(caret,caret);
+  }
 }
 
 // ================= NAV / RENDER =================
@@ -1449,7 +1510,7 @@ function render(){
   renderTabs();
   const mt=MEETINGS.find(m=>m.k===state.meeting);
   $('pageTitle').textContent=mt?mt.label:'';
-  $('ctxLine').textContent=CTX[state.meeting]+(state.meeting==='mensal'&&state.mesMensal?(' · '+mesLabel(state.mesMensal)):'');
+  $('ctxLine').textContent=CTX[state.meeting]+(state.meeting==='mensal'&&state.mesMensal?(' · '+mesLabel(state.mesMensal)):'')+(state.meeting==='oneone'&&state.semanaOneOne?(' · '+semanaLabel(state.semanaOneOne)):'');
   $('wsalesControls').style.display=state.meeting==='wsales'?'flex':'none';
   $('wareaControls').style.display=state.meeting==='warea'?'flex':'none';
   $('mensalControls').style.display=state.meeting==='mensal'?'flex':'none';
@@ -1473,6 +1534,7 @@ updateBanner();
 initWsalesControls();
 initWareaControls();
 initMensalControls();
+initOneOneControls();
 render();
 </script>
 
