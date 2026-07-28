@@ -342,7 +342,15 @@ for (const r of fop) {
     const wo2 = anoSemana(dates.closed_won_date);
     const a1kSame = _a1kD && anoSemana(_a1kD) === wo2;
     const a5kSame = a1kSame && _a5kD && anoSemana(_a5kD) === wo2;
-    const bumpOnbCoh = o => { const cc = o[wo2] || (o[wo2] = { cw: 0, a1k: 0, a5k: 0 }); cc.cw++; if (a1kSame) cc.a1k++; if (a5kSame) cc.a5k++; };
+    // a10kSame é DIRETO (não encadeado por a1k/a5k) — mede CW→10k ponta a ponta na mesma
+    // semana, igual ao C3 do SDR (contato→qualificação pulando a exigência de conexão).
+    const a10kSame = dates.activation_date_10k && anoSemana(dates.activation_date_10k) === wo2;
+    // status ATUAL (hoje) do onboarding — não é coorte de mesma semana, é snapshot de agora,
+    // pra quem fechou (CW) naquela semana. Usado porque onboarding_unaccomplished_date vem
+    // sempre nulo no nosso recorte (Brasil/2024+), mesmo com status definido — o status em si
+    // (campo direto de dhm_data_business.f_operational_sales_touched) é mais confiável.
+    const onbStatus = (r.onboarding_status || '').trim();
+    const bumpOnbCoh = o => { const cc = o[wo2] || (o[wo2] = { cw: 0, a1k: 0, a5k: 0, a10k: 0, accomplished: 0, unaccomplished: 0 }); cc.cw++; if (a1kSame) cc.a1k++; if (a5kSame) cc.a5k++; if (a10kSame) cc.a10k++; if (onbStatus === 'Accomplished') cc.accomplished++; if (onbStatus === 'Unaccomplished') cc.unaccomplished++; };
     bumpOnbCoh(onbCohort.all); if (e) bumpOnbCoh(onbCohort[e]);
     const pwo = wk(getP(porPessoaOnb, onb), wo2);
     pwo.cohCw = (pwo.cohCw || 0) + 1;

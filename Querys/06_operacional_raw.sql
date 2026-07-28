@@ -16,6 +16,13 @@
 -- Fonte: data_business.dhmv_sales_touched (1 linha = 1 lead).
 --   Owner: join com dhaf_salesforce."user" (id -> username), só pra resolver o
 --   e-mail do owner — não faz parte da tabela fonte.
+--   Accomplished/Unaccomplished (Onboarding): join com
+--   dhm_data_business.f_operational_sales_touched (schema DIFERENTE — "dhm_data_business",
+--   não "data_business") por lead_id, só pra trazer onboarding_accomplished_date/
+--   onboarding_unaccomplished_date — campos que NÃO existem em dhmv_sales_touched.
+--   Confirmado 28/07/2026 que lead_id é único nessa tabela pra linhas com lead_id
+--   preenchido (a única "duplicidade" era de linhas com lead_id NULL, que não afetam
+--   o JOIN) — LEFT JOIN por lead_id não multiplica linha nenhuma do export.
 --
 -- Filtro: só Brasil -> is_lead_br_funnel = true (mesmo filtro das queries antigas).
 --   + corte de 2024 em diante (pra reduzir tamanho do export), mantendo a linha se
@@ -33,15 +40,24 @@
 --   análises futuras, mas não tocadas pelo pipeline atual):
 --   lead_id, contacted_date, connected_date, opportunity_create_date, sql_date,
 --   closed_won_date, activation_date_10k, amount_12_months, sales_strategy,
---   sdr_email_sf, closer_email_sf, onboarding_email_sf, owner_email (derivado do join)
+--   sdr_email_sf, closer_email_sf, onboarding_email_sf, owner_email (derivado do join),
+--   onboarding_status (derivada do join — accomplished_date/unaccomplished_date também
+--   vêm juntas mas hoje não são usadas: no recorte Brasil/2024+ a data de unaccomplished
+--   sempre vem nula mesmo com status definido, então o build_data.js usa o status como
+--   snapshot em vez de tentar bucketizar por semana com a data)
 -- =============================================================================
 
 SELECT
     t.*,
-    u.username AS owner_email
+    u.username AS owner_email,
+    f.onboarding_accomplished_date,
+    f.onboarding_unaccomplished_date,
+    f.onboarding_status
 FROM data_business.dhmv_sales_touched t
 LEFT JOIN dhaf_salesforce."user" u
     ON u.id = t.lead_owner_id
+LEFT JOIN dhm_data_business.f_operational_sales_touched f
+    ON f.lead_id = t.lead_id
 WHERE t.is_lead_br_funnel::boolean = true
   AND (
         NULLIF(NULLIF(TRIM(t.contacted_date),          ''), 'null')::date >= DATE '2024-01-01'

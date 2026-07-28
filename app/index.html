@@ -1185,12 +1185,11 @@ function renderAreaOnboarding(){
   // conhecida aqui — não há "lost"/churn documentado no funil de ativação).
   const deltaEst=totCwIn-totAct;
   const deltaPill=`Δ estoque <span class="att ${deltaEst>=0?'hi':'lo'}">${deltaEst>=0?'▲ +':'▼ '}${fN(deltaEst)}</span>`;
-  // Coorte CW→1k (C1) e 1k→5k (C2, encadeado) na MESMA semana — mesmo conceito do C1/C2 de
-  // SDR/Closer. ⚠️ O ciclo médio CW→Ativação é de ~50 dias (ver card de ciclo na Semanal
-  // Sales), então esses % tendem a ficar bem baixos por natureza (a maioria só cruza o próximo
-  // patamar em semanas futuras) — não é sinal de erro, é esperado dado o ciclo longo.
-  const cohPct=coh&&coh.cw?Math.round(coh.a1k/coh.cw*100):null;
-  const c2Pct=coh&&coh.a1k?Math.round((coh.a5k||0)/coh.a1k*100):null;
+  // CW → 10k DIRETO na MESMA semana — não passa por 1k/5k (mesmo padrão do C3 de SDR:
+  // contato→qualificação pulando a exigência de conexão). ⚠️ O ciclo médio CW→Ativação é de
+  // ~50 dias (ver card de ciclo na Semanal Sales), então esse % tende a ficar bem baixo por
+  // natureza (a maioria só ativa em semanas futuras) — não é sinal de erro.
+  const c10kPct=coh&&coh.cw?Math.round((coh.a10k||0)/coh.cw*100):null;
   // FTE — onboarders que de fato receberam CW / ativaram 10k na semana (mesma aproximação do SDR/Closer)
   const cwFteCount=(D.onbCwFte?.[estrF]||{})[week]||0;
   const actFteCount=(D.onbActFte?.[estrF]||{})[week]||0;
@@ -1205,10 +1204,9 @@ function renderAreaOnboarding(){
   const actBD=(bdt.act?`meta ${bdt.act}/BD`:'sem meta')+bdPill(actFteDia,bdt.act)+` · média ${actFte.toFixed(2)}/FTE · ${actFteCount} onboarders · ${diasUteis} BD`;
   const kpis=[
     ['Entradas',fN(totCwIn),metaSub(totCwIn,refT?.cw,`${listF.length} onboarders`),'Negócios recebidos (CW in)',null,KIC.entradas],
-    ['Saídas do funil',fN(totAct),'Ativados 10k (única saída conhecida)','Contas que ativaram 10k GMV',null,KIC.saidas],
+    ['Saídas do funil',fN((coh?.accomplished||0)+(coh?.unaccomplished||0)),coh?`${fN(coh.accomplished||0)} accomplished · ${fN(coh.unaccomplished||0)} unaccomplished`:'sem dado','Status atual do onboarding (quem fechou CW nessa semana)',null,KIC.saidas],
     ['Estoque atual',estTot!=null?fN(estTot):'—',deltaPill,'Funil de ativação atual (CW/1k/5k)',null,KIC.estoque],
-    ['C1 · CW→1k',cohPct!=null?cohPct+'%':'—',coh?`${fN(coh.a1k)}/${fN(coh.cw)} · sem meta ${mockBadge('Meta de coorte CW→1k ainda não confirmada — e tende a ficar baixa por natureza (ciclo médio ~50 dias).')}`:'sem dado','Coorte: chegou a 1k na mesma semana',null,KIC.link],
-    ['C2 · 1k→5k',c2Pct!=null?c2Pct+'%':'—',coh&&coh.a1k?`${fN(coh.a5k||0)}/${fN(coh.a1k)} em 1k`:'sem dado','Do coorte do C1 · chegou a 5k na mesma semana',null,KIC.check],
+    ['CW → 10K',c10kPct!=null?c10kPct+'%':'—',coh?`${fN(coh.a10k||0)}/${fN(coh.cw)} fechados`:'sem dado','Coorte: ativou 10k na mesma semana do CW',null,KIC.check],
     ['CW / FTE / BD',cwFteDia!=null?cwFteDia.toFixed(2):'—',cwBD,'Negócios recebidos por FTE / dia útil',null,KIC.users],
     ['Ativado / FTE / BD',actFteDia!=null?actFteDia.toFixed(2):'—',actBD,'Ativações 10k por FTE / dia útil','kpi-accent',KIC.target],
   ];

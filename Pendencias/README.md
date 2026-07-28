@@ -42,6 +42,56 @@ Notas de handoff para quem continuar o desenvolvimento. Última atualização: 2
   de % de atingimento (achou poluído) — então o número de atingimento é calculado
   (`c1CloPct`/`cohPct` vs `C1_OPP_SQL_META`) mas não é exibido, só a referência da meta.
   Isso vale nas duas abas onde esse card aparece (SDR e Closer, mesmo dado).
+- **Aba Onboarding — pedido pausado no dia 26/07 (ver "Concluído 26/07" abaixo), retomado e
+  concluído hoje:**
+  - **Tirei os cards "C1 · CW→1k" e "C2 · 1k→5k".**
+  - **Novo card "CW → 10K"**: coorte DIRETA na mesma semana (fechou CW em W → ativou 10k na
+    MESMA W), sem exigir passar por 1k/5k — mesmo padrão do C3 que já existia no SDR
+    (contato→qualificação pulando a conexão). Campo novo `a10k` dentro do `onbCohort`.
+  - **"Saídas do funil" virou Accomplished/Unaccomplished.** Isso exigiu uma investigação de
+    schema no Redshift (direto via Astrobox, `information_schema`/`svv_all_columns` — a busca
+    por catálogo padrão não funcionava nesse datasource, tive que testar tabela por tabela):
+    - **A tabela certa é `dhm_data_business.f_operational_sales_touched`** — schema DIFERENTE
+      do que já usávamos (`data_business.dhmv_sales_touched`). Ela tem `lead_id` (mesma chave),
+      e MUITO mais colunas de onboarding do que a nossa fonte original, incluindo
+      `onboarding_accomplished_date`, `onboarding_unaccomplished_date` e um campo de
+      **status direto**, `onboarding_status` (valores: Accomplished, Unaccomplished, New
+      Onboarding, Active, Growth, Ready, Set Up, Activation & Monitoring, etc. — 20 valores).
+    - **`Querys/06_operacional_raw.sql` ganhou um segundo LEFT JOIN** (além do já existente com
+      `dhaf_salesforce."user"`) nessa tabela, por `lead_id`, trazendo as 3 colunas
+      (`onboarding_status`, `onboarding_accomplished_date`, `onboarding_unaccomplished_date`).
+      Confirmei antes que `lead_id` é único em `f_operational_sales_touched` pra linhas com
+      `lead_id` preenchido (a única "duplicidade" que apareceu numa contagem inicial era de
+      linhas com `lead_id` NULO, que não afeta o JOIN) — então o LEFT JOIN não multiplica
+      nenhuma linha do nosso export (68.577 linhas antes e depois do JOIN).
+    - ⚠️ **Abordagem alternativa considerada e descartada: usar as DATAS
+      (`onboarding_accomplished_date`/`onboarding_unaccomplished_date`) em vez do status.**
+      Essa era a primeira ideia — bucketizar "Saídas do funil" por semana usando a data, no
+      mesmo padrão dos outros cards de "saídas" do projeto (SDR/Closer). Testei direto no
+      Redshift: na tabela inteira (sem filtro), `onboarding_unaccomplished_date` tem 4.040
+      linhas preenchidas — o campo existe e é usado. **Mas no nosso recorte (Brasil +
+      CW a partir de 2024, o mesmo filtro do `06_operacional_raw.sql`), ela vem sempre
+      nula.** Conferi 5 exemplos de leads com `onboarding_status = 'Unaccomplished'` e
+      `closed_won_date` dentro do nosso filtro (jan-fev/2024) — nenhum tinha a data
+      preenchida, mesmo com o status certo. Ou seja: implementando por data, o card
+      "Unaccomplished" ficaria **sempre zerado** pros nossos dados atuais, mesmo havendo
+      8.340 registros com esse status na fonte inteira. **Por isso troquei pra usar
+      `onboarding_status` como SNAPSHOT** (situação de agora, não coorte por semana de saída)
+      — funciona porque o status vem populado de forma muito mais confiável que a data.
+      **Se um dia a Hotmart passar a preencher `onboarding_unaccomplished_date`
+      consistentemente** (é um problema de qualidade de dado do lado deles, não nosso), dá pra
+      trocar pra abordagem por data e ganhar a granularidade de "saiu NESSA semana" em vez de
+      "está nesse status HOJE, entre quem fechou nessa semana" — a estrutura já fica pronta
+      pra isso (só trocar a lógica de bucket no `build_data.js`, os dois campos já estão
+      disponíveis no CSV).
+    - **Como funciona hoje**: pra cada semana W (ancorada em `closed_won_date`, igual ao resto
+      da página), conta quantos dos que fecharam CW em W estão com `onboarding_status` igual a
+      `'Accomplished'` ou `'Unaccomplished'` **no momento do build** (não necessariamente saíram
+      nessa semana — é o status atual de quem entrou naquela semana). Campos novos `accomplished`
+      e `unaccomplished` dentro do `onbCohort`. Testado com semana 50/2025 (mais antiga, já com
+      dado real): 16 accomplished · 20 unaccomplished, de 37 CW — bate com a query direta no
+      Redshift. Semanas recentes (últimas ~8 semanas) ficam zeradas, esperado pelo ciclo longo
+      de onboarding (~50 dias) — a maioria ainda não chegou a um status final.
 
 ## Concluído (26/07/2026)
 
@@ -163,6 +213,18 @@ Notas de handoff para quem continuar o desenvolvimento. Última atualização: 2
 - A wordmark "hotmart" na sidebar é **texto**, não o SVG oficial — trocar pelo vetor quando
   houver o asset (`app/hotmart-logo.svg`).
 
+## Fonte de dados — segunda tabela no `06_operacional_raw.sql` (28/07/2026)
+
+`Querys/06_operacional_raw.sql` agora faz **dois** LEFT JOIN a partir de
+`data_business.dhmv_sales_touched` (a fonte principal, continua igual): um com
+`dhaf_salesforce."user"` (já existia, resolve e-mail do owner) e um novo com
+**`dhm_data_business.f_operational_sales_touched`** (schema `dhm_data_business`, note o "m" —
+não confundir com `data_business`), por `lead_id`, só pra trazer `onboarding_status`,
+`onboarding_accomplished_date` e `onboarding_unaccomplished_date` (campos que não existem em
+`dhmv_sales_touched`). Essa segunda tabela tem bem mais colunas de onboarding que a nossa
+fonte principal (~160 colunas, contra 101) — se precisar de mais algum campo de onboarding no
+futuro, é ali que provavelmente está, não em `dhmv_sales_touched`.
+
 ## Estruturas novas no `build_data.js` (todas indexadas por estratégia: all/Outbound/Inbound/Hunting)
 
 Alimentam a página **Semanal Área › SDR**:
@@ -214,6 +276,9 @@ Alimenta a página **Semanal Área › Onboarding**:
   lead: cw/a1k/a5k/ativado_10k (data mais recente vence, sem "lost").
 - `cohCw`/`coh1k` (dentro de `porPessoa.onboarding[].porSemana`) — coorte C1 por pessoa (mesma
   lógica do `onbCohort`, só que por onboarder individual em vez do agregado).
+- `onbCohort` ganhou os campos `a10k` (coorte direta CW→10k na mesma semana, sem exigir
+  1k/5k) e `accomplished`/`unaccomplished` (snapshot do `onboarding_status` atual, de quem
+  fechou CW naquela semana — ver "Concluído 28/07" acima pro porquê de não usar data).
 
 Regenerar: `node app/build_data.js` (lê `Dados/*.csv` locais).
 
@@ -263,16 +328,21 @@ Regenerar: `node app/build_data.js` (lê `Dados/*.csv` locais).
 11. ~~Editar as 6 queries em `Querys/` pra usar a borda nova de nível~~ — **resolvido (28/07)**:
     as 6 foram editadas e a `01_receita_semana_nivel_estrategia.sql` (única em uso no pipeline)
     foi reexportada via Astrobox. Net Revenue/GMV/SAP por nível já refletem a borda nova.
-12. **Aba Onboarding — pedido do Gabriel em 28/07, ainda NÃO implementado:**
-    - Card "Saídas do funil" devia virar **Accomplished / Unaccomplished** em vez de só
-      "Ativados 10k" — mas não existe nenhum campo na base (`06_operacional_raw.csv`) que
-      marque quando um onboarding é considerado "não realizado"/desistência. Perguntei ao
-      Gabriel qual seria a regra (prazo em dias sem ativar? outro campo?) e ele pausou esse
-      item pra fazer uma verificação antes (acabou virando a investigação da borda de nível,
-      item acima). **Retomar perguntando a regra de "Unaccomplished" antes de mexer.**
-    - Tirar os cards **C1 · CW→1k** e **C2 · 1k→5k**.
-    - Adicionar um card **CW → 10k direto** (coorte na mesma semana, sem passar por 1k/5k —
-      mesmo padrão do C3 que foi feito no SDR: contato→qualificação pulando a conexão).
+12. ~~Aba Onboarding: Saídas do funil Accomplished/Unaccomplished, tirar C1/C2, add CW→10k~~ —
+    **resolvido (28/07)**. Ver "Concluído 28/07" acima pro detalhe completo (schema novo,
+    por que não usei data, como funciona hoje).
+13. **Migrar "Saídas do funil" do Onboarding de status (snapshot) pra data (coorte por
+    semana), se a Hotmart passar a preencher `onboarding_unaccomplished_date` de forma
+    confiável.** Hoje esse campo vem sempre nulo no nosso recorte (Brasil + CW 2024+), mesmo
+    em registros com `onboarding_status = 'Unaccomplished'` certo — por isso o card usa o
+    status atual em vez da data. Os dois campos (`onboarding_accomplished_date`/
+    `onboarding_unaccomplished_date`) já vêm no `06_operacional_raw.csv` (JOIN com
+    `dhm_data_business.f_operational_sales_touched`), só não são usados ainda. Se a data
+    passar a ser preenchida, dá pra trocar a lógica no `build_data.js` (bloco do `onbCohort`,
+    perto do `a10kSame`) pra bucketizar por semana de saída de verdade, em vez de "status de
+    quem entrou nessa semana".
+14. **`onboarding_status`/accomplished/unaccomplished ainda não validados contra o Power BI** —
+    mesma ressalva dos outros campos novos (ver item 10).
 
 ## Convenções do projeto (não esquecer)
 
