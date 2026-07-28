@@ -261,7 +261,10 @@ for (const r of fop) {
     const connSame = dates.connected_date && anoSemana(dates.connected_date) === wc;
     // C2 encadeado: do coorte de contato (contatou+conectou em W), qualificou em W? (mesma semana)
     const q1 = cleanDate(r.qualified_date), qualSame = connSame && q1 && anoSemana(q1) === wc;
-    const bumpCoh = o => { const cc = o[wc] || (o[wc] = { contacted: 0, conn: 0, qual: 0 }); cc.contacted++; if (connSame) cc.conn++; if (qualSame) cc.qual++; };
+    // C3: contatado em W e qualificado em W, direto — NÃO exige conexão na mesma semana (mede
+    // o funil ponta a ponta contato→qualificação, independente de quando a conexão aconteceu).
+    const qualDirect = q1 && anoSemana(q1) === wc;
+    const bumpCoh = o => { const cc = o[wc] || (o[wc] = { contacted: 0, conn: 0, qual: 0, qualDirect: 0 }); cc.contacted++; if (connSame) cc.conn++; if (qualSame) cc.qual++; if (qualDirect) cc.qualDirect++; };
     if (ownerReal) { bumpCoh(sdrCohort.all); if (_estrLead) bumpCoh(sdrCohort[_estrLead]); }
     // mesma coorte, por SDR (mantido) — mas o C2 da tabela usa a versão por DONO abaixo.
     if (sdr) {
@@ -418,6 +421,9 @@ for (const r of fop) {
         p.oppNivel = p.oppNivel || {}; p.oppNivel[b] = (p.oppNivel[b] || 0) + 1;
         p.semanal = p.semanal || {}; p.semanal[w] = (p.semanal[w] || 0) + 1;
         const pw = wk(p, w); pw.opps = (pw.opps || 0) + 1; pw.oppNivel = pw.oppNivel || {}; pw.oppNivel[b] = (pw.oppNivel[b] || 0) + 1;
+        // esta MESMA opp (independente de semana) chegou a SQL? — acumulado, não coorte de
+        // mesma semana (alimenta a coluna "Opp→SQL · 5s" da tabela por pessoa).
+        if (dates.sql_date) pw.oppSql = (pw.oppSql || 0) + 1;
         if (ownerReal) { (sdrOppFteSet.all[w] = sdrOppFteSet.all[w] || new Set()).add(owner);
           if (e) (sdrOppFteSet[e][w] = sdrOppFteSet[e][w] || new Set()).add(owner); }
       }
@@ -791,6 +797,9 @@ function buildPessoaSemanaSdr(p) {
       cohortRate: pw.cohContacted ? +(pw.cohConn / pw.cohContacted).toFixed(3) : null,
       oppNivel: NIVEIS.map(n => Math.round((pw.oppNivel || {})[n] || 0)),
       diasContatoConectado: pw.dCCn ? +(pw.dCCsum / pw.dCCn).toFixed(1) : null,
+      // das opps geradas NESSA semana, quantas (essa mesma opp) já chegaram a SQL — acumulado
+      // até hoje, não coorte de mesma semana (alimenta "Opp→SQL · 5s" na tabela por pessoa).
+      oppSql: Math.round(pw.oppSql || 0),
     };
   }
   return out;

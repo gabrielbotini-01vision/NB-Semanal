@@ -196,13 +196,14 @@
   .wtlegend .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:middle}
 
   /* table */
-  table.tbl{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;font-size:13.5px;box-shadow:var(--sh-card)}
+  table.tbl{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;font-size:12.5px;box-shadow:var(--sh-card)}
   table.tbl thead th{background:var(--surface);color:var(--text-faint);text-align:left;font-weight:700;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;padding:12px 16px;white-space:nowrap;border-bottom:1px solid var(--border)}
   table.tbl thead th.sortable{cursor:pointer;user-select:none}
   .th-ic{display:inline-flex;vertical-align:-2px;margin-right:4px}
   .th-ic svg{width:12px;height:12px}
   table.tbl thead th.sortable:hover{color:var(--accent)}
   table.tbl th.r,table.tbl td.r{text-align:right}
+  table.tbl th.c,table.tbl td.c{text-align:center}
   table.tbl td{padding:12px 16px;border-top:1px solid var(--border)}
   table.tbl tbody tr:first-child td{border-top:none}
   table.tbl tbody tr.rankrow{cursor:pointer}
@@ -398,6 +399,9 @@ function weeklyByNivel(metricObj,nivel){
 }
 
 // ---- tabela agrupada / ranking ----
+// alinhamento da coluna: 'r' (direita, padrão pra número solto) ou 'c' (centralizado — usado
+// quando o cabeçalho tem ícone, pra valor e título ficarem visualmente alinhados no centro).
+const alignClass=c=>c.align==='r'?'r':c.align==='c'?'c':'';
 function groupedTable({rows,groupBy,groupOrder,groupLabel,cols,kind,totals,sort,hd}){
   if(!rows||!rows.length) return '<div class="card"><span class="miss">Sem pessoas com dado no período.</span></div>';
   // ordenação (clicável) por qualquer coluna com fn `sort` — ordena DENTRO de cada grupo.
@@ -405,7 +409,7 @@ function groupedTable({rows,groupBy,groupOrder,groupLabel,cols,kind,totals,sort,
   const num=v=>(v==null||isNaN(v))?-Infinity:v;
   const sortItems=arr=>sc?arr.slice().sort((a,b)=>{const d=num(sc.sort(a))-num(sc.sort(b));return sort.dir==='asc'?d:-d;}):arr;
   const aggRow=(label,items,strong)=>{const st=strong?' style="border-top:2px solid var(--text)"':'';
-    return `<tr class="grouprow"><td${st}>${label}</td>${cols.map(c=>`<td class="${c.align==='r'?'r':''}"${st}>${c.agg?`<span class="mono">${c.agg(items)}</span>`:''}</td>`).join('')}</tr>`;};
+    return `<tr class="grouprow"><td${st}>${label}</td>${cols.map(c=>`<td class="${alignClass(c)}"${st}>${c.agg?`<span class="mono">${c.agg(items)}</span>`:''}</td>`).join('')}</tr>`;};
   let body='';
   if(groupBy){
     const groups={};
@@ -413,7 +417,7 @@ function groupedTable({rows,groupBy,groupOrder,groupLabel,cols,kind,totals,sort,
     const order=(groupOrder||Object.keys(groups)).filter(g=>groups[g]&&groups[g].length);
     order.forEach(g=>{
       const items=groups[g];
-      const gcells=cols.map(c=>`<td class="${c.align==='r'?'r':''}">${totals&&c.agg?`<span class="mono">${c.agg(items)}</span>`:''}</td>`).join('');
+      const gcells=cols.map(c=>`<td class="${alignClass(c)}">${totals&&c.agg?`<span class="mono">${c.agg(items)}</span>`:''}</td>`).join('');
       body+=`<tr class="grouprow"><td>${groupLabel?groupLabel(g):g} <span class="miss">· ${items.length}</span></td>${gcells}</tr>`;
       body+=sortItems(items).map((r,i)=>rowHTML(r,i,cols,kind)).join('');
     });
@@ -424,14 +428,14 @@ function groupedTable({rows,groupBy,groupOrder,groupLabel,cols,kind,totals,sort,
   }
   const ind=c=>(sort&&sort.key===c.key)?(sort.dir==='asc'?' ▲':' ▼'):'';
   return `<div class="card" style="padding:0;overflow-x:auto">${hd?`<div class="tbl-hd">${hd}</div>`:''}<table class="tbl">
-    <thead><tr><th>Pessoa</th>${cols.map(c=>`<th class="${c.align==='r'?'r':''}${c.sort?' sortable':''}" data-k="${c.key||''}">${c.icon?`<span class="th-ic">${c.icon}</span>`:''}${c.label}${ind(c)}</th>`).join('')}</tr></thead>
+    <thead><tr><th>Pessoa</th>${cols.map(c=>`<th class="${alignClass(c)}${c.sort?' sortable':''}" data-k="${c.key||''}">${c.icon?`<span class="th-ic">${c.icon}</span>`:''}${c.label}${ind(c)}</th>`).join('')}</tr></thead>
     <tbody>${body}</tbody></table></div>`;
 }
 function rowHTML(r,i,cols,kind){
   return `<tr class="rankrow" data-email="${r.email}" data-kind="${kind}">
-    <td><span class="mono idx">${String(i+1).padStart(2,'0')}</span>
+    <td style="white-space:nowrap"><span class="mono idx">${String(i+1).padStart(2,'0')}</span>
       <span style="display:inline-flex;align-items:center;gap:8px;vertical-align:middle">${avatarHTML(r,22)}${displayName(r)}</span></td>
-    ${cols.map(c=>`<td class="${c.align==='r'?'r':''}">${c.render(r)}</td>`).join('')}
+    ${cols.map(c=>`<td class="${alignClass(c)}">${c.render(r)}</td>`).join('')}
   </tr>`;
 }
 function bindRowClicks(root){
@@ -850,6 +854,9 @@ const KIC={
 // badge de alerta pra métrica com valor MOCADO/estimado — meta ou regra ainda não confirmada
 // com o time de negócio. Sempre visível ao lado do valor, pra não confundir com dado validado.
 const mockBadge=title=>`<span class="mockbadge" title="${title||'Métrica ainda não validada com o time — valor estimado, favor confirmar a regra correta.'}">⚠ a validar</span>`;
+// meta da coorte C1 · Opp→SQL (compartilhada entre as abas SDR e Closer, mesmo card/dado) —
+// confirmada em 28/07/2026, não é mais mockada.
+const C1_OPP_SQL_META=60;
 function renderAreaSdr(){
   const week=state.semanaArea;
   const base=D.porPessoa?.sdr||[];
@@ -873,14 +880,14 @@ function renderAreaSdr(){
   // delta de estoque da semana = entradas − saídas = contatados − opps − unqualifieds
   const deltaEst=totContacted-totOpps-totUnq;
   const deltaPill=`Δ estoque <span class="att ${deltaEst>=0?'hi':'lo'}">${deltaEst>=0?'▲ +':'▼ '}${fN(deltaEst)}</span>`;
-  // Coorte contato→conexão: dos contatados na semana, quantos conectaram na PRÓPRIA semana.
-  // Referência fixa de 10% (não vem de budget — é uma meta operacional combinada à parte).
+  // C3: dos contatados na semana, quantos qualificaram na PRÓPRIA semana — direto, não exige
+  // conexão na mesma semana (mede o funil ponta a ponta contato→qualificação).
   const coh=(D.sdrCohort?.[estrF]||{})[week]||null;
-  const cohPct=coh&&coh.contacted?Math.round(coh.conn/coh.contacted*100):null;
-  const COH_META=10;
-  const cohAtt=cohPct!=null?pct(cohPct,COH_META):null;
-  // C2 encadeado: do MESMO coorte do C1 (contatou+conectou em W), quantos qualificaram em W.
-  const c2Pct=coh&&coh.conn?Math.round((coh.qual||0)/coh.conn*100):null;
+  const c3Pct=coh&&coh.contacted?Math.round((coh.qualDirect||0)/coh.contacted*100):null;
+  // C1 · Opp→SQL — mesma coorte de negociação usada na aba Closer (D.closerCohort), exibida
+  // aqui também pra dar visibilidade de como o pipeline gerado pelo SDR avança no Closer.
+  const cohClo=(D.closerCohort?.[estrF]||{})[week]||null;
+  const c1CloPct=cohClo&&cohClo.opp?Math.round(cohClo.sql/cohClo.opp*100):null;
   // FTE — SDRs que de fato contataram / geraram opp na semana (Backlog: usar base de headcount real)
   const contactFteCount=(D.sdrContactFte?.[estrF]||{})[week]||0;
   const oppFteCount=(D.sdrOppFte?.[estrF]||{})[week]||0;
@@ -900,8 +907,8 @@ function renderAreaSdr(){
     ['Entradas',fN(totContacted),metaSub(totContacted,refT?.contacted,`${listF.length} SDRs`),'Contatados',null,KIC.entradas],
     ['Saídas do funil',fN(totSaidas),`${fN(totOpps)} opps · ${fN(totUnq)} unqualifieds`,'Oportunidades geradas + unqualifieds',null,KIC.saidas],
     ['Estoque atual',estTot!=null?fN(estTot):'—',deltaPill,'Funil de SDR atual',null,KIC.estoque],
-    ['C1 · Contato→Conexão',cohPct!=null?cohPct+'%':'—',coh?`${fN(coh.conn)}/${fN(coh.contacted)} · meta ${COH_META}%${cohAtt!=null?` · <span class="att ${attClass(cohAtt)}">${cohAtt}%</span>`:''}`:'sem dado','Coorte: conectou na mesma semana',null,KIC.link],
-    ['C2 · Conexão→Qualif.',c2Pct!=null?c2Pct+'%':'—',coh&&coh.conn?`${fN(coh.qual||0)}/${fN(coh.conn)} conectados`:'sem dado','Do coorte do C1 · qualificou na mesma semana',null,KIC.check],
+    ['C3 · Contacted→Qualified',c3Pct!=null?c3Pct+'%':'—',coh?`${fN(coh.qualDirect||0)}/${fN(coh.contacted)} contatados`:'sem dado','Coorte: qualificou na mesma semana do contato',null,KIC.check],
+    ['C1 · Opp→SQL',c1CloPct!=null?c1CloPct+'%':'—',cohClo?`${fN(cohClo.sql)}/${fN(cohClo.opp)} · meta ${C1_OPP_SQL_META}%`:'sem dado','Coorte de negociação: chegou a SQL na mesma semana',null,KIC.link],
     ['Contacted / FTE / BD',contatadosFteDia!=null?contatadosFteDia.toFixed(1):'—',contBD,'Contatados por FTE / dia útil',null,KIC.users],
     ['Opps / FTE / BD',oppsFteDia!=null?oppsFteDia.toFixed(2):'—',oppBD,'Oportunidades por FTE / dia útil','kpi-accent',KIC.target],
   ];
@@ -927,6 +934,14 @@ function renderAreaSdr(){
   const baseByEmail={}; base.forEach(p=>baseByEmail[p.email]=p);
   const oppsAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return x?(x.opps||0):0;};
   const contactedAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return x?(x.contacted||0):0;};
+  // Opp→SQL acumulado nas últimas 5 semanas (janela própria, maior que a de 3 semanas usada
+  // nas outras colunas): das opps GERADAS nessa janela, quantas (a mesma opp) já chegaram a
+  // SQL até hoje — não é coorte de mesma semana, é conversão acumulada da safra de opps.
+  const weeks5=[0,1,2,3,4].map(i=>D.semanas[idxW-i]).filter(Boolean);
+  const oppSqlAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return x?(x.oppSql||0):0;};
+  const opp5Sum=r=>weeks5.reduce((s,w)=>s+oppsAt(r,w),0);
+  const oppSql5Sum=r=>weeks5.reduce((s,w)=>s+oppSqlAt(r,w),0);
+  const oppSqlRate5=r=>{const o=opp5Sum(r);return o?Math.round(oppSql5Sum(r)/o*100):null;};
   // coorte C2 por pessoa: dos leads que a pessoa CONTATOU (owner_email) na semana W, quantos
   // conectaram na MESMA semana. Usa owner_email (não sdr_email_sf, que só é preenchido pós-conexão,
   // o que dava 100% falso pra todos). Mesma medida do card do topo, aberta por analista.
@@ -962,22 +977,25 @@ function renderAreaSdr(){
   const TI={pd:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',c:KIC.users,conn:KIC.link,opp:KIC.target,niv:KIC.estoque};
   const cols=[
     // PRODUTIVIDADE por dia útil (média das 3 últimas semanas) — agregador = média por SDR
-    {key:'pdContacted',label:'Contat./BD · 3s',align:'r',icon:TI.pd,render:r=>bdCell(pdCont(r),BD_TGT[r.estrategia]?.contacted,1),agg:rows=>bdAgg(rows,pdCont,1,tg=>tg?.contacted),sort:pdCont},
-    {key:'pdOpp',label:'Opps/BD · 3s',align:'r',icon:TI.pd,render:r=>bdCell(pdOppFn(r),BD_TGT[r.estrategia]?.opps,2),agg:rows=>bdAgg(rows,pdOppFn,2,tg=>tg?.opps),sort:pdOppFn},
+    {key:'pdContacted',label:'Contat./BD · 3s',align:'c',icon:TI.pd,render:r=>bdCell(pdCont(r),BD_TGT[r.estrategia]?.contacted,1),agg:rows=>bdAgg(rows,pdCont,1,tg=>tg?.contacted),sort:pdCont},
+    {key:'pdOpp',label:'Opps/BD · 3s',align:'c',icon:TI.pd,render:r=>bdCell(pdOppFn(r),BD_TGT[r.estrategia]?.opps,2),agg:rows=>bdAgg(rows,pdOppFn,2,tg=>tg?.opps),sort:pdOppFn},
     // ENTRADA
-    {key:'contA',label:'Contatados · sem.',align:'r',icon:TI.c,render:r=>`<span class="mono">${fN(contOwnerAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>contOwnerAt(r,week))),sort:r=>contOwnerAt(r,week)},
+    {key:'contA',label:'Contatados · sem.',align:'c',icon:TI.c,render:r=>`<span class="mono">${fN(contOwnerAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>contOwnerAt(r,week))),sort:r=>contOwnerAt(r,week)},
     // CONVERSÃO C1 (contato→conexão na mesma semana) · atual e 2 anteriores
-    {key:'connA',label:'C1 · sem.',align:'r',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,week)!=null?cohAt(r,week)+'%':'—'}</span>`,agg:rows=>c2Agg(rows,week),sort:r=>cohAt(r,week)},
-    {key:'connB',label:'C1 · '+sB,align:'r',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,wB)!=null?cohAt(r,wB)+'%':'—'}</span>`,agg:rows=>c2Agg(rows,wB),sort:r=>cohAt(r,wB)},
-    {key:'connC',label:'C1 · '+sC,align:'r',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,wC)!=null?cohAt(r,wC)+'%':'—'}</span>`,agg:rows=>c2Agg(rows,wC),sort:r=>cohAt(r,wC)},
+    {key:'connA',label:'C1 · sem.',align:'c',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,week)!=null?cohAt(r,week)+'%':'—'}</span>`,agg:rows=>c2Agg(rows,week),sort:r=>cohAt(r,week)},
+    {key:'connB',label:'C1 · '+sB,align:'c',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,wB)!=null?cohAt(r,wB)+'%':'—'}</span>`,agg:rows=>c2Agg(rows,wB),sort:r=>cohAt(r,wB)},
+    {key:'connC',label:'C1 · '+sC,align:'c',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,wC)!=null?cohAt(r,wC)+'%':'—'}</span>`,agg:rows=>c2Agg(rows,wC),sort:r=>cohAt(r,wC)},
     // OUTPUT (Opps geradas) · atual e 2 anteriores
-    {key:'oppsA',label:'Opps · sem.',align:'r',icon:TI.opp,render:r=>`<span class="mono">${fN(oppsAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>oppsAt(r,week))),sort:r=>oppsAt(r,week)},
-    {key:'oppsB',label:'Opps · '+sB,align:'r',icon:TI.opp,render:r=>`<span class="mono">${fN(oppsAt(r,wB))}</span>`,agg:rows=>fN(sumBy(rows,r=>oppsAt(r,wB))),sort:r=>oppsAt(r,wB)},
-    {key:'oppsC',label:'Opps · '+sC,align:'r',icon:TI.opp,render:r=>`<span class="mono">${fN(oppsAt(r,wC))}</span>`,agg:rows=>fN(sumBy(rows,r=>oppsAt(r,wC))),sort:r=>oppsAt(r,wC)},
+    {key:'oppsA',label:'Opps · sem.',align:'c',icon:TI.opp,render:r=>`<span class="mono">${fN(oppsAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>oppsAt(r,week))),sort:r=>oppsAt(r,week)},
+    {key:'oppsB',label:'Opps · '+sB,align:'c',icon:TI.opp,render:r=>`<span class="mono">${fN(oppsAt(r,wB))}</span>`,agg:rows=>fN(sumBy(rows,r=>oppsAt(r,wB))),sort:r=>oppsAt(r,wB)},
+    {key:'oppsC',label:'Opps · '+sC,align:'c',icon:TI.opp,render:r=>`<span class="mono">${fN(oppsAt(r,wC))}</span>`,agg:rows=>fN(sumBy(rows,r=>oppsAt(r,wC))),sort:r=>oppsAt(r,wC)},
     // MIX das opps por nível de cliente (acumulado 3 semanas)
-    {key:'n1',label:'% N2-N3',align:'r',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,0)}%</span>`,agg:rows=>nivAgg(rows,0),sort:r=>nivelPct(r,0)},
-    {key:'n2',label:'% N4-N5',align:'r',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,1)}%</span>`,agg:rows=>nivAgg(rows,1),sort:r=>nivelPct(r,1)},
-    {key:'n3',label:'% N6+',align:'r',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,2)}%</span>`,agg:rows=>nivAgg(rows,2),sort:r=>nivelPct(r,2)},
+    {key:'n1',label:'% N2-N3',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,0)}%</span>`,agg:rows=>nivAgg(rows,0),sort:r=>nivelPct(r,0)},
+    {key:'n2',label:'% N4-N5',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,1)}%</span>`,agg:rows=>nivAgg(rows,1),sort:r=>nivelPct(r,1)},
+    {key:'n3',label:'% N6+',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,2)}%</span>`,agg:rows=>nivAgg(rows,2),sort:r=>nivelPct(r,2)},
+    // Opp→SQL acumulado das opps geradas nas últimas 5 semanas (janela maior, não é coorte de
+    // mesma semana — mostra quanto do que o SDR gerou recentemente já avançou no Closer).
+    {key:'oppSql5',label:'Opp→SQL · 5s',align:'c',icon:TI.opp,render:r=>`<span class="mono">${oppSqlRate5(r)!=null?oppSqlRate5(r)+'%':'—'}</span>`,agg:rows=>{const o=sumBy(rows,opp5Sum),s=sumBy(rows,oppSql5Sum);return o?Math.round(s/o*100)+'%':'—';},sort:oppSqlRate5},
   ];
   // TODOS que contataram (por owner_email) na janela de 3 semanas — mescla com os dados de
   // opp/nível do SDR correspondente quando existe. Assim a tabela reconcilia com o card Entradas.
@@ -989,8 +1007,11 @@ function renderAreaSdr(){
   let rowsOwner=[...ownerSet].map(o=>{ const p=sdrMap[o.toLowerCase()];
     return p ? {...p, email:o} : {email:o, nome:null, foto:null, ativo:false, estrategia:null, porSemana:{}, oppNivel:[0,0,0]}; });
   if(estrF!=='all') rowsOwner=rowsOwner.filter(r=>r.estrategia===estrF); // filtro de estratégia: só SDRs atribuídos
+  // tira o grupo "Outros" (contas de time/cadência tipo bubr_bizops/bkf-team e quem não tem
+  // estratégia atribuída) — a pedido do Gabriel, a tabela mostra só SDRs de verdade.
+  rowsOwner=rowsOwner.filter(r=>!ehNaoSdr(r.email)&&r.estrategia);
   rowsOwner.sort((a,b)=>contOwnerAt(b,week)-contOwnerAt(a,week));
-  const table=groupedTable({rows:rowsOwner,groupBy:r=>ehNaoSdr(r.email)?'Outros':(r.estrategia||'Outros'),groupOrder:[...STR_ORDER,'Outros'],cols,kind:'sdr',totals:true,sort:state.sdrSort,hd:cardHd(KIC.users,'SDR · por pessoa','opps, C1, mix por nível e produtividade/BD')});
+  const table=groupedTable({rows:rowsOwner,groupBy:r=>r.estrategia,groupOrder:STR_ORDER,cols,kind:'sdr',totals:true,sort:state.sdrSort,hd:cardHd(KIC.users,'SDR · por pessoa','opps, C1, mix por nível e produtividade/BD')});
   $('viewArea').innerHTML=`
     <div class="sec"><div class="sec-head"><h2>Resultado semanal</h2><span class="hint">${semanaLabel(week)}${estrF!=='all'?' · '+estrF:''}</span></div>
       <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d,cls,icon])=>`<div class="kpi ${cls||''}">${icon?`<span class="kpi-ic">${icon}</span>`:''}<span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div></div>
@@ -1035,9 +1056,7 @@ function renderAreaClosers(){
   const deltaEst=totOpps-totCw-totLost;
   const deltaPill=`Δ estoque <span class="att ${deltaEst>=0?'hi':'lo'}">${deltaEst>=0?'▲ +':'▼ '}${fN(deltaEst)}</span>`;
   // Coorte Opp→SQL (C1) e SQL→Offer (C2, encadeado) na MESMA semana — mesmo conceito do C1/C2
-  // de SDR, aplicado ao funil de negociação. ⚠️ Sem meta de negócio confirmada ainda (o COH_META
-  // de SDR veio de uma meta combinada à parte; aqui não temos equivalente) — mostramos o valor
-  // real e avisamos em vez de simular um número de atingimento.
+  // de SDR, aplicado ao funil de negociação. Meta do C1 confirmada em 28/07/2026 (C1_OPP_SQL_META).
   const cohPct=coh&&coh.opp?Math.round(coh.sql/coh.opp*100):null;
   const c2Pct=coh&&coh.sql?Math.round((coh.offer||0)/coh.sql*100):null;
   // FTE — closers que de fato receberam opp / fecharam CW na semana (mesma aproximação do SDR)
@@ -1056,7 +1075,7 @@ function renderAreaClosers(){
     ['Entradas',fN(totOpps),metaSub(totOpps,refT?.opps,`${listF.length} closers`),'Oportunidades recebidas (Opp in)',null,KIC.entradas],
     ['Saídas do funil',fN(totSaidas),`${fN(totCw)} CW · ${fN(totLost)} lost${winRatePct!=null?` · win rate ${winRatePct}%`:''}`,'Fechados: ganhos + perdidos',null,KIC.saidas],
     ['Estoque atual',estTot!=null?fN(estTot):'—',deltaPill,'Funil de negociação atual (Opp/SQL/Offer/Contract)',null,KIC.estoque],
-    ['C1 · Opp→SQL',cohPct!=null?cohPct+'%':'—',coh?`${fN(coh.sql)}/${fN(coh.opp)} · sem meta ${mockBadge('Meta de coorte Opp→SQL ainda não confirmada com o time de Closer.')}`:'sem dado','Coorte: chegou a SQL na mesma semana',null,KIC.link],
+    ['C1 · Opp→SQL',cohPct!=null?cohPct+'%':'—',coh?`${fN(coh.sql)}/${fN(coh.opp)} · meta ${C1_OPP_SQL_META}%`:'sem dado','Coorte: chegou a SQL na mesma semana',null,KIC.link],
     ['C2 · SQL→Offer',c2Pct!=null?c2Pct+'%':'—',coh&&coh.sql?`${fN(coh.offer||0)}/${fN(coh.sql)} em SQL`:'sem dado','Do coorte do C1 · chegou a Offer na mesma semana',null,KIC.check],
     ['Opp / FTE / BD',oppsFteDia!=null?oppsFteDia.toFixed(2):'—',oppBD,'Oportunidades por FTE / dia útil',null,KIC.users],
     ['CW / FTE / BD',cwFteDia!=null?cwFteDia.toFixed(2):'—',cwBD,'Negócios fechados por FTE / dia útil','kpi-accent',KIC.target],
