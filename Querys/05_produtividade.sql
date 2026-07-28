@@ -57,9 +57,9 @@ dims AS (
         CASE
             WHEN lb.amount_12_months IS NULL       THEN 'Sem nivel'
             WHEN lb.amount_12_months <=   600000   THEN 'N2'
-            WHEN lb.amount_12_months <=  1000000   THEN 'N3'
+            WHEN lb.amount_12_months <   1000000   THEN 'N3'
             WHEN lb.amount_12_months <=  2000000   THEN 'N4'
-            WHEN lb.amount_12_months <=  5000000   THEN 'N5'
+            WHEN lb.amount_12_months <   5000000   THEN 'N5'
             WHEN lb.amount_12_months <= 10000000   THEN 'N6'
             ELSE 'N7'
         END AS nivel,

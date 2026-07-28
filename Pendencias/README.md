@@ -1,6 +1,47 @@
 # Pendências · New Business Cockpit
 
-Notas de handoff para quem continuar o desenvolvimento. Última atualização: 26/07/2026.
+Notas de handoff para quem continuar o desenvolvimento. Última atualização: 28/07/2026.
+
+## Concluído (28/07/2026)
+
+- **Regra de nível de cliente (`bucketFromAmount` no `build_data.js`) corrigida — borda
+  passa a ser inclusiva no nível DE CIMA.** Antes: `amount_12_months <= 1.000.000 → N2-N3`,
+  `<= 5.000.000 → N4-N5` (quem estava exatamente em 1M ou 5M ficava no nível de baixo). Agora:
+  `< 1.000.000 → N2-N3`, `< 5.000.000 → N4-N5`, `>= 5.000.000 → N6+` — confirmado com o
+  Gabriel comparando contra um número real (CW de N6+ numa semana específica: eram 2, o
+  esperado eram 4, por causa de 2 negócios de exatamente R$ 5.000.000 que deveriam contar
+  como N6+). **Retroativo**: como o `build_data.js` recalcula o histórico inteiro a cada
+  build, isso muda Opps/CW/Ativação por nível em TODAS as abas (Mensal Sales, Semanal Sales,
+  Semanal Área), pra qualquer mês/semana já processado — não é só daqui pra frente. Só no mês
+  fechado (jun/2026) isso moveu 714 leads de N2-N3→N4-N5 e 201 de N4-N5→N6+ no histórico
+  completo (contando todos os registros na borda exata, não só o mês).
+  **Net Revenue/GMV/SAP por nível também corrigidos, no mesmo dia.** Essas três métricas vêm
+  de um export SQL separado (`01_receita_semana_nivel_estrategia.csv`), que já traz o nível
+  pronto do Redshift — editei o corte de 1M/5M (`<=` → `<`) nas 6 queries que tinham essa
+  mesma régua (`01_receita_semana_nivel_estrategia.sql`, `01b_financeira_raw.sql`,
+  `02_safra_contacted.sql`, `03_safra_opportunity.sql`, `04_safra_closed_won.sql`,
+  `05_produtividade.sql`) e rodei de novo via Astrobox só a `01_receita_semana_nivel_estrategia.sql`
+  (é a única das 6 que o `build_data.js` realmente lê hoje — as outras 5 ficam só como
+  referência histórica, editadas por consistência mas sem uso no pipeline). Conferi
+  integridade: soma de Net Revenue/GMV por nível bate exatamente com o total sem quebra
+  (nenhum registro se perdeu ou duplicou na redistribuição).
+- **Aba Closers**: o card que era "C1 · Opp→SQL" virou **"C4 · SQL→CW"** — coorte nova e
+  independente (`closerCohortSqlCw` no `build_data.js`), ancorada na semana do SQL (não do
+  Opp): dos que chegaram a SQL na semana, quantos fecharam (CW) na mesma semana. O card
+  "C2 · SQL→Offer" não mudou (continua encadeado a partir do `closerCohort`, ancorado no Opp).
+  - **Novo card "Opps em Issues"**: contagem atual (snapshot na semana selecionada) de opps
+    parados no estágio `issues_identified_date`, ainda não chegaram a SQL. Pra isso, o próprio
+    **estoque do funil Closer ganhou um estágio novo**: era Opp→SQL→Offer→Contract, agora é
+    **Opp→Issues→SQL→Offer→Contract** (`closerEstoque` e `closerEstoqueHTML()`) — o que antes
+    ficava tudo junto em "Opp" agora se divide entre quem ainda não teve issues identificadas
+    e quem já teve mas não chegou a SQL.
+  - Com esses dois cards novos, a "Resultado semanal" de Closers foi de 7 pra **8 KPIs** —
+    precisei adicionar suporte a grid de 8 no CSS (`.g8`, 2 linhas de 4 colunas).
+- **Aba SDR**: meta da coorte **C1 · Opp→SQL confirmada em 60%** (`C1_OPP_SQL_META`) — não é
+  mais mocada. Só que, a pedido do Gabriel, o card mostra a meta (`meta 60%`) **sem** o badge
+  de % de atingimento (achou poluído) — então o número de atingimento é calculado
+  (`c1CloPct`/`cohPct` vs `C1_OPP_SQL_META`) mas não é exibido, só a referência da meta.
+  Isso vale nas duas abas onde esse card aparece (SDR e Closer, mesmo dado).
 
 ## Concluído (26/07/2026)
 
@@ -154,6 +195,10 @@ Alimenta a página **Semanal Área › Closers**:
   lead: opp/sql/offer/contract/closed_won/lost_deal (data mais recente vence).
 - `cohOpp`/`cohSql` (dentro de `porPessoa.closer[].porSemana`) — coorte C1 por pessoa (mesma
   lógica do `closerCohort`, só que por closer individual em vez do agregado).
+- `closerCohortSqlCw` — coorte C4 (SQL→CW), independente do `closerCohort` acima: ancorada na
+  semana do SQL, não do Opp. Dos que chegaram a SQL na semana, quantos fecharam na mesma semana.
+- `closerEstoque` ganhou o campo `issues` (estágio "Issues Identified", entre Opp e SQL) —
+  alimenta o card "Opps em Issues" e o novo segmento do gráfico de estoque.
 
 Alimenta a página **Semanal Área › Onboarding**:
 
@@ -215,6 +260,19 @@ Regenerar: `node app/build_data.js` (lê `Dados/*.csv` locais).
     item 7). Se o time tiver medida equivalente, comparar número a número antes de confiar
     100% nos valores. Vale sobretudo pro C1/C2 do Onboarding, que — pelo ciclo longo
     (~50 dias) — só vai ficar realmente sólido comparando várias semanas seguidas.
+11. ~~Editar as 6 queries em `Querys/` pra usar a borda nova de nível~~ — **resolvido (28/07)**:
+    as 6 foram editadas e a `01_receita_semana_nivel_estrategia.sql` (única em uso no pipeline)
+    foi reexportada via Astrobox. Net Revenue/GMV/SAP por nível já refletem a borda nova.
+12. **Aba Onboarding — pedido do Gabriel em 28/07, ainda NÃO implementado:**
+    - Card "Saídas do funil" devia virar **Accomplished / Unaccomplished** em vez de só
+      "Ativados 10k" — mas não existe nenhum campo na base (`06_operacional_raw.csv`) que
+      marque quando um onboarding é considerado "não realizado"/desistência. Perguntei ao
+      Gabriel qual seria a regra (prazo em dias sem ativar? outro campo?) e ele pausou esse
+      item pra fazer uma verificação antes (acabou virando a investigação da borda de nível,
+      item acima). **Retomar perguntando a regra de "Unaccomplished" antes de mexer.**
+    - Tirar os cards **C1 · CW→1k** e **C2 · 1k→5k**.
+    - Adicionar um card **CW → 10k direto** (coorte na mesma semana, sem passar por 1k/5k —
+      mesmo padrão do C3 que foi feito no SDR: contato→qualificação pulando a conexão).
 
 ## Convenções do projeto (não esquecer)
 

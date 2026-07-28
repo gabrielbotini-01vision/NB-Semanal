@@ -95,11 +95,11 @@
   .sec-head .hint{font-size:12px;color:var(--text-faint)}
 
   .grid{display:grid;gap:16px}
-  .g7{grid-template-columns:repeat(7,1fr)} .g6{grid-template-columns:repeat(6,1fr)} .g5{grid-template-columns:repeat(5,1fr)} .g4{grid-template-columns:repeat(4,1fr)}
+  .g8{grid-template-columns:repeat(4,1fr)} .g7{grid-template-columns:repeat(7,1fr)} .g6{grid-template-columns:repeat(6,1fr)} .g5{grid-template-columns:repeat(5,1fr)} .g4{grid-template-columns:repeat(4,1fr)}
   .g3{grid-template-columns:repeat(3,1fr)} .g2{grid-template-columns:repeat(2,1fr)}
   @media(max-width:1180px){.g7{grid-template-columns:repeat(4,1fr)}.g6,.g5{grid-template-columns:repeat(3,1fr)}}
-  @media(max-width:920px){.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:1fr}}
-  @media(max-width:640px){.g7,.g6,.g5,.g4,.g2{grid-template-columns:1fr}}
+  @media(max-width:920px){.g8,.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:1fr}}
+  @media(max-width:640px){.g8,.g7,.g6,.g5,.g4,.g2{grid-template-columns:1fr}}
 
   .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:20px;box-shadow:var(--sh-card);position:relative;overflow:hidden}
 
@@ -785,20 +785,21 @@ function closerStatusHTML(estrF){
 function closerEstoqueHTML(estrF){
   const rows=((D.closerEstoque&&D.closerEstoque[estrF||'all'])||[]).slice(-16);
   if(!rows.length) return '<span class="miss">Sem série de estoque — regenere o app_data.js com o build_data.js atualizado.</span>';
-  const max=Math.max(...rows.map(r=>r.opp+r.sql+r.offer+r.contract),1), H=190;
+  const max=Math.max(...rows.map(r=>r.opp+r.issues+r.sql+r.offer+r.contract),1), H=190;
   const h=v=>v>0?Math.max(2,(v/max)*H):0;
   const cols=rows.map(r=>{
-    const tot=r.opp+r.sql+r.offer+r.contract;
-    return `<div class="ecol" title="${semanaLabel(r.semana)} · total ${fN(tot)} — Opp ${fN(r.opp)} · SQL ${fN(r.sql)} · Offer ${fN(r.offer)} · Contract ${fN(r.contract)}">
+    const tot=r.opp+r.issues+r.sql+r.offer+r.contract;
+    return `<div class="ecol" title="${semanaLabel(r.semana)} · total ${fN(tot)} — Opp ${fN(r.opp)} · Issues ${fN(r.issues)} · SQL ${fN(r.sql)} · Offer ${fN(r.offer)} · Contract ${fN(r.contract)}">
       <div class="etot">${fN(tot)}</div>
       <div class="eseg" style="height:${h(r.contract)}px;background:var(--accent)"></div>
       <div class="eseg" style="height:${h(r.offer)}px;background:#344054"></div>
       <div class="eseg" style="height:${h(r.sql)}px;background:#667085"></div>
+      <div class="eseg" style="height:${h(r.issues)}px;background:#84919F"></div>
       <div class="eseg" style="height:${h(r.opp)}px;background:#98A2B3"></div>
       <div class="ecap">${r.semana.replace('2025-','25').replace('2026-','26')}</div></div>`;
   }).join('');
   return `<div class="estoque">${cols}</div>
-    <div class="legend"><span><i class="sw" style="background:#98A2B3"></i>Opp</span><span><i class="sw" style="background:#667085"></i>SQL</span><span><i class="sw" style="background:#344054"></i>Offer</span><span><i class="sw" style="background:var(--accent)"></i>Contract</span></div>`;
+    <div class="legend"><span><i class="sw" style="background:#98A2B3"></i>Opp</span><span><i class="sw" style="background:#84919F"></i>Issues</span><span><i class="sw" style="background:#667085"></i>SQL</span><span><i class="sw" style="background:#344054"></i>Offer</span><span><i class="sw" style="background:var(--accent)"></i>Contract</span></div>`;
 }
 // estoque de ativação (Onboarding): barras empilhadas (CW/1k/5k) por semana — mesmo padrão
 // visual, com D.onbEstoque (funil pós-CW: fica com o time de Onboarding, não Closer).
@@ -1049,16 +1050,16 @@ function renderAreaClosers(){
   const refT=refAgg;
   // Estoque do funil na POSIÇÃO da semana selecionada (snapshot), na estratégia filtrada
   const eCur=(D.closerEstoque?.[estrF]||[]).find(e=>e.semana===week);
-  const estTot=eCur?eCur.opp+eCur.sql+eCur.offer+eCur.contract:null;
+  const estTot=eCur?eCur.opp+eCur.issues+eCur.sql+eCur.offer+eCur.contract:null;
   const totSaidas=totCw+totLost;
   const winRatePct=totSaidas?Math.round(totCw/totSaidas*100):null;
   // delta de estoque da semana = entradas − saídas = virou opp − (fechou ganho + perdeu)
   const deltaEst=totOpps-totCw-totLost;
   const deltaPill=`Δ estoque <span class="att ${deltaEst>=0?'hi':'lo'}">${deltaEst>=0?'▲ +':'▼ '}${fN(deltaEst)}</span>`;
-  // Coorte Opp→SQL (C1) e SQL→Offer (C2, encadeado) na MESMA semana — mesmo conceito do C1/C2
-  // de SDR, aplicado ao funil de negociação. Meta do C1 confirmada em 28/07/2026 (C1_OPP_SQL_META).
-  const cohPct=coh&&coh.opp?Math.round(coh.sql/coh.opp*100):null;
-  const c2Pct=coh&&coh.sql?Math.round((coh.offer||0)/coh.sql*100):null;
+  // C4 · SQL→CW — coorte isolada, ancorada na semana do SQL (não do opp): dos que chegaram a
+  // SQL em W, quantos fecharam (CW) na MESMA semana.
+  const cohSqlCw=(D.closerCohortSqlCw?.[estrF]||{})[week]||null;
+  const c4Pct=cohSqlCw&&cohSqlCw.sql?Math.round(cohSqlCw.cw/cohSqlCw.sql*100):null;
   // FTE — closers que de fato receberam opp / fecharam CW na semana (mesma aproximação do SDR)
   const oppFteCount=(D.closerOppFte?.[estrF]||{})[week]||0;
   const cwFteCount=(D.closerCwFte?.[estrF]||{})[week]||0;
@@ -1074,9 +1075,9 @@ function renderAreaClosers(){
   const kpis=[
     ['Entradas',fN(totOpps),metaSub(totOpps,refT?.opps,`${listF.length} closers`),'Oportunidades recebidas (Opp in)',null,KIC.entradas],
     ['Saídas do funil',fN(totSaidas),`${fN(totCw)} CW · ${fN(totLost)} lost${winRatePct!=null?` · win rate ${winRatePct}%`:''}`,'Fechados: ganhos + perdidos',null,KIC.saidas],
-    ['Estoque atual',estTot!=null?fN(estTot):'—',deltaPill,'Funil de negociação atual (Opp/SQL/Offer/Contract)',null,KIC.estoque],
-    ['C1 · Opp→SQL',cohPct!=null?cohPct+'%':'—',coh?`${fN(coh.sql)}/${fN(coh.opp)} · meta ${C1_OPP_SQL_META}%`:'sem dado','Coorte: chegou a SQL na mesma semana',null,KIC.link],
-    ['C2 · SQL→Offer',c2Pct!=null?c2Pct+'%':'—',coh&&coh.sql?`${fN(coh.offer||0)}/${fN(coh.sql)} em SQL`:'sem dado','Do coorte do C1 · chegou a Offer na mesma semana',null,KIC.check],
+    ['Estoque atual',estTot!=null?fN(estTot):'—',deltaPill,'Funil de negociação atual (Opp/Issues/SQL/Offer/Contract)',null,KIC.estoque],
+    ['Opps em Issues',eCur&&eCur.issues!=null?fN(eCur.issues):'—','Ainda não chegou a SQL','Estágio "Issues Identified" do funil, snapshot atual',null,KIC.estoque],
+    ['C4 · SQL→CW',c4Pct!=null?c4Pct+'%':'—',cohSqlCw?`${fN(cohSqlCw.cw)}/${fN(cohSqlCw.sql)} em SQL`:'sem dado','Coorte: fechou (CW) na mesma semana do SQL',null,KIC.link],
     ['Opp / FTE / BD',oppsFteDia!=null?oppsFteDia.toFixed(2):'—',oppBD,'Oportunidades por FTE / dia útil',null,KIC.users],
     ['CW / FTE / BD',cwFteDia!=null?cwFteDia.toFixed(2):'—',cwBD,'Negócios fechados por FTE / dia útil','kpi-accent',KIC.target],
   ];
@@ -1148,7 +1149,7 @@ function renderAreaClosers(){
       <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d,cls,icon])=>`<div class="kpi ${cls||''}">${icon?`<span class="kpi-ic">${icon}</span>`:''}<span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div></div>
     <div class="sec"><div class="sec-head"><h2>Evolução do resultado</h2></div>
       <div class="grid g2">
-        <div class="card">${cardHd(KIC.estoque,'Estoque do funil Closer','snapshot no fim de cada semana · últ. 16 · Opp → SQL → Offer → Contract')}${closerEstoqueHTML(estrF)}</div>
+        <div class="card">${cardHd(KIC.estoque,'Estoque do funil Closer','snapshot no fim de cada semana · últ. 16 · Opp → Issues → SQL → Offer → Contract')}${closerEstoqueHTML(estrF)}</div>
         <div class="card">${cardHd(KIC.check,'Status atual por semana de entrada (opp)','virou opp × situação hoje · últ. 16')}${closerStatusHTML(estrF)}</div>
       </div></div>
     <div class="sec"><div class="sec-head"><h2>CW por nível de cliente</h2><span class="hint">fechamentos por semana · últimas 8 semanas</span></div>

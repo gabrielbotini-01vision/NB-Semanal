@@ -89,9 +89,11 @@ const mesBr  = d => { const [dd, mm, yy] = d.split('/'); return yy + '-' + mm; }
 const bucket = n => { n = (n || '').replace('N', ''); const x = +n;
   if (x === 2 || x === 3) return 'N2-N3'; if (x === 4 || x === 5) return 'N4-N5'; if (x >= 6) return 'N6+'; return 'Sem nivel'; };
 // operacional_raw.csv vem cru (SELECT *) — nível é derivado direto do amount_12_months
-// numérico, mesma régua de sempre (<=1M N2/N3 · <=5M N4/N5 · acima N6+).
+// numérico. Borda inclusiva no nível DE CIMA (confirmado com o Gabriel em 28/07/2026):
+// <1M N2-N3 · 1M a <5M N4-N5 · >=5M N6+. Quem está exatamente em 1M ou 5M conta pro nível
+// seguinte (antes era <= e ficava no nível de baixo — ver Pendencias/README.md).
 const bucketFromAmount = s => { const amt = parseFloat(s);
-  if (!isFinite(amt)) return 'Sem nivel'; if (amt <= 1000000) return 'N2-N3'; if (amt <= 5000000) return 'N4-N5'; return 'N6+'; };
+  if (!isFinite(amt)) return 'Sem nivel'; if (amt < 1000000) return 'N2-N3'; if (amt < 5000000) return 'N4-N5'; return 'N6+'; };
 // operacional_raw.csv tem campos de texto livre sem nenhum escape/aspa ao redor (motivo de
 // perda, nome de produtor com "&" etc.) — uma minoria de linhas fica desalinhada de um jeito
 // que a reconstrução por contagem de coluna (readCsv) não recupera 100%. Em vez de tentar
@@ -203,6 +205,9 @@ const sdrOppsNivelAcc = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} }; // 
 // mesma semana, quantos chegaram a Offer também na mesma semana (C2, encadeado — mesmo
 // padrão do C2 de SDR: sempre a partir do sub-coorte do estágio anterior, não do total).
 const closerCohort = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} }; // estr -> W -> { opp, sql, offer }
+// C4: coorte SQL→CW, ancorada na semana do SQL (não do opp) — dos que chegaram a SQL em W,
+// quantos fecharam (CW) na MESMA semana. Métrica isolada, não encadeada com C1/C2.
+const closerCohortSqlCw = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} }; // estr -> W(sql) -> { sql, cw }
 // saídas do funil de Closer por perda (Lost Deal) — mesmo papel do sdrUnq pro SDR.
 const closerLost = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} };   // estr -> W -> nº de lost deals
 // throughput semanal de CW (fechado ganho), só de leads com closer atribuído — denominador
@@ -318,6 +323,14 @@ for (const r of fop) {
   if (_lostD && closer) {
     const wl = anoSemana(_lostD);
     closerLost.all[wl] = (closerLost.all[wl] || 0) + 1; if (e) closerLost[e][wl] = (closerLost[e][wl] || 0) + 1;
+  }
+  // C4: coorte SQL→CW — dos leads que chegaram a SQL na semana W, quantos fecharam (CW) na
+  // MESMA semana. Âncora é a semana do SQL (diferente do C1/C2 acima, ancorados na semana do opp).
+  if (dates.sql_date && closer) {
+    const wsql = anoSemana(dates.sql_date);
+    const cwSame = dates.closed_won_date && anoSemana(dates.closed_won_date) === wsql;
+    const bumpC4 = o => { const cc = o[wsql] || (o[wsql] = { sql: 0, cw: 0 }); cc.sql++; if (cwSame) cc.cw++; };
+    bumpC4(closerCohortSqlCw.all); if (e) bumpC4(closerCohortSqlCw[e]);
   }
 
   // coorte semanal de ativação (Onboarding): denom = fechou (CW) em W; C1 = chegou a 1k em W;
@@ -665,21 +678,22 @@ for (const k of ESTOQUE_KEYS) for (const w in onbActFteSet[k]) onbActFte[k][w] =
 // semana. Sai do estoque ao fechar (Closed Won) ou perder (Lost Deal).
 const closerLeads = fop.map(r => ({
   estr: estr(r.sales_strategy),
-  opp: cleanDate(r.opportunity_create_date), sql: cleanDate(r.sql_date),
+  opp: cleanDate(r.opportunity_create_date), issues: cleanDate(r.issues_identified_date), sql: cleanDate(r.sql_date),
   offer: cleanDate(r.offer_presented_date), contract: cleanDate(r.contract_sent_date),
   cw: cleanDate(r.closed_won_date), lost: cleanDate(r.lost_deal_date),
 })).filter(l => l.opp); // só quem virou opp entra no estoque de closer
-const closerEstoque = {}; ESTOQUE_KEYS.forEach(k => closerEstoque[k] = []); // estr -> [{semana,opp,sql,offer,contract}]
+const closerEstoque = {}; ESTOQUE_KEYS.forEach(k => closerEstoque[k] = []); // estr -> [{semana,opp,issues,sql,offer,contract}]
 for (const w of semanas) {
   const startStr = weekStartUTC(w).toISOString().slice(0, 10);
   if (startStr > hojeStr) continue;
   let T = weekEndUTC(w).toISOString().slice(0, 10);
   if (T > hojeStr) T = hojeStr;
-  const acc = {}; ESTOQUE_KEYS.forEach(k => acc[k] = { opp: 0, sql: 0, offer: 0, contract: 0 });
+  const acc = {}; ESTOQUE_KEYS.forEach(k => acc[k] = { opp: 0, issues: 0, sql: 0, offer: 0, contract: 0 });
   for (const l of closerLeads) {
     if (l.opp > T) continue;                                          // ainda não virou opp até T
     if ((l.cw && l.cw <= T) || (l.lost && l.lost <= T)) continue;      // fechou (ganhou ou perdeu) — saiu do estoque
     let best = l.opp, stage = 'opp';                                  // etapa mais recente até T
+    if (l.issues && l.issues <= T && l.issues >= best) { best = l.issues; stage = 'issues'; }
     if (l.sql && l.sql <= T && l.sql >= best) { best = l.sql; stage = 'sql'; }
     if (l.offer && l.offer <= T && l.offer >= best) { best = l.offer; stage = 'offer'; }
     if (l.contract && l.contract <= T && l.contract >= best) { best = l.contract; stage = 'contract'; }
@@ -914,7 +928,7 @@ const DATA = {
   fte, fteSemanal,
   sdrEstoque, sdrCohort, sdrOwnerCohort, sdrUnq, sdrOppsNivel, sdrOppFte, sdrCohortStatus, sdrContactFte,
   diasUteisSemana, closerEstoque, onbEstoque,
-  closerCohort, closerLost, closerCw: closerCwAcc, closerCohortStatus, closerOppFte, closerCwFte,
+  closerCohort, closerCohortSqlCw, closerLost, closerCw: closerCwAcc, closerCohortStatus, closerOppFte, closerCwFte,
   onbCohort, onbAct: onbActAcc, onbCohortStatus, onbCwFte, onbActFte,
   mesFechado,
 };

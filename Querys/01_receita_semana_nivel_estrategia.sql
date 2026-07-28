@@ -119,9 +119,9 @@ bucketed AS (
         DATE_TRUNC('month', hub_date)::date AS mes,   -- quebra semanas que cruzam a virada de mês
         CASE
             WHEN amount_12_months <=   600000 THEN 'N2'
-            WHEN amount_12_months <=  1000000 THEN 'N3'
+            WHEN amount_12_months <   1000000 THEN 'N3'
             WHEN amount_12_months <=  2000000 THEN 'N4'
-            WHEN amount_12_months <=  5000000 THEN 'N5'
+            WHEN amount_12_months <   5000000 THEN 'N5'
             WHEN amount_12_months <= 10000000 THEN 'N6'
             ELSE 'N7'
         END AS nivel,

@@ -89,9 +89,9 @@ SELECT
     CASE
         WHEN n.amount_12_months IS NULL       THEN 'Sem nivel'
         WHEN n.amount_12_months <=   600000   THEN 'N2'
-        WHEN n.amount_12_months <=  1000000   THEN 'N3'
+        WHEN n.amount_12_months <   1000000   THEN 'N3'
         WHEN n.amount_12_months <=  2000000   THEN 'N4'
-        WHEN n.amount_12_months <=  5000000   THEN 'N5'
+        WHEN n.amount_12_months <   5000000   THEN 'N5'
         WHEN n.amount_12_months <= 10000000   THEN 'N6'
         ELSE 'N7'
     END AS nivel,
