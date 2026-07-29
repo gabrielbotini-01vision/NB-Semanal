@@ -286,7 +286,21 @@ const isRealCloser = o => { o = (o || '').toLowerCase(); return !!o && rosterClo
 // Filtro do Power BI (visual "Tamanho Carteira de Opps"): só opps válidas e dentro do funil
 // BR — mesmos campos de dhmv_sales_touched (is_opp_valid/is_opp_br_funnel), sem precisar de
 // join novo. Efeito pequeno sozinho (~99,7% das opps já passam), mas replicado por completude.
+// Mesmos campos usados também pelo Power BI como 'f_salesfunnel_dates'[is_opp_valid/is_opp_br_funnel]
+// — não achamos essa tabela separada no Redshift (só produtos de automação sem relação; ver
+// Pendencias/README.md), o mais provável é ser o mesmo dado importado 2x no modelo do Power BI.
 const oppValidOk = r => (r.is_opp_valid || '').trim() === 'True' && (r.is_opp_br_funnel || '').trim() === 'True';
+// ⚠️ Testado em 30/07/2026: adicionar leadFlowOk (PQL/PPQL + Seed 1/2) ao Estoque de Closer
+// afasta o número do Power BI em vez de aproximar (o visual "Tamanho Carteira de Opps" não
+// parece aplicar esse filtro) — por isso o closerLeads abaixo usa só isRealCloser+oppValidOk,
+// sem leadFlowOk (diferente do Estoque de SDR, onde leadFlowOk é confirmado necessário).
+// Testado em 30/07/2026: ao contrário de SDR/Closer, um roster curado (Cargo=Onboarding+Ativo=Sim,
+// 19 pessoas) deixa o Estoque de Onboarding MUITO abaixo do Power BI (~296 vs ~603 na última
+// semana) — a maioria das 55 pessoas que já apareceram como onboarding_email_sf histórico NÃO
+// está nesse roster (saíram do time, mudaram de cargo etc.), mas ainda assim contam no Power BI.
+// O filtro real de "Nome onboarders não é em branco" é bem mais simples: só exige ter alguém
+// atribuído (quase sempre true — 4755/4756 dos CW já tem onboarding_email_sf preenchido), sem
+// exigir que essa pessoa esteja num roster "ativo hoje".
 let dataMaxRaw = ''; // data mais recente com resultado na base (max das datas de estágio)
 
 for (const r of fop) {
@@ -752,19 +766,21 @@ for (const w of semanas) {
 // Mesmo conceito, no funil pós-CW: quantas oportunidades (opp_id) fechadas (CW) estão
 // paradas em cada faixa de ativação — CW mas ainda não 1k / 1k mas ainda não 5k / 5k mas
 // ainda não 10k — no fim de cada semana. Sai do estoque ao ativar 10k (fora do escopo do
-// Onboarding, já é "ativado"). Contagem por opp_id (não lead_id), igual à métrica de referência.
-// ⚠️ Aqui (e no estoque de Closer acima) NÃO existe no SELECT * um campo equivalente a
-// "lead_end_date"/"Onboarding_close_date" (data em que a Hotmart para de rastrear o registro
-// mesmo sem ele ter avançado) — então, ao contrário do Power BI, um registro parado não
-// "envelhece" pra fora do estoque; ele acumula na faixa indefinidamente. Os números tendem a
-// ficar MAIORES que o Power BI pra faixas antigas — se um dia expusermos esse campo (ou
-// equivalente) no export, dá pra replicar o comportamento de baixa exata.
+// Onboarding, já é "ativado") OU ao ser marcado accomplished/unaccomplished sem ativar (mesmo
+// papel do "Onboarding_close_date" do Power BI — COALESCE(accomplished_date,
+// unaccomplished_date), campos que já lemos pro card Accomplished/Unaccomplished da página).
+// Contagem por opp_id (não lead_id), igual à métrica de referência.
 const onbLeadsMap = new Map();
 for (const r of fop) {
   const cw = cleanDate(r.closed_won_date); if (!cw) continue;
+  if (!cleanEmail(r.onboarding_email_sf) || !oppValidOk(r) || !leadFlowOk(r)) continue; // filtros do Power BI
   const oppId = (r.opp_id || '').trim(); if (!oppId || onbLeadsMap.has(oppId)) continue;
+  // Onboarding_close_date (DAX do Power BI): accomplished_date se preenchido, senão
+  // unaccomplished_date, senão "nunca" — accomplished tem prioridade (não é o menor dos dois).
+  const accomp = cleanDate(r.onboarding_accomplished_date), unaccomp = cleanDate(r.onboarding_unaccomplished_date);
+  const close = accomp || unaccomp || null;
   onbLeadsMap.set(oppId, {
-    estr: estr(r.sales_strategy), cw,
+    estr: estr(r.sales_strategy), cw, close,
     a1k: cleanDate(r.activation_date_1k), a5k: cleanDate(r.activation_date_5k), a10k: cleanDate(r.activation_date_10k),
   });
 }
@@ -779,6 +795,7 @@ for (const w of semanas) {
   for (const l of onbLeads) {
     if (l.cw > T) continue;                                 // ainda não fechou até T
     if (l.a10k && l.a10k <= T) continue;                     // já ativou 10k — saiu do estoque
+    if (l.close && l.close <= T) continue;                   // accomplished/unaccomplished até T — saiu do estoque
     let best = l.cw, stage = 'cw';                           // etapa mais recente até T
     if (l.a1k && l.a1k <= T && l.a1k >= best) { best = l.a1k; stage = 'a1k'; }
     if (l.a5k && l.a5k <= T && l.a5k >= best) { best = l.a5k; stage = 'a5k'; }
