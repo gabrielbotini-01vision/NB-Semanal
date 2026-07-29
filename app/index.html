@@ -780,26 +780,27 @@ function closerStatusHTML(estrF){
   return `${legend}<div class="estoque">${cols}</div>
     <div class="edata-lbl">Conversão da safra · closed won / total que virou opp</div><div class="edata">${data}</div>`;
 }
-// estoque do funil de negociação do Closer: barras empilhadas (Opp/SQL/Offer/Contract) por
-// semana, mesmo padrão visual do estoque de SDR (série D.closerEstoque vinda do build_data.js).
+// estoque do funil de negociação do Closer: barras empilhadas (Opp/Issues/SQL/Offer/Contract)
+// por semana — mesmo padrão visual do estoque de SDR (legenda antes do gráfico, rótulo do
+// valor dentro de cada segmento e variação WoW abaixo), série D.closerEstoque do build_data.js.
 function closerEstoqueHTML(estrF){
   const rows=((D.closerEstoque&&D.closerEstoque[estrF||'all'])||[]).slice(-16);
   if(!rows.length) return '<span class="miss">Sem série de estoque — regenere o app_data.js com o build_data.js atualizado.</span>';
-  const max=Math.max(...rows.map(r=>r.opp+r.issues+r.sql+r.offer+r.contract),1), H=190;
+  const tots=rows.map(r=>r.opp+r.issues+r.sql+r.offer+r.contract);
+  const max=Math.max(...tots,1), H=190;
   const h=v=>v>0?Math.max(2,(v/max)*H):0;
-  const cols=rows.map(r=>{
-    const tot=r.opp+r.issues+r.sql+r.offer+r.contract;
+  const ES=[['contract','var(--accent)','#fff'],['offer','#344054','#fff'],['sql','#667085','#fff'],['issues','#84919F','#fff'],['opp','#98A2B3','#fff']];
+  const cols=rows.map((r,i)=>{
+    const tot=tots[i];
+    const segs=ES.map(([k,c,lc])=>{const hh=h(r[k]);return `<div class="eseg" style="height:${hh}px;background:${c}">${hh>=13?`<span class="eseglbl" style="color:${lc}">${fN(r[k])}</span>`:''}</div>`;}).join('');
     return `<div class="ecol" title="${semanaLabel(r.semana)} · total ${fN(tot)} — Opp ${fN(r.opp)} · Issues ${fN(r.issues)} · SQL ${fN(r.sql)} · Offer ${fN(r.offer)} · Contract ${fN(r.contract)}">
-      <div class="etot">${fN(tot)}</div>
-      <div class="eseg" style="height:${h(r.contract)}px;background:var(--accent)"></div>
-      <div class="eseg" style="height:${h(r.offer)}px;background:#344054"></div>
-      <div class="eseg" style="height:${h(r.sql)}px;background:#667085"></div>
-      <div class="eseg" style="height:${h(r.issues)}px;background:#84919F"></div>
-      <div class="eseg" style="height:${h(r.opp)}px;background:#98A2B3"></div>
+      <div class="etot">${fN(tot)}</div>${segs}
       <div class="ecap">${r.semana.replace('2025-','25').replace('2026-','26')}</div></div>`;
   }).join('');
-  return `<div class="estoque">${cols}</div>
-    <div class="legend"><span><i class="sw" style="background:#98A2B3"></i>Opp</span><span><i class="sw" style="background:#84919F"></i>Issues</span><span><i class="sw" style="background:#667085"></i>SQL</span><span><i class="sw" style="background:#344054"></i>Offer</span><span><i class="sw" style="background:var(--accent)"></i>Contract</span></div>`;
+  const legend=`<div class="legend" style="margin:0 0 10px"><span><i class="sw" style="background:#98A2B3"></i>Opp</span><span><i class="sw" style="background:#84919F"></i>Issues</span><span><i class="sw" style="background:#667085"></i>SQL</span><span><i class="sw" style="background:#344054"></i>Offer</span><span><i class="sw" style="background:var(--accent)"></i>Contract</span></div>`;
+  const data=rows.map((r,i)=>{const d=i>0?tots[i]-tots[i-1]:null;const col=d==null?'':(d>0?'var(--success)':d<0?'var(--danger)':'var(--text-faint)');return `<div class="edcell" style="${col?'color:'+col+';font-weight:700':''}">${d==null?'—':(d>0?'+':d<0?'−':'')+fN(Math.abs(d))}</div>`;}).join('');
+  return `${legend}<div class="estoque">${cols}</div>
+    <div class="edata-lbl">Variação do estoque · WoW</div><div class="edata">${data}</div>`;
 }
 // estoque de ativação (Onboarding): barras empilhadas (CW/1k/5k) por semana — mesmo padrão
 // visual, com D.onbEstoque (funil pós-CW: fica com o time de Onboarding, não Closer).

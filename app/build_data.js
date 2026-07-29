@@ -255,6 +255,11 @@ function pushCiclo(key, dateA, dateB) {
 // — a PÁGINA de SDR conta só quem é "real"; a tabela mantém todos (auditoria).
 const fDiretorio = readCsvOptional('Imagens Sales.csv', ',');
 let rosterSdr = new Set(fDiretorio.filter(r => (r.Cargo || '').trim() === 'SDR' && (r.Ativo || '').trim() === 'Sim').map(r => (r.Email || '').trim().toLowerCase()).filter(Boolean));
+// Inclusão manual: promovidos a Closer que já não aparecem com Cargo=SDR no diretório, mas
+// atuaram como SDR antes da promoção — a pedido do Gabriel (30/07/2026), mantidos no funil de
+// SDR pra não perder os contatados/coortes do período em que trabalharam como SDR.
+const SDR_MANUAL_INCLUI = new Set(['olivio.blach@hotmart.com', 'lucas.guerrero@hotmart.com']);
+if (rosterSdr.size) SDR_MANUAL_INCLUI.forEach(e => rosterSdr.add(e));
 let NAO_SDR = new Set();
 if (!rosterSdr.size) {
   console.warn('[aviso] Dados/Imagens Sales.csv sem ninguém com Cargo=SDR — usando heurístico antigo de "SDR real" (menos preciso, ver Pendencias/README.md).');
@@ -269,6 +274,19 @@ const isRealSdr = o => { o = (o || '').toLowerCase(); return !!o && rosterSdr.ha
 // roster oficial acima.
 const leadFlowOk = r => { const lf = (r.lead_flow || '').trim(), seg = (r.lead_flow_segmentation || '').trim();
   return lf !== 'PQL' && lf !== 'PPQL' && seg !== 'Seed 1' && seg !== 'Seed 2'; };
+// "Closer real" = mesmo padrão do isRealSdr acima, via Dados/Imagens Sales.csv (Cargo=Closer,
+// Ativo=Sim). Reconciliado com o "Tamanho Carteira de Opps" do Power BI em 29/07/2026: o
+// total (Opp+SQL+Offer+Contract) bate de perto nas semanas recentes (~292 vs ~290 na última),
+// com folga maior em semanas mais antigas — esperado, já que o roster "Ativo" é um snapshot de
+// HOJE aplicado retroativamente (quem entrou/saiu do time nas semanas mais antigas puxa o
+// número pra outro lado; não dá pra reconstruir o roster histórico exato sem uma fonte
+// versionada). Página de Closer conta só quem é "real"; sem filtro, a tabela audita todos.
+const rosterCloser = new Set(fDiretorio.filter(r => (r.Cargo || '').trim() === 'Closer' && (r.Ativo || '').trim() === 'Sim').map(r => (r.Email || '').trim().toLowerCase()));
+const isRealCloser = o => { o = (o || '').toLowerCase(); return !!o && rosterCloser.has(o); };
+// Filtro do Power BI (visual "Tamanho Carteira de Opps"): só opps válidas e dentro do funil
+// BR — mesmos campos de dhmv_sales_touched (is_opp_valid/is_opp_br_funnel), sem precisar de
+// join novo. Efeito pequeno sozinho (~99,7% das opps já passam), mas replicado por completude.
+const oppValidOk = r => (r.is_opp_valid || '').trim() === 'True' && (r.is_opp_br_funnel || '').trim() === 'True';
 let dataMaxRaw = ''; // data mais recente com resultado na base (max das datas de estágio)
 
 for (const r of fop) {
@@ -703,12 +721,12 @@ for (const k of ESTOQUE_KEYS) for (const w in onbActFteSet[k]) onbActFte[k][w] =
 // Mesmo conceito do estoque de SDR, aplicado ao funil de negociação: quantos leads (que já
 // viraram opp) estão parados em cada etapa — Opp / SQL / Offer / Contract — no fim de cada
 // semana. Sai do estoque ao fechar (Closed Won) ou perder (Lost Deal).
-const closerLeads = fop.map(r => ({
+const closerLeads = fop.filter(r => isRealCloser(cleanEmail(r.closer_email_sf)) && oppValidOk(r)).map(r => ({
   estr: estr(r.sales_strategy),
   opp: cleanDate(r.opportunity_create_date), issues: cleanDate(r.issues_identified_date), sql: cleanDate(r.sql_date),
   offer: cleanDate(r.offer_presented_date), contract: cleanDate(r.contract_sent_date),
   cw: cleanDate(r.closed_won_date), lost: cleanDate(r.lost_deal_date),
-})).filter(l => l.opp); // só quem virou opp entra no estoque de closer
+})).filter(l => l.opp); // só quem virou opp entra no estoque de closer, só Closer real e opp válida/BR
 const closerEstoque = {}; ESTOQUE_KEYS.forEach(k => closerEstoque[k] = []); // estr -> [{semana,opp,issues,sql,offer,contract}]
 for (const w of semanas) {
   const startStr = weekStartUTC(w).toISOString().slice(0, 10);
