@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>New Business · Cockpit</title>
+<title>New Business · Semanal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -199,6 +199,8 @@
   table.tbl{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;font-size:12.5px;box-shadow:var(--sh-card)}
   table.tbl thead th{background:var(--surface);color:var(--text-faint);text-align:left;font-weight:700;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;padding:12px 16px;white-space:nowrap;border-bottom:1px solid var(--border)}
   table.tbl thead th.sortable{cursor:pointer;user-select:none}
+  table.tbl thead tr.tbl-grouphd th{text-align:center;padding:10px 16px 4px;border-bottom:none;color:var(--text);font-size:13px;font-weight:700}
+  table.tbl thead tr.tbl-grouphd+tr th{padding-top:2px}
   .th-ic{display:inline-flex;vertical-align:-2px;margin-right:4px}
   .th-ic svg{width:12px;height:12px}
   table.tbl thead th.sortable:hover{color:var(--accent)}
@@ -219,7 +221,6 @@
   .legend span{display:inline-flex;align-items:center;gap:6px}
   .legend .sw{width:12px;height:12px;border-radius:4px;flex:none}
   .miss{color:var(--text-faint);font-style:italic}
-  .mockbadge{font-weight:700;font-family:var(--font-sans);font-size:10.5px;padding:2px 8px;border-radius:var(--r-pill);display:inline-flex;align-items:center;gap:3px;white-space:nowrap;color:#B54708;background:var(--warn-bg);cursor:help}
 
   /* 1:1 Gestor */
   .oneone{display:grid;grid-template-columns:260px 1fr;gap:18px;align-items:start}
@@ -427,8 +428,16 @@ function groupedTable({rows,groupBy,groupOrder,groupLabel,cols,kind,totals,sort,
     if(totals) body+=aggRow('Total geral', rows, true);
   }
   const ind=c=>(sort&&sort.key===c.key)?(sort.dir==='asc'?' ▲':' ▼'):'';
+  // linha extra de super-cabeçalho (ex.: "Atual"/"Hist. 5 semanas"), só se alguma coluna
+  // tiver `group` — colunas consecutivas com o mesmo `group` viram um único <th colspan>.
+  let groupRow='';
+  if(cols.some(c=>c.group)){
+    const segs=[]; let i=0;
+    while(i<cols.length){ const g=cols[i].group; let span=1; while(i+span<cols.length&&cols[i+span].group===g) span++; segs.push({g,span}); i+=span; }
+    groupRow=`<tr class="tbl-grouphd"><th></th>${segs.map(s=>`<th colspan="${s.span}">${s.g||''}</th>`).join('')}</tr>`;
+  }
   return `<div class="card" style="padding:0;overflow-x:auto">${hd?`<div class="tbl-hd">${hd}</div>`:''}<table class="tbl">
-    <thead><tr><th>Pessoa</th>${cols.map(c=>`<th class="${alignClass(c)}${c.sort?' sortable':''}" data-k="${c.key||''}">${c.icon?`<span class="th-ic">${c.icon}</span>`:''}${c.label}${ind(c)}</th>`).join('')}</tr></thead>
+    <thead>${groupRow}<tr><th>Pessoa</th>${cols.map(c=>`<th class="${alignClass(c)}${c.sort?' sortable':''}" data-k="${c.key||''}">${c.icon?`<span class="th-ic">${c.icon}</span>`:''}${c.label}${ind(c)}</th>`).join('')}</tr></thead>
     <tbody>${body}</tbody></table></div>`;
 }
 function rowHTML(r,i,cols,kind){
@@ -855,9 +864,6 @@ const KIC={
   users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
   target:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
 };
-// badge de alerta pra métrica com valor MOCADO/estimado — meta ou regra ainda não confirmada
-// com o time de negócio. Sempre visível ao lado do valor, pra não confundir com dado validado.
-const mockBadge=title=>`<span class="mockbadge" title="${title||'Métrica ainda não validada com o time — valor estimado, favor confirmar a regra correta.'}">⚠ a validar</span>`;
 // meta da coorte C1 · Opp→SQL (compartilhada entre as abas SDR e Closer, mesmo card/dado) —
 // confirmada em 28/07/2026, não é mais mockada.
 const C1_OPP_SQL_META=60;
@@ -982,20 +988,20 @@ function renderAreaSdr(){
   const cols=[
     // ENTRADA/CONVERSÃO/OUTPUT da semana atual
     {key:'contA',label:'Contatados · sem.',align:'c',icon:TI.c,render:r=>`<span class="mono">${fN(contOwnerAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>contOwnerAt(r,week))),sort:r=>contOwnerAt(r,week)},
-    {key:'connA',label:'C1 · sem.',align:'c',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,week)!=null?cohAt(r,week)+'%':'—'}</span>`,agg:rows=>c2Agg(rows,week),sort:r=>cohAt(r,week)},
-    {key:'oppsA',label:'Opps · sem.',align:'c',icon:TI.opp,render:r=>`<span class="mono">${fN(oppsAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>oppsAt(r,week))),sort:r=>oppsAt(r,week)},
-    // PRODUTIVIDADE por dia útil (janela de 5 semanas) — agregador = média por SDR
-    {key:'pdContacted',label:'Contat./BD · 5s',align:'c',icon:TI.pd,render:r=>bdCell(pdCont(r),BD_TGT[r.estrategia]?.contacted,1),agg:rows=>bdAgg(rows,pdCont,1,tg=>tg?.contacted),sort:pdCont},
-    {key:'pdOpp',label:'Opps/BD · 5s',align:'c',icon:TI.pd,render:r=>bdCell(pdOppFn(r),BD_TGT[r.estrategia]?.opps,2),agg:rows=>bdAgg(rows,pdOppFn,2,tg=>tg?.opps),sort:pdOppFn},
-    // CONVERSÃO C1 acumulada na janela de 5 semanas (mesmo espírito do Opp→SQL · 5s abaixo)
-    {key:'c15s',label:'C1 · 5s',align:'c',icon:TI.conn,render:r=>`<span class="mono">${cohRate5(r)!=null?cohRate5(r)+'%':'—'}</span>`,agg:c2Agg5,sort:cohRate5},
-    // Opp→SQL acumulado das opps geradas nas últimas 5 semanas (janela maior, não é coorte de
-    // mesma semana — mostra quanto do que o SDR gerou recentemente já avançou no Closer).
-    {key:'oppSql5',label:'Opp→SQL · 5s',align:'c',icon:TI.opp,render:r=>`<span class="mono">${oppSqlRate5(r)!=null?oppSqlRate5(r)+'%':'—'}</span>`,agg:rows=>{const o=sumBy(rows,opp5Sum),s=sumBy(rows,oppSql5Sum);return o?Math.round(s/o*100)+'%':'—';},sort:oppSqlRate5},
+    {key:'connA',label:'C1 · sem.',align:'c',icon:TI.conn,group:'Atual',render:r=>`<span class="mono">${cohAt(r,week)!=null?cohAt(r,week)+'%':'—'}</span>`,agg:rows=>c2Agg(rows,week),sort:r=>cohAt(r,week)},
+    {key:'oppsA',label:'Opps · sem.',align:'c',icon:TI.opp,group:'Atual',render:r=>`<span class="mono">${fN(oppsAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>oppsAt(r,week))),sort:r=>oppsAt(r,week)},
     // MIX das opps por nível de cliente (acumulado 3 semanas) — proporções N2-N3/N4-N5/N6+
     {key:'n1',label:'% N2-N3',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,0)}%</span>`,agg:rows=>nivAgg(rows,0),sort:r=>nivelPct(r,0)},
     {key:'n2',label:'% N4-N5',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,1)}%</span>`,agg:rows=>nivAgg(rows,1),sort:r=>nivelPct(r,1)},
     {key:'n3',label:'% N6+',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,2)}%</span>`,agg:rows=>nivAgg(rows,2),sort:r=>nivelPct(r,2)},
+    // PRODUTIVIDADE por dia útil (janela de 5 semanas) — agregador = média por SDR
+    {key:'pdContacted',label:'Contat./BD · 5s',align:'c',icon:TI.pd,group:'Hist. 5 semanas',render:r=>bdCell(pdCont(r),BD_TGT[r.estrategia]?.contacted,1),agg:rows=>bdAgg(rows,pdCont,1,tg=>tg?.contacted),sort:pdCont},
+    {key:'pdOpp',label:'Opps/BD · 5s',align:'c',icon:TI.pd,group:'Hist. 5 semanas',render:r=>bdCell(pdOppFn(r),BD_TGT[r.estrategia]?.opps,2),agg:rows=>bdAgg(rows,pdOppFn,2,tg=>tg?.opps),sort:pdOppFn},
+    // CONVERSÃO C1 acumulada na janela de 5 semanas (mesmo espírito do Opp→SQL · 5s abaixo)
+    {key:'c15s',label:'C1 · 5s',align:'c',icon:TI.conn,group:'Hist. 5 semanas',render:r=>`<span class="mono">${cohRate5(r)!=null?cohRate5(r)+'%':'—'}</span>`,agg:c2Agg5,sort:cohRate5},
+    // Opp→SQL acumulado das opps geradas nas últimas 5 semanas (janela maior, não é coorte de
+    // mesma semana — mostra quanto do que o SDR gerou recentemente já avançou no Closer).
+    {key:'oppSql5',label:'Opp→SQL · 5s',align:'c',icon:TI.opp,group:'Hist. 5 semanas',render:r=>`<span class="mono">${oppSqlRate5(r)!=null?oppSqlRate5(r)+'%':'—'}</span>`,agg:rows=>{const o=sumBy(rows,opp5Sum),s=sumBy(rows,oppSql5Sum);return o?Math.round(s/o*100)+'%':'—';},sort:oppSqlRate5},
   ];
   // TODOS que contataram (por owner_email) na janela de 3 semanas — mescla com os dados de
   // opp/nível do SDR correspondente quando existe. Assim a tabela reconcilia com o card Entradas.
@@ -1068,9 +1074,9 @@ function renderAreaClosers(){
   const oppsFteDia=diasUteis?oppsFte/diasUteis:null;
   const cwFteDia=diasUteis?cwFte/diasUteis:null;
   const bdt=BD_TGT_CLOSER[estrF]||{};
-  const bdPill=(val,tgt)=>tgt?` <span class="att ${val!=null&&val>=tgt?'hi':'lo'}">${val!=null?Math.round(val/tgt*100):0}%</span>`:` ${mockBadge('Meta de Opp/BD e CW/BD do Closer ainda não confirmada com o time — favor validar o valor certo.')}`;
-  const oppBD=(bdt.opps?`meta ${bdt.opps}/BD`:'sem meta')+bdPill(oppsFteDia,bdt.opps)+` · média ${oppsFte.toFixed(2)}/FTE · ${oppFteCount} closers · ${diasUteis} BD`;
-  const cwBD=(bdt.cw?`meta ${bdt.cw}/BD`:'sem meta')+bdPill(cwFteDia,bdt.cw)+` · média ${cwFte.toFixed(2)}/FTE · ${cwFteCount} closers · ${diasUteis} BD`;
+  const bdPill=(val,tgt)=>tgt?` <span class="att ${val!=null&&val>=tgt?'hi':'lo'}">${val!=null?Math.round(val/tgt*100):0}%</span>`:'';
+  const oppBD=(bdt.opps?`meta ${bdt.opps}/BD${bdPill(oppsFteDia,bdt.opps)} · `:'')+`média ${oppsFte.toFixed(2)}/FTE · ${oppFteCount} closers · ${diasUteis} BD`;
+  const cwBD=(bdt.cw?`meta ${bdt.cw}/BD${bdPill(cwFteDia,bdt.cw)} · `:'')+`média ${cwFte.toFixed(2)}/FTE · ${cwFteCount} closers · ${diasUteis} BD`;
   const kpis=[
     ['Entradas',fN(totOpps),metaSub(totOpps,refT?.opps,`${listF.length} closers`),'Oportunidades recebidas (Opp in)',null,KIC.entradas],
     ['Saídas do funil',fN(totSaidas),`${fN(totCw)} CW · ${fN(totLost)} lost${winRatePct!=null?` · win rate ${winRatePct}%`:''}`,'Fechados: ganhos + perdidos',null,KIC.saidas],
@@ -1096,51 +1102,64 @@ function renderAreaClosers(){
     <span><b style="font-size:16px">${cwFte.toFixed(2)}</b> <span style="color:var(--text-muted);font-size:12px">CW/FTE</span></span>
     <span><b style="font-size:16px">${cwFteDia!=null?cwFteDia.toFixed(2):'—'}</b> <span style="color:var(--text-muted);font-size:12px">CW/FTE/dia útil (${diasUteis}d)</span></span>
   </div>`;
-  // semanas de referência (atual, −1, −2) — mesmo padrão da tabela SDR.
+  // janela de referência (semana atual + últimas 5, mesmo padrão da tabela SDR).
   const idxW=D.semanas.indexOf(week);
-  const wB=D.semanas[idxW-1]||null, wC=D.semanas[idxW-2]||null;
-  const wkNum=w=>w?('Semana '+ +w.split('-W')[1]):'−';
-  const lblB=wkNum(wB), lblC=wkNum(wC);
-  const wkShort=w=>w?('S'+ +w.split('-W')[1]):'−'; const sB=wkShort(wB), sC=wkShort(wC);
+  const weeks5=[0,1,2,3,4].map(i=>D.semanas[idxW-i]).filter(Boolean);
+  // mesma janela de 5 semanas, deslocada 1 semana pra trás — usada só pra calcular a variação
+  // semana a semana (WoW) da produtividade, já que ainda não há meta confirmada (BD_TGT_CLOSER).
+  const weeks5Prev=[1,2,3,4,5].map(i=>D.semanas[idxW-i]).filter(Boolean);
   const cwAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return x?(x.cw||0):0;};
   const oppsAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return x?(x.opps||0):0;};
+  const oppCwAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return x?(x.oppCw||0):0;};
   // C1 por pessoa: dos que a pessoa recebeu como opp NA semana W, quantos chegaram a SQL na
   // MESMA semana. Lê direto de porSemana (sem mapa auxiliar — closer, ao contrário do SDR, não
   // tem o problema de atribuição tardia que motivou o sdrOwnerCohort).
   const cohAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return (x&&x.cohOpp)?Math.round(x.cohSql/x.cohOpp*100):null;};
-  const cwNivel3=r=>{
-    const a=[0,0,0];
-    [week,wB,wC].forEach(w=>{const x=w&&(r.porSemana||{})[w]; if(x&&x.cwNivel) x.cwNivel.forEach((v,j)=>a[j]+=v||0);});
-    return a;
-  };
-  const diasUteis3=[week,wB,wC].reduce((s,w)=>s+(w?(D.diasUteisSemana?.[w]||0):0),0);
+  // mix de CW por nível na janela de 5 semanas (mesma janela das outras colunas de histórico).
+  const cwNivel5=r=>{const a=[0,0,0]; weeks5.forEach(w=>{const x=w&&(r.porSemana||{})[w]; if(x&&x.cwNivel) x.cwNivel.forEach((v,j)=>a[j]+=v||0);}); return a;};
+  const nivelPct=(r,i)=>{const a=cwNivel5(r); const t=(a[0]+a[1]+a[2])||1; return Math.round((a[i]||0)/t*100);};
+  const diasUteis5=weeks5.reduce((s,w)=>s+(D.diasUteisSemana?.[w]||0),0);
+  const diasUteis5Prev=weeks5Prev.reduce((s,w)=>s+(D.diasUteisSemana?.[w]||0),0);
   const sumBy=(rows,f)=>rows.reduce((s,r)=>s+(f(r)||0),0);
-  const cohAgg=(rows,w)=>{let co=0,cs=0;rows.forEach(r=>{const x=w&&(r.porSemana||{})[w];if(x){co+=x.cohOpp||0;cs+=x.cohSql||0;}});return co?Math.round(cs/co*100)+'%':'—';};
-  const nivAgg=(rows,i)=>{const a=[0,0,0];rows.forEach(r=>[week,wB,wC].forEach(w=>{const x=w&&(r.porSemana||{})[w];if(x&&x.cwNivel)x.cwNivel.forEach((v,j)=>a[j]+=v||0);}));const t=(a[0]+a[1]+a[2])||1;return Math.round((a[i]||0)/t*100)+'%';};
-  // produtividade/dia útil (3 sem.) por pessoa + agregador = MÉDIA por closer (não soma).
-  const pdOppFn=r=>diasUteis3?(oppsAt(r,week)+oppsAt(r,wB)+oppsAt(r,wC))/diasUteis3:null;
-  const pdCwFn=r=>diasUteis3?(cwAt(r,week)+cwAt(r,wB)+cwAt(r,wC))/diasUteis3:null;
+  const c2Agg=(rows,w)=>{let co=0,cs=0;rows.forEach(r=>{const x=w&&(r.porSemana||{})[w];if(x){co+=x.cohOpp||0;cs+=x.cohSql||0;}});return co?Math.round(cs/co*100)+'%':'—';};
+  const nivAgg=(rows,i)=>{const a=[0,0,0];rows.forEach(r=>{const ai=cwNivel5(r);a[0]+=ai[0];a[1]+=ai[1];a[2]+=ai[2];});const t=(a[0]+a[1]+a[2])||1;return Math.round((a[i]||0)/t*100)+'%';};
+  // produtividade/dia útil E coorte C1/Opp→CW, todos na janela de 5 semanas — agregador =
+  // MÉDIA por closer (produtividade) ou taxa recalculada (coortes, não é média de %).
+  const pdOppFn=r=>diasUteis5?weeks5.reduce((s,w)=>s+oppsAt(r,w),0)/diasUteis5:null;
+  const pdCwFn=r=>diasUteis5?weeks5.reduce((s,w)=>s+cwAt(r,w),0)/diasUteis5:null;
+  const pdOppFnPrev=r=>diasUteis5Prev?weeks5Prev.reduce((s,w)=>s+oppsAt(r,w),0)/diasUteis5Prev:null;
+  const pdCwFnPrev=r=>diasUteis5Prev?weeks5Prev.reduce((s,w)=>s+cwAt(r,w),0)/diasUteis5Prev:null;
+  const cohSum5=r=>{let co=0,cs=0;weeks5.forEach(w=>{const x=w&&(r.porSemana||{})[w];if(x){co+=x.cohOpp||0;cs+=x.cohSql||0;}});return{co,cs};};
+  const cohRate5=r=>{const{co,cs}=cohSum5(r);return co?Math.round(cs/co*100):null;};
+  const c2Agg5=rows=>{let co=0,cs=0;rows.forEach(r=>weeks5.forEach(w=>{const x=w&&(r.porSemana||{})[w];if(x){co+=x.cohOpp||0;cs+=x.cohSql||0;}}));return co?Math.round(cs/co*100)+'%':'—';};
+  // Opp→CW acumulado das opps recebidas nas últimas 5 semanas (mesmo espírito do Opp→SQL·5s
+  // do SDR — quanto do que o closer recebeu recentemente já fechou).
+  const opp5Sum=r=>weeks5.reduce((s,w)=>s+oppsAt(r,w),0);
+  const oppCw5Sum=r=>weeks5.reduce((s,w)=>s+oppCwAt(r,w),0);
+  const oppCwRate5=r=>{const o=opp5Sum(r);return o?Math.round(oppCw5Sum(r)/o*100):null;};
   const mediaAgg=(rows,f,dec)=>{const v=rows.map(f).filter(x=>x!=null);return v.length?(v.reduce((s,x)=>s+x,0)/v.length).toFixed(dec):'—';};
-  // célula BD SEM meta confirmada: valor + badge de alerta (em vez de simular % de atingimento
-  // com um número inventado). Assim que o time passar a meta certa, trocar por bdCell (SDR).
-  const bdCellClo=(v,dec)=>`<span class="mono">${v!=null?v.toFixed(dec):'—'}</span> ${mockBadge('Meta de produtividade/BD do Closer ainda não confirmada — valor exibido sem comparação com meta.')}`;
+  // célula BD: valor + pill de variação semana a semana (WoW, janela de 5s atual vs anterior).
+  // BD_TGT_CLOSER ainda vazio (sem meta confirmada) — usar WoW no lugar de atingimento vs meta.
+  const wowDelta=(v,p)=>{if(p==null||!p)return '';return ` <span class="att ${v>=p?'hi':'lo'}">${v>=p?'+':''}${Math.round((v/p-1)*100)}%</span>`;};
+  const bdCellClo=(v,p,dec)=>`<span class="mono">${v!=null?v.toFixed(dec):'—'}</span>${(v!=null&&p!=null)?wowDelta(v,p):''}`;
+  const bdAgg=(rows,f,fPrev,dec)=>{const v=mediaAgg(rows,f,dec),n=parseFloat(v),pv=rows.map(fPrev).filter(x=>x!=null),p=pv.length?pv.reduce((s,x)=>s+x,0)/pv.length:null;return (p!=null&&!isNaN(n))?`${v}${wowDelta(n,p)}`:v;};
   const TI={pd:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',c:KIC.users,conn:KIC.link,opp:KIC.target,niv:KIC.estoque};
   const cols=[
-    {key:'pdOpp',label:'Opps/BD · 3s',align:'r',icon:TI.pd,render:r=>bdCellClo(pdOppFn(r),2),agg:rows=>mediaAgg(rows,pdOppFn,2),sort:pdOppFn},
-    {key:'pdCw',label:'CW/BD · 3s',align:'r',icon:TI.pd,render:r=>bdCellClo(pdCwFn(r),2),agg:rows=>mediaAgg(rows,pdCwFn,2),sort:pdCwFn},
-    {key:'contA',label:'Opp in · sem.',align:'r',icon:TI.c,render:r=>`<span class="mono">${fN(oppsAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>oppsAt(r,week))),sort:r=>oppsAt(r,week)},
-    {key:'connA',label:'C1 · sem.',align:'r',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,week)!=null?cohAt(r,week)+'%':'—'}</span>`,agg:rows=>cohAgg(rows,week),sort:r=>cohAt(r,week)},
-    {key:'connB',label:'C1 · '+sB,align:'r',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,wB)!=null?cohAt(r,wB)+'%':'—'}</span>`,agg:rows=>cohAgg(rows,wB),sort:r=>cohAt(r,wB)},
-    {key:'connC',label:'C1 · '+sC,align:'r',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,wC)!=null?cohAt(r,wC)+'%':'—'}</span>`,agg:rows=>cohAgg(rows,wC),sort:r=>cohAt(r,wC)},
-    {key:'cwA',label:'CW · sem.',align:'r',icon:TI.opp,render:r=>`<span class="mono">${fN(cwAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>cwAt(r,week))),sort:r=>cwAt(r,week)},
-    {key:'cwB',label:'CW · '+sB,align:'r',icon:TI.opp,render:r=>`<span class="mono">${fN(cwAt(r,wB))}</span>`,agg:rows=>fN(sumBy(rows,r=>cwAt(r,wB))),sort:r=>cwAt(r,wB)},
-    {key:'cwC',label:'CW · '+sC,align:'r',icon:TI.opp,render:r=>`<span class="mono">${fN(cwAt(r,wC))}</span>`,agg:rows=>fN(sumBy(rows,r=>cwAt(r,wC))),sort:r=>cwAt(r,wC)},
-    {key:'cwNivel',label:'CW por nível',icon:TI.niv,render:r=>ministack(cwNivel3(r),NIV.map(n=>NIV_COLOR[n]))},
-    {key:'diasOppSql',label:'Ciclo Opp→SQL',align:'r',render:r=>`<span class="mono">${r.diasOppSql!=null?r.diasOppSql+'d':'—'}</span>`},
-    {key:'diasSqlWon',label:'Ciclo SQL→CW',align:'r',render:r=>`<span class="mono">${r.diasSqlWon!=null?r.diasSqlWon+'d':'—'}</span>`},
+    {key:'contA',label:'Opp in · sem.',align:'c',icon:TI.c,render:r=>`<span class="mono">${fN(oppsAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>oppsAt(r,week))),sort:r=>oppsAt(r,week)},
+    {key:'connA',label:'C1 · sem.',align:'c',icon:TI.conn,group:'Atual',render:r=>`<span class="mono">${cohAt(r,week)!=null?cohAt(r,week)+'%':'—'}</span>`,agg:rows=>c2Agg(rows,week),sort:r=>cohAt(r,week)},
+    {key:'cwA',label:'CW · sem.',align:'c',icon:TI.opp,group:'Atual',render:r=>`<span class="mono">${fN(cwAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>cwAt(r,week))),sort:r=>cwAt(r,week)},
+    {key:'n1',label:'% N2-N3',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,0)}%</span>`,agg:rows=>nivAgg(rows,0),sort:r=>nivelPct(r,0)},
+    {key:'n2',label:'% N4-N5',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,1)}%</span>`,agg:rows=>nivAgg(rows,1),sort:r=>nivelPct(r,1)},
+    {key:'n3',label:'% N6+',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,2)}%</span>`,agg:rows=>nivAgg(rows,2),sort:r=>nivelPct(r,2)},
+    {key:'pdOpp',label:'Opps/BD · 5s',align:'c',icon:TI.pd,group:'Hist. 5 semanas',render:r=>bdCellClo(pdOppFn(r),pdOppFnPrev(r),2),agg:rows=>bdAgg(rows,pdOppFn,pdOppFnPrev,2),sort:pdOppFn},
+    {key:'pdCw',label:'CW/BD · 5s',align:'c',icon:TI.pd,group:'Hist. 5 semanas',render:r=>bdCellClo(pdCwFn(r),pdCwFnPrev(r),2),agg:rows=>bdAgg(rows,pdCwFn,pdCwFnPrev,2),sort:pdCwFn},
+    {key:'c15s',label:'C1 · 5s',align:'c',icon:TI.conn,group:'Hist. 5 semanas',render:r=>`<span class="mono">${cohRate5(r)!=null?cohRate5(r)+'%':'—'}</span>`,agg:c2Agg5,sort:cohRate5},
+    {key:'oppCw5',label:'Opp→CW · 5s',align:'c',icon:TI.opp,group:'Hist. 5 semanas',render:r=>`<span class="mono">${oppCwRate5(r)!=null?oppCwRate5(r)+'%':'—'}</span>`,agg:rows=>{const o=sumBy(rows,opp5Sum),c=sumBy(rows,oppCw5Sum);return o?Math.round(c/o*100)+'%':'—';},sort:oppCwRate5},
+    {key:'diasOppSql',label:'Ciclo Opp→SQL',align:'c',render:r=>`<span class="mono">${r.diasOppSql!=null?r.diasOppSql+'d':'—'}</span>`},
+    {key:'diasSqlWon',label:'Ciclo SQL→CW',align:'c',render:r=>`<span class="mono">${r.diasSqlWon!=null?r.diasSqlWon+'d':'—'}</span>`},
   ];
-  // só closers com pelo menos 1 CW ou Opp in em uma das 3 últimas semanas (atual, −1, −2)
-  let listTbl=list.filter(r=>(cwAt(r,week)+cwAt(r,wB)+cwAt(r,wC)+oppsAt(r,week)+oppsAt(r,wB)+oppsAt(r,wC))>0);
+  // só closers com pelo menos 1 CW ou Opp in na janela de 5 semanas
+  let listTbl=list.filter(r=>weeks5.some(w=>cwAt(r,w)>0||oppsAt(r,w)>0));
   if(estrF!=='all') listTbl=listTbl.filter(r=>r.estrategia===estrF);
   const table=groupedTable({rows:listTbl,groupBy:r=>r.estrategia||'Sem estratégia',groupOrder:[...STR_ORDER,'Sem estratégia'],cols,kind:'closer',totals:true,sort:state.closerSort,hd:cardHd(KIC.users,'Closers · por pessoa','opps, C1, mix por nível e produtividade/BD')});
   $('viewArea').innerHTML=`
@@ -1198,9 +1217,9 @@ function renderAreaOnboarding(){
   const cwFteDia=diasUteis?cwFte/diasUteis:null;
   const actFteDia=diasUteis?actFte/diasUteis:null;
   const bdt=BD_TGT_ONB[estrF]||{};
-  const bdPill=(val,tgt)=>tgt?` <span class="att ${val!=null&&val>=tgt?'hi':'lo'}">${val!=null?Math.round(val/tgt*100):0}%</span>`:` ${mockBadge('Meta de CW/BD e Ativado/BD do Onboarding ainda não confirmada com o time — favor validar o valor certo.')}`;
-  const cwBD=(bdt.cw?`meta ${bdt.cw}/BD`:'sem meta')+bdPill(cwFteDia,bdt.cw)+` · média ${cwFte.toFixed(2)}/FTE · ${cwFteCount} onboarders · ${diasUteis} BD`;
-  const actBD=(bdt.act?`meta ${bdt.act}/BD`:'sem meta')+bdPill(actFteDia,bdt.act)+` · média ${actFte.toFixed(2)}/FTE · ${actFteCount} onboarders · ${diasUteis} BD`;
+  const bdPill=(val,tgt)=>tgt?` <span class="att ${val!=null&&val>=tgt?'hi':'lo'}">${val!=null?Math.round(val/tgt*100):0}%</span>`:'';
+  const cwBD=(bdt.cw?`meta ${bdt.cw}/BD${bdPill(cwFteDia,bdt.cw)} · `:'')+`média ${cwFte.toFixed(2)}/FTE · ${cwFteCount} onboarders · ${diasUteis} BD`;
+  const actBD=(bdt.act?`meta ${bdt.act}/BD${bdPill(actFteDia,bdt.act)} · `:'')+`média ${actFte.toFixed(2)}/FTE · ${actFteCount} onboarders · ${diasUteis} BD`;
   const kpis=[
     ['Entradas',fN(totCwIn),metaSub(totCwIn,refT?.cw,`${listF.length} onboarders`),'Negócios recebidos (CW in)',null,KIC.entradas],
     ['Saídas do funil',fN((coh?.accomplished||0)+(coh?.unaccomplished||0)),coh?`${fN(coh.accomplished||0)} accomplished · ${fN(coh.unaccomplished||0)} unaccomplished`:'sem dado','Status atual do onboarding (quem fechou CW nessa semana)',null,KIC.saidas],
@@ -1225,48 +1244,62 @@ function renderAreaOnboarding(){
     <span><b style="font-size:16px">${actFte.toFixed(2)}</b> <span style="color:var(--text-muted);font-size:12px">ativados/FTE</span></span>
     <span><b style="font-size:16px">${actFteDia!=null?actFteDia.toFixed(2):'—'}</b> <span style="color:var(--text-muted);font-size:12px">ativados/FTE/dia útil (${diasUteis}d)</span></span>
   </div>`;
-  // semanas de referência (atual, −1, −2) — mesmo padrão da tabela SDR/Closer.
+  // janela de referência (semana atual + últimas 5, mesmo padrão da tabela SDR/Closer).
   const idxW=D.semanas.indexOf(week);
-  const wB=D.semanas[idxW-1]||null, wC=D.semanas[idxW-2]||null;
-  const wkNum=w=>w?('Semana '+ +w.split('-W')[1]):'−';
-  const lblB=wkNum(wB), lblC=wkNum(wC);
-  const wkShort=w=>w?('S'+ +w.split('-W')[1]):'−'; const sB=wkShort(wB), sC=wkShort(wC);
+  const weeks5=[0,1,2,3,4].map(i=>D.semanas[idxW-i]).filter(Boolean);
+  // mesma janela de 5 semanas, deslocada 1 semana pra trás — usada só pra calcular a variação
+  // semana a semana (WoW) da produtividade, já que ainda não há meta confirmada (BD_TGT_ONB).
+  const weeks5Prev=[1,2,3,4,5].map(i=>D.semanas[idxW-i]).filter(Boolean);
   const cwAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return x?(x.cwIn||0):0;};
   const actAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return x?(x.activated||0):0;};
+  const cwAct10kAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return x?(x.cwAct10k||0):0;};
   // C1 por pessoa: dos que o onboarder recebeu como CW NA semana W, quantos chegaram a 1k na
   // MESMA semana. Lê direto de porSemana, sem mapa auxiliar (mesmo padrão do Closer).
   const cohAt=(r,w)=>{const x=w&&(r.porSemana||{})[w];return (x&&x.cohCw)?Math.round(x.coh1k/x.cohCw*100):null;};
-  const actNivel3=r=>{
-    const a=[0,0,0];
-    [week,wB,wC].forEach(w=>{const x=w&&(r.porSemana||{})[w]; if(x&&x.actNivel) x.actNivel.forEach((v,j)=>a[j]+=v||0);});
-    return a;
-  };
-  const diasUteis3=[week,wB,wC].reduce((s,w)=>s+(w?(D.diasUteisSemana?.[w]||0):0),0);
+  // mix de ativação por nível na janela de 5 semanas (mesma janela das outras colunas de histórico).
+  const actNivel5=r=>{const a=[0,0,0]; weeks5.forEach(w=>{const x=w&&(r.porSemana||{})[w]; if(x&&x.actNivel) x.actNivel.forEach((v,j)=>a[j]+=v||0);}); return a;};
+  const nivelPct=(r,i)=>{const a=actNivel5(r); const t=(a[0]+a[1]+a[2])||1; return Math.round((a[i]||0)/t*100);};
+  const diasUteis5=weeks5.reduce((s,w)=>s+(D.diasUteisSemana?.[w]||0),0);
+  const diasUteis5Prev=weeks5Prev.reduce((s,w)=>s+(D.diasUteisSemana?.[w]||0),0);
   const sumBy=(rows,f)=>rows.reduce((s,r)=>s+(f(r)||0),0);
-  const cohAgg=(rows,w)=>{let co=0,cs=0;rows.forEach(r=>{const x=w&&(r.porSemana||{})[w];if(x){co+=x.cohCw||0;cs+=x.coh1k||0;}});return co?Math.round(cs/co*100)+'%':'—';};
-  const nivAgg=(rows,i)=>{const a=[0,0,0];rows.forEach(r=>[week,wB,wC].forEach(w=>{const x=w&&(r.porSemana||{})[w];if(x&&x.actNivel)x.actNivel.forEach((v,j)=>a[j]+=v||0);}));const t=(a[0]+a[1]+a[2])||1;return Math.round((a[i]||0)/t*100)+'%';};
-  // produtividade/dia útil (3 sem.) por pessoa + agregador = MÉDIA por onboarder (não soma).
-  const pdCwFn=r=>diasUteis3?(cwAt(r,week)+cwAt(r,wB)+cwAt(r,wC))/diasUteis3:null;
-  const pdActFn=r=>diasUteis3?(actAt(r,week)+actAt(r,wB)+actAt(r,wC))/diasUteis3:null;
+  const c2Agg=(rows,w)=>{let co=0,cs=0;rows.forEach(r=>{const x=w&&(r.porSemana||{})[w];if(x){co+=x.cohCw||0;cs+=x.coh1k||0;}});return co?Math.round(cs/co*100)+'%':'—';};
+  const nivAgg=(rows,i)=>{const a=[0,0,0];rows.forEach(r=>{const ai=actNivel5(r);a[0]+=ai[0];a[1]+=ai[1];a[2]+=ai[2];});const t=(a[0]+a[1]+a[2])||1;return Math.round((a[i]||0)/t*100)+'%';};
+  // produtividade/dia útil E coorte C1/CW→10K, todos na janela de 5 semanas — agregador =
+  // MÉDIA por onboarder (produtividade) ou taxa recalculada (coortes, não é média de %).
+  const pdCwFn=r=>diasUteis5?weeks5.reduce((s,w)=>s+cwAt(r,w),0)/diasUteis5:null;
+  const pdActFn=r=>diasUteis5?weeks5.reduce((s,w)=>s+actAt(r,w),0)/diasUteis5:null;
+  const pdCwFnPrev=r=>diasUteis5Prev?weeks5Prev.reduce((s,w)=>s+cwAt(r,w),0)/diasUteis5Prev:null;
+  const pdActFnPrev=r=>diasUteis5Prev?weeks5Prev.reduce((s,w)=>s+actAt(r,w),0)/diasUteis5Prev:null;
+  const cohSum5=r=>{let co=0,cs=0;weeks5.forEach(w=>{const x=w&&(r.porSemana||{})[w];if(x){co+=x.cohCw||0;cs+=x.coh1k||0;}});return{co,cs};};
+  const cohRate5=r=>{const{co,cs}=cohSum5(r);return co?Math.round(cs/co*100):null;};
+  const c2Agg5=rows=>{let co=0,cs=0;rows.forEach(r=>weeks5.forEach(w=>{const x=w&&(r.porSemana||{})[w];if(x){co+=x.cohCw||0;cs+=x.coh1k||0;}}));return co?Math.round(cs/co*100)+'%':'—';};
+  // CW→10K acumulado dos CWs recebidos nas últimas 5 semanas (mesmo espírito do Opp→SQL·5s
+  // do SDR — quanto do que o onboarder recebeu recentemente já ativou 10k).
+  const cw5Sum=r=>weeks5.reduce((s,w)=>s+cwAt(r,w),0);
+  const cwAct10k5Sum=r=>weeks5.reduce((s,w)=>s+cwAct10kAt(r,w),0);
+  const cwAct10kRate5=r=>{const c=cw5Sum(r);return c?Math.round(cwAct10k5Sum(r)/c*100):null;};
   const mediaAgg=(rows,f,dec)=>{const v=rows.map(f).filter(x=>x!=null);return v.length?(v.reduce((s,x)=>s+x,0)/v.length).toFixed(dec):'—';};
-  // célula BD SEM meta confirmada: valor + badge de alerta (mesmo padrão do Closer).
-  const bdCellOnb=(v,dec)=>`<span class="mono">${v!=null?v.toFixed(dec):'—'}</span> ${mockBadge('Meta de produtividade/BD do Onboarding ainda não confirmada — valor exibido sem comparação com meta.')}`;
+  // célula BD: valor + pill de variação semana a semana (WoW, janela de 5s atual vs anterior).
+  // BD_TGT_ONB ainda vazio (sem meta confirmada) — usar WoW no lugar de atingimento vs meta.
+  const wowDelta=(v,p)=>{if(p==null||!p)return '';return ` <span class="att ${v>=p?'hi':'lo'}">${v>=p?'+':''}${Math.round((v/p-1)*100)}%</span>`;};
+  const bdCellOnb=(v,p,dec)=>`<span class="mono">${v!=null?v.toFixed(dec):'—'}</span>${(v!=null&&p!=null)?wowDelta(v,p):''}`;
+  const bdAgg=(rows,f,fPrev,dec)=>{const v=mediaAgg(rows,f,dec),n=parseFloat(v),pv=rows.map(fPrev).filter(x=>x!=null),p=pv.length?pv.reduce((s,x)=>s+x,0)/pv.length:null;return (p!=null&&!isNaN(n))?`${v}${wowDelta(n,p)}`:v;};
   const TI={pd:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',c:KIC.users,conn:KIC.link,opp:KIC.target,niv:KIC.estoque};
   const cols=[
-    {key:'pdCw',label:'CW/BD · 3s',align:'r',icon:TI.pd,render:r=>bdCellOnb(pdCwFn(r),2),agg:rows=>mediaAgg(rows,pdCwFn,2),sort:pdCwFn},
-    {key:'pdAct',label:'Ativ./BD · 3s',align:'r',icon:TI.pd,render:r=>bdCellOnb(pdActFn(r),2),agg:rows=>mediaAgg(rows,pdActFn,2),sort:pdActFn},
-    {key:'contA',label:'CW in · sem.',align:'r',icon:TI.c,render:r=>`<span class="mono">${fN(cwAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>cwAt(r,week))),sort:r=>cwAt(r,week)},
-    {key:'connA',label:'C1 · sem.',align:'r',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,week)!=null?cohAt(r,week)+'%':'—'}</span>`,agg:rows=>cohAgg(rows,week),sort:r=>cohAt(r,week)},
-    {key:'connB',label:'C1 · '+sB,align:'r',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,wB)!=null?cohAt(r,wB)+'%':'—'}</span>`,agg:rows=>cohAgg(rows,wB),sort:r=>cohAt(r,wB)},
-    {key:'connC',label:'C1 · '+sC,align:'r',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,wC)!=null?cohAt(r,wC)+'%':'—'}</span>`,agg:rows=>cohAgg(rows,wC),sort:r=>cohAt(r,wC)},
-    {key:'actA',label:'Ativ. · sem.',align:'r',icon:TI.opp,render:r=>`<span class="mono">${fN(actAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>actAt(r,week))),sort:r=>actAt(r,week)},
-    {key:'actB',label:'Ativ. · '+sB,align:'r',icon:TI.opp,render:r=>`<span class="mono">${fN(actAt(r,wB))}</span>`,agg:rows=>fN(sumBy(rows,r=>actAt(r,wB))),sort:r=>actAt(r,wB)},
-    {key:'actC',label:'Ativ. · '+sC,align:'r',icon:TI.opp,render:r=>`<span class="mono">${fN(actAt(r,wC))}</span>`,agg:rows=>fN(sumBy(rows,r=>actAt(r,wC))),sort:r=>actAt(r,wC)},
-    {key:'actNivel',label:'Ativação por nível',icon:TI.niv,render:r=>ministack(actNivel3(r),NIV.map(n=>NIV_COLOR[n]))},
-    {key:'diasWonAtivacao',label:'Ciclo CW→Ativação',align:'r',render:r=>`<span class="mono">${r.diasWonAtivacao!=null?r.diasWonAtivacao+'d':'—'}</span>`},
+    {key:'contA',label:'CW in · sem.',align:'c',icon:TI.c,render:r=>`<span class="mono">${fN(cwAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>cwAt(r,week))),sort:r=>cwAt(r,week)},
+    {key:'connA',label:'C1 · sem.',align:'c',icon:TI.conn,group:'Atual',render:r=>`<span class="mono">${cohAt(r,week)!=null?cohAt(r,week)+'%':'—'}</span>`,agg:rows=>c2Agg(rows,week),sort:r=>cohAt(r,week)},
+    {key:'actA',label:'Ativ. · sem.',align:'c',icon:TI.opp,group:'Atual',render:r=>`<span class="mono">${fN(actAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>actAt(r,week))),sort:r=>actAt(r,week)},
+    {key:'n1',label:'% N2-N3',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,0)}%</span>`,agg:rows=>nivAgg(rows,0),sort:r=>nivelPct(r,0)},
+    {key:'n2',label:'% N4-N5',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,1)}%</span>`,agg:rows=>nivAgg(rows,1),sort:r=>nivelPct(r,1)},
+    {key:'n3',label:'% N6+',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,2)}%</span>`,agg:rows=>nivAgg(rows,2),sort:r=>nivelPct(r,2)},
+    {key:'pdCw',label:'CW/BD · 5s',align:'c',icon:TI.pd,group:'Hist. 5 semanas',render:r=>bdCellOnb(pdCwFn(r),pdCwFnPrev(r),2),agg:rows=>bdAgg(rows,pdCwFn,pdCwFnPrev,2),sort:pdCwFn},
+    {key:'pdAct',label:'Ativ./BD · 5s',align:'c',icon:TI.pd,group:'Hist. 5 semanas',render:r=>bdCellOnb(pdActFn(r),pdActFnPrev(r),2),agg:rows=>bdAgg(rows,pdActFn,pdActFnPrev,2),sort:pdActFn},
+    {key:'c15s',label:'C1 · 5s',align:'c',icon:TI.conn,group:'Hist. 5 semanas',render:r=>`<span class="mono">${cohRate5(r)!=null?cohRate5(r)+'%':'—'}</span>`,agg:c2Agg5,sort:cohRate5},
+    {key:'cwAct10k5',label:'CW→10K · 5s',align:'c',icon:TI.opp,group:'Hist. 5 semanas',render:r=>`<span class="mono">${cwAct10kRate5(r)!=null?cwAct10kRate5(r)+'%':'—'}</span>`,agg:rows=>{const c=sumBy(rows,cw5Sum),a=sumBy(rows,cwAct10k5Sum);return c?Math.round(a/c*100)+'%':'—';},sort:cwAct10kRate5},
+    {key:'diasWonAtivacao',label:'Ciclo CW→Ativação',align:'c',render:r=>`<span class="mono">${r.diasWonAtivacao!=null?r.diasWonAtivacao+'d':'—'}</span>`},
   ];
-  // só onboarders com pelo menos 1 CW ou Ativação em uma das 3 últimas semanas (atual, −1, −2)
-  let listTbl=list.filter(r=>(cwAt(r,week)+cwAt(r,wB)+cwAt(r,wC)+actAt(r,week)+actAt(r,wB)+actAt(r,wC))>0);
+  // só onboarders com pelo menos 1 CW ou Ativação na janela de 5 semanas
+  let listTbl=list.filter(r=>weeks5.some(w=>cwAt(r,w)>0||actAt(r,w)>0));
   if(estrF!=='all') listTbl=listTbl.filter(r=>r.estrategia===estrF);
   const table=groupedTable({rows:listTbl,groupBy:r=>r.estrategia||'Sem estratégia',groupOrder:[...STR_ORDER,'Sem estratégia'],cols,kind:'onb',totals:true,sort:state.onbSort,hd:cardHd(KIC.users,'Onboarding · por pessoa','CW recebido, coorte C1, mix por nível e produtividade/BD')});
   $('viewArea').innerHTML=`

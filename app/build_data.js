@@ -501,7 +501,11 @@ for (const r of fop) {
       }
       if (closer) {
         const p = getP(porPessoaCloser, closer); p.opps = (p.opps || 0) + 1; p.estrategia = e || p.estrategia;
-        wk(p, w).opps = (wk(p, w).opps || 0) + 1;
+        const pw = wk(p, w); pw.opps = (pw.opps || 0) + 1;
+        // esta MESMA opp (independente de semana) chegou a CW? — acumulado, não coorte de
+        // mesma semana (alimenta a coluna "Opp→CW · 5s" da tabela por pessoa, mesmo padrão
+        // do "Opp→SQL · 5s" do SDR).
+        if (dates.closed_won_date) pw.oppCw = (pw.oppCw || 0) + 1;
       }
       if (e) {
         fteBy[e].opps += 1;
@@ -528,7 +532,10 @@ for (const r of fop) {
       }
       if (onb) {
         const p = getP(porPessoaOnb, onb); p.cwIn = (p.cwIn || 0) + 1; p.estrategia = e || p.estrategia;
-        wk(p, w).cwIn = (wk(p, w).cwIn || 0) + 1;
+        const pw = wk(p, w); pw.cwIn = (pw.cwIn || 0) + 1;
+        // este MESMO CW (independente de semana) já ativou 10k? — acumulado, alimenta a
+        // coluna "CW→10K · 5s" da tabela por pessoa (mesmo padrão do "Opp→SQL · 5s" do SDR).
+        if (dates.activation_date_10k) pw.cwAct10k = (pw.cwAct10k || 0) + 1;
       }
       if (owner) { rankOwner[owner] = rankOwner[owner] || { email: owner, cw: 0, ativados: 0 }; rankOwner[owner].cw += 1; }
     }
@@ -893,6 +900,9 @@ function buildPessoaSemanaCloser(p) {
       diasSqlWon: pw.dSWn ? +(pw.dSWsum / pw.dSWn).toFixed(1) : null,
       // coorte: dos que viraram opp NESSA semana, quantos chegaram a SQL na MESMA semana.
       cohOpp: Math.round(pw.cohOpp || 0), cohSql: Math.round(pw.cohSql || 0),
+      // das opps recebidas NESSA semana, quantas (essa mesma opp) já chegaram a CW — acumulado
+      // até hoje, não coorte de mesma semana (alimenta "Opp→CW · 5s" na tabela por pessoa).
+      oppCw: Math.round(pw.oppCw || 0),
     };
   }
   return out;
@@ -908,6 +918,9 @@ function buildPessoaSemanaOnb(p) {
       diasWonAtivacao: pw.dWAn ? +(pw.dWAsum / pw.dWAn).toFixed(1) : null,
       // coorte: dos que fecharam (CW) NESSA semana, quantos chegaram a 1k na MESMA semana.
       cohCw: Math.round(pw.cohCw || 0), coh1k: Math.round(pw.coh1k || 0),
+      // dos CWs recebidos NESSA semana, quantos (esse mesmo CW) já ativaram 10k — acumulado até
+      // hoje, não coorte de mesma semana (alimenta "CW→10K · 5s" na tabela por pessoa).
+      cwAct10k: Math.round(pw.cwAct10k || 0),
     };
   }
   return out;

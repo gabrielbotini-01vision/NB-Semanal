@@ -1,6 +1,93 @@
 # Pendências · New Business Cockpit
 
-Notas de handoff para quem continuar o desenvolvimento. Última atualização: 28/07/2026.
+Notas de handoff para quem continuar o desenvolvimento. Última atualização: 29/07/2026.
+
+## Concluído (29/07/2026)
+
+- **Reconciliação dos 3 Estoques (SDR/Closer/Onboarding) com as medidas DAX/visuais reais do
+  Power BI ("New Biz")** — o item 7 do Backlog (validar `sdrEstoque`/`onbEstoque` contra o
+  Power BI) foi retomado a fundo, com o Gabriel mandando prints do painel de filtros dos
+  visuais e as fórmulas DAX das medidas `Carteira_*`.
+  - **Descoberta principal: `Dados/Imagens Sales.csv` (datasource Astrobox "Imagens Sales") já
+    tem as colunas `Cargo` e `Ativo`** — dá pra derivar um roster "real" de SDR/Closer/
+    Onboarding direto dessa planilha que já líamos só pra nome/foto, sem precisar de nenhum
+    arquivo novo. Isso troca o heurístico antigo de `isRealSdr()` (qualquer email que já
+    apareceu como `sdr_email_sf`, menos 4 exclusões manuais — incluía ~2x mais gente que o
+    necessário: ex-SDRs, contas de time) pela lista oficial (`Cargo='SDR' AND Ativo='Sim'`).
+    Comparado com o roster oficial do Power BI (`6.1d_SDR[Nome]`, visto no painel de filtros):
+    bate 29 de 29, com 2 exceções (Olivio Blach e Lucas Guerrero, promovidos a Closer) que o
+    Gabriel pediu pra manter manualmente no roster de SDR (`SDR_MANUAL_INCLUI` em
+    `build_data.js`) — atuaram como SDR antes da promoção e o contato deles é relevante pro
+    funil histórico.
+  - **`sdrEstoque` reconciliado**: roster oficial (acima) + filtro de página do Power BI
+    (`lead_flow` não é PQL/PPQL, `lead_flow_segmentation` não é Seed 1/Seed 2 — `leadFlowOk()`
+    em `build_data.js`). Resultado: **bate exatamente** com o Power BI (semana 31: 1.090 = 1.090
+    depois do Gabriel confirmar a inclusão manual de Olivio/Lucas Guerrero).
+  - **`closerEstoque` reconciliado** contra o visual "Tamanho Carteira de Opps": roster
+    `Cargo='Closer' AND Ativo='Sim'` (`isRealCloser()`) + `is_opp_valid`/`is_opp_br_funnel`
+    (`oppValidOk()`, campos que já vêm no `06_operacional_raw.csv`, ~99,7% das opps já passam).
+    **Testado e descartado**: aplicar `leadFlowOk()` (PQL/Seed) aqui também — piora o ajuste em
+    vez de melhorar (o visual de Closer não parece usar esse filtro, ao contrário do de SDR) —
+    fica documentado em comentário no código pra não reintroduzir por engano. Resultado: bate
+    de perto (semana 31: 294 vs ~290 na imagem).
+  - **`onbEstoque` reconciliado** contra "Tamanho Carteira de Cws", com a ajuda decisiva da
+    fórmula DAX do `Onboarding_close_date` que o Gabriel passou:
+    `IF(LEN(accomplished_date)>3, accomplished_date, IF(LEN(unaccomplished_date)>3,
+    unaccomplished_date, DATE(2099,12,31)))` — ou seja, accomplished tem PRIORIDADE sobre
+    unaccomplished (não é "o menor dos dois"). Implementado como saída do estoque (campo
+    `close` em `onbLeadsMap`): antes, sem esse campo, um registro parado "envelhecia" no
+    estoque pra sempre (❗ resolve a limitação documentada em "Concluído 23/07" abaixo).
+    **Diferente de SDR/Closer, aqui o roster curado (`Cargo='Onboarding' AND Ativo='Sim'`)
+    piora o ajuste em vez de melhorar** — testado e descartado: só 19 de 55 onboarders
+    históricos estão "ativos" nesse diretório hoje, cortando o estoque bem abaixo do Power BI
+    (~296 vs ~603 na semana 31). O filtro real "Nome onboarders não é em branco" foi
+    implementado de forma literal (só exige `onboarding_email_sf` preenchido — quase sempre
+    true, 4755/4756 dos CW já têm). Mantidos `is_opp_valid`/`is_opp_br_funnel` e
+    `lead_flow`/`lead_flow_segmentation` (aqui SIM fazem diferença, ao contrário do Closer).
+    **Resultado: ~682 vs ~603-712 na imagem (~13% acima) — não fechou 100%.**
+    - **Investigado e descartado o filtro `Current_office=BRAZIL`** (visto como filtro
+      "em todas as páginas", com cadeado, no painel do Power BI). O campo existe mesmo em
+      `data_business.dhmv_sales_touched.current_office` (confirmado com o Gabriel, não é
+      coluna calculada) — mas **só vem preenchido pra quem já tem `activation_date_1k`**
+      (confirmado direto no Redshift, mesmo filtro Brasil+corte 2024 do nosso export: ~80% de
+      cobertura entre CW, praticamente 100% correlacionado com ter ativação). Aplicar esse
+      filtro corta o bloco "CW ainda sem 1k" (o maior bloco do estoque) quase por completo,
+      derrubando o número bem abaixo do alvo. Também explorada a tabela onde
+      `Current_office` "mora" oficialmente no modelo (`f_finance_sales` → provável
+      `dhm_data_business.f_finance_sales_touched`, tabela de receita por `user_producer_id`/
+      mês) — **não tem nenhuma chave (`opp_id`/`lead_id`) pra se relacionar com o funil
+      operacional**, o que sugere que esse filtro "com cadeado" pode nem ter relacionamento
+      ativo com o visual de Estoque no modelo do Power BI (filtro "ligado" mas sem efeito
+      nesse gráfico específico — comportamento comum quando não há relacionamento entre as
+      tabelas). Ver item novo no Backlog.
+  - **Card "Estoque" de Closer e Onboarding redesenhados no mesmo padrão visual do de SDR**
+    (`closerEstoqueHTML()`/`onbEstoqueHTML()` em `index.html`): legenda antes do gráfico
+    (antes vinha depois), valor de cada segmento exibido dentro da barra (quando cabe) e nova
+    linha de variação WoW (▲/▼) abaixo — antes só o Estoque de SDR tinha esse padrão completo.
+- **Tabela "SDR · por pessoa" reordenada e sem colunas de semana anterior** — a pedido do
+  Gabriel: `Contatados·sem., C1·sem., Opps·sem., Contat./BD·5s, Opps/BD·5s, C1·5s,
+  Opp→SQL·5s, %N2-N3, %N4-N5, %N6+`. As colunas de produtividade (`Contat./BD`, `Opps/BD`)
+  passaram da janela de 3 semanas pra 5 (reaproveitando a mesma janela do `Opp→SQL·5s`), e
+  ganharam uma irmã nova, `C1·5s` (coorte contato→conexão acumulada em 5 semanas, mesmo
+  espírito do `Opp→SQL·5s`). As colunas de semana anterior (`C1`/`Opps · S-1/S-2`) foram
+  removidas.
+- **Bug corrigido: colunas "Opp→CW · 5s" (Closer) e "CW→10K · 5s" (Onboarding) sempre
+  zeradas.** Os campos `oppCw`/`cwAct10k` eram calculados certo dentro de `porSemana` durante o
+  build, mas `buildPessoaSemanaCloser`/`buildPessoaSemanaOnb` — as funções que reconstroem o
+  objeto por semana campo a campo pra exportar no `app_data.js` — esqueciam de incluí-los na
+  lista. Corrigido incluindo os dois campos nessas funções; conferido depois do rebuild que
+  773/1375 semana-pessoa de Closer e 704/1437 de Onboarding têm valor `>0` (antes, 100% zero).
+- **Badge de % nas colunas "Hist. 5 semanas" de produtividade de Closer/Onboarding** (`Opps/BD`,
+  `CW/BD`, `Ativ./BD`): como `BD_TGT_CLOSER`/`BD_TGT_ONB` continuam vazios (meta real ainda não
+  confirmada, item 9 do Backlog), essas células ficavam sem nenhum badge, só o valor cru. A
+  pedido do Gabriel, ganharam um badge no mesmo estilo visual (pill verde/vermelho) do
+  atingimento-vs-meta do SDR, só que mostrando **variação semana a semana (WoW)** — janela de 5
+  semanas atual vs. as 5 semanas imediatamente anteriores — em vez de % de meta.
+  ⚠️ **Ponto de atenção pro futuro: isso é um substituto temporário, não a métrica final.**
+  Assim que o time passar as metas reais de Closer/Onboarding, trocar esse badge WoW pelo de
+  atingimento-vs-meta de verdade (preencher `BD_TGT_CLOSER`/`BD_TGT_ONB` no mesmo formato do
+  `BD_TGT` de SDR — aí os badges de WoW somem sozinhos e vira % de meta, sem precisar mexer no
+  resto do código). Ver Backlog item 9, atualizado.
 
 ## Concluído (28/07/2026)
 
@@ -279,6 +366,24 @@ Alimenta a página **Semanal Área › Onboarding**:
 - `onbCohort` ganhou os campos `a10k` (coorte direta CW→10k na mesma semana, sem exigir
   1k/5k) e `accomplished`/`unaccomplished` (snapshot do `onboarding_status` atual, de quem
   fechou CW naquela semana — ver "Concluído 28/07" acima pro porquê de não usar data).
+- `onbLeadsMap` ganhou o campo `close` (`Onboarding_close_date`: accomplished_date com
+  prioridade sobre unaccomplished_date, senão nunca) — usado como saída extra do `onbEstoque`
+  (ver "Concluído 29/07" acima).
+
+Helpers de roster/filtro "real" (29/07, em `build_data.js`, todos derivados de
+`Dados/Imagens Sales.csv` — colunas `Cargo`/`Ativo`, exceto `leadFlowOk`/`oppValidOk` que vêm
+de campos do `06_operacional_raw.csv`):
+
+- `isRealSdr(email)` — `Cargo='SDR' AND Ativo='Sim'`, + inclusão manual de Olivio Blach/Lucas
+  Guerrero (`SDR_MANUAL_INCLUI`). Fallback pro heurístico antigo se a planilha faltar.
+- `isRealCloser(email)` — `Cargo='Closer' AND Ativo='Sim'`.
+- `leadFlowOk(row)` — `lead_flow` não é PQL/PPQL e `lead_flow_segmentation` não é Seed 1/2.
+  Usado em `sdrEstoque`/coortes de SDR e em `onbEstoque`. **Não usado em `closerEstoque`**
+  (testado e piora o ajuste com o Power BI, ver "Concluído 29/07").
+- `oppValidOk(row)` — `is_opp_valid` e `is_opp_br_funnel` ambos `True`. Usado em
+  `closerEstoque` e `onbEstoque` (não se aplica a `sdrEstoque`, que é pré-opp).
+- Onboarding **não tem** um `isRealOnb`/roster curado — testado e descartado (ver "Concluído
+  29/07"): o filtro real é só `onboarding_email_sf` não-vazio.
 
 Regenerar: `node app/build_data.js` (lê `Dados/*.csv` locais).
 
@@ -301,24 +406,25 @@ Regenerar: `node app/build_data.js` (lê `Dados/*.csv` locais).
    (ganho ou perdido); sai do estoque de Onboarding quando ativa 10k (única saída conhecida —
    não há campo de "perda"/churn no funil de ativação). Confirmar se as três regras batem com
    a operação.
-7. **Validar `sdrEstoque` e `onbEstoque` contra o Power BI.** O Gabriel já comparou a lógica
-   com as medidas DAX (`Carteira_Contacted/Connected/Nurturing` pro SDR e
-   `Carteira_CW_not1k/not5k/not10k` pro Onboarding) — a estrutura bate, mas os números não
-   devem fechar exatamente por causa do `lead_end_date`/`Onboarding_close_date` que não temos
-   (ver "Concluído" 23/07 acima). Ainda falta comparar número a número numa semana específica
-   pra medir o tamanho real da diferença. **`closerEstoque` (Opp/SQL/Offer/Contract) ainda não
-   tem medida DAX equivalente enviada pra comparar.**
+7. ~~Validar `sdrEstoque` e `onbEstoque` contra o Power BI~~ — **resolvido em boa parte
+   (29/07)**: ver "Concluído 29/07" acima. `sdrEstoque` bate exato; `closerEstoque` bate de
+   perto (~294 vs ~290); `onbEstoque` ficou ~13% acima (~682 vs ~603-712) por causa do filtro
+   `Current_office=BRAZIL` que não conseguimos replicar (ver item 15, novo).
 8. ~~Onboarding sem paridade com SDR/Closer~~ — **resolvido (26/07)**: mesma estrutura de
    página das outras duas abas, adaptada ao funil de ativação (CW → 1k → 5k → 10k).
-9. **Validar com o time de Closer e de Onboarding as metas mocadas** — hoje aparecem com
-   badge "⚠ a validar" em vez de simular um número:
+9. **Validar com o time de Closer e de Onboarding as metas mocadas** — hoje não existe meta
+   real confirmada, então nada é simulado:
    - Meta da coorte **C1 · Opp→SQL** (Closer, 24/07) e **C1 · CW→1k** (Onboarding, 26/07) —
      equivalente ao `COH_META=10%` fixo do SDR, mas sem valor real de negócio confirmado ainda
      pras outras duas áreas.
    - Metas de produtividade **Opp/BD e CW/BD** (Closer, `BD_TGT_CLOSER`) e **CW/BD e
      Ativado/BD** (Onboarding, `BD_TGT_ONB`) por estratégia — ambas `{}` vazias em
-     `index.html` hoje; preencher no mesmo formato do `BD_TGT` de SDR assim que o time passar
-     os números certos.
+     `index.html` hoje. **Enquanto isso (29/07), a tabela por pessoa mostra um badge de
+     variação semana a semana (WoW) no lugar do % de meta**, só pra não deixar a célula sem
+     nenhum sinal visual — ver "Concluído 29/07" acima. Preencher `BD_TGT_CLOSER`/`BD_TGT_ONB`
+     no mesmo formato do `BD_TGT` de SDR assim que o time passar os números certos, e então
+     trocar o badge WoW de volta pro badge de atingimento-vs-meta (`bdCellClo`/`bdCellOnb` em
+     `index.html`, funções perto da tabela por pessoa de Closer/Onboarding).
 10. **`closerCohort`/`closerCohortStatus`/`closerLost`/`closerCw` e `onbCohort`/
     `onbCohortStatus`/`onbAct` ainda não foram validados contra nenhuma medida DAX do Power
     BI** (diferente do `sdrCohort`/`sdrCohortStatus`, que já foram comparados na lógica, ver
@@ -343,6 +449,19 @@ Regenerar: `node app/build_data.js` (lê `Dados/*.csv` locais).
     quem entrou nessa semana".
 14. **`onboarding_status`/accomplished/unaccomplished ainda não validados contra o Power BI** —
     mesma ressalva dos outros campos novos (ver item 10).
+15. **`onbEstoque` ~13% acima do Power BI, causa provável: `Current_office=BRAZIL` sem
+    conseguir replicar.** O campo `current_office` (`data_business.dhmv_sales_touched`) só vem
+    preenchido pra quem já tem `activation_date_1k` (~80% de cobertura entre CW, quase 100%
+    correlacionado com ter ativação — confirmado direto no Redshift, não é problema do nosso
+    export). Aplicar o filtro estrito derruba o número bem abaixo do alvo, cortando o maior
+    bloco do estoque (CW ainda sem 1k). A tabela onde `Current_office` mora oficialmente
+    (`f_finance_sales`, provável `dhm_data_business.f_finance_sales_touched`) não tem chave
+    (`opp_id`/`lead_id`) pra se relacionar com o funil operacional — hipótese mais provável é
+    que esse filtro "em todas as páginas" do Power BI não tenha relacionamento ativo com o
+    visual de Estoque (fica "ligado" mas sem efeito nesse gráfico específico). Se algum dia
+    aparecer uma tabela-ponte (produtor/conta → país) com chave pro `opp_id`, dá pra tentar de
+    novo. Mesma limitação estrutural já existia pro `sdrEstoque` (não documentada à parte
+    porque lá o roster oficial sozinho já foi suficiente pra bater exato).
 
 ## Convenções do projeto (não esquecer)
 
