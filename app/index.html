@@ -956,19 +956,19 @@ function renderAreaSdr(){
     [week,wB,wC].forEach(w=>{const x=w&&(r.porSemana||{})[w]; if(x&&x.oppNivel) x.oppNivel.forEach((v,j)=>a[j]+=v||0);});
     const t=(a[0]+a[1]+a[2])||1; return Math.round((a[i]||0)/t*100);
   };
-  // produtividade/dia útil nas 3 últimas semanas — uma por Contacted, outra por Opp.
-  const diasUteis3=[week,wB,wC].reduce((s,w)=>s+(w?(D.diasUteisSemana?.[w]||0):0),0);
-  // rótulo das colunas de semana anterior: "Semana 29"/"Semana 28" em vez de "−1"/"−2".
-  const wkNum=w=>w?('Semana '+ +w.split('-W')[1]):'−';
-  const lblB=wkNum(wB), lblC=wkNum(wC);
-  const wkShort=w=>w?('S'+ +w.split('-W')[1]):'−'; const sB=wkShort(wB), sC=wkShort(wC);
   // agregadores pro subtotal/total: soma pra contagem; recálculo correto pra taxas (não média de %).
   const sumBy=(rows,f)=>rows.reduce((s,r)=>s+(f(r)||0),0);
   const c2Agg=(rows,w)=>{let cc=0,co=0;rows.forEach(r=>{const c=(D.sdrOwnerCohort?.[r.email]||{})[w];if(c){cc+=c.contacted||0;co+=c.conn||0;}});return cc?Math.round(co/cc*100)+'%':'—';};
   const nivAgg=(rows,i)=>{const a=[0,0,0];rows.forEach(r=>[week,wB,wC].forEach(w=>{const x=w&&(r.porSemana||{})[w];if(x&&x.oppNivel)x.oppNivel.forEach((v,j)=>a[j]+=v||0);}));const t=(a[0]+a[1]+a[2])||1;return Math.round((a[i]||0)/t*100)+'%';};
-  // produtividade/dia útil (3 sem.) por pessoa + agregador = MÉDIA por SDR (não soma).
-  const pdCont=r=>diasUteis3?(contOwnerAt(r,week)+contOwnerAt(r,wB)+contOwnerAt(r,wC))/diasUteis3:null;
-  const pdOppFn=r=>diasUteis3?(oppsAt(r,week)+oppsAt(r,wB)+oppsAt(r,wC))/diasUteis3:null;
+  // produtividade/dia útil E coorte C1, ambos na janela de 5 semanas (mesma janela do Opp→SQL
+  // · 5s acima — reusa weeks5) — agregador = MÉDIA por SDR (produtividade) ou taxa recalculada
+  // (C1, não é média de %).
+  const diasUteis5=weeks5.reduce((s,w)=>s+(D.diasUteisSemana?.[w]||0),0);
+  const pdCont=r=>diasUteis5?weeks5.reduce((s,w)=>s+contOwnerAt(r,w),0)/diasUteis5:null;
+  const pdOppFn=r=>diasUteis5?weeks5.reduce((s,w)=>s+oppsAt(r,w),0)/diasUteis5:null;
+  const cohSum5=r=>{let cc=0,co=0;weeks5.forEach(w=>{const c=(D.sdrOwnerCohort?.[r.email]||{})[w];if(c){cc+=c.contacted||0;co+=c.conn||0;}});return{cc,co};};
+  const cohRate5=r=>{const{cc,co}=cohSum5(r);return cc?Math.round(co/cc*100):null;};
+  const c2Agg5=rows=>{let cc=0,co=0;rows.forEach(r=>weeks5.forEach(w=>{const c=(D.sdrOwnerCohort?.[r.email]||{})[w];if(c){cc+=c.contacted||0;co+=c.conn||0;}}));return cc?Math.round(co/cc*100)+'%':'—';};
   const mediaAgg=(rows,f,dec)=>{const v=rows.map(f).filter(x=>x!=null);return v.length?(v.reduce((s,x)=>s+x,0)/v.length).toFixed(dec):'—';};
   // célula BD: valor colorido + pill de variação % vs meta (fundo tingido, igual aos cards de cima).
   const bdDelta=(v,t)=>` <span class="att ${v>=t?'hi':'lo'}">${v>=t?'+':''}${Math.round((v/t-1)*100)}%</span>`;
@@ -977,26 +977,22 @@ function renderAreaSdr(){
   // ícones dos headers (só o SVG, sem chip) — reusa KIC + um de produtividade.
   const TI={pd:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',c:KIC.users,conn:KIC.link,opp:KIC.target,niv:KIC.estoque};
   const cols=[
-    // PRODUTIVIDADE por dia útil (média das 3 últimas semanas) — agregador = média por SDR
-    {key:'pdContacted',label:'Contat./BD · 3s',align:'c',icon:TI.pd,render:r=>bdCell(pdCont(r),BD_TGT[r.estrategia]?.contacted,1),agg:rows=>bdAgg(rows,pdCont,1,tg=>tg?.contacted),sort:pdCont},
-    {key:'pdOpp',label:'Opps/BD · 3s',align:'c',icon:TI.pd,render:r=>bdCell(pdOppFn(r),BD_TGT[r.estrategia]?.opps,2),agg:rows=>bdAgg(rows,pdOppFn,2,tg=>tg?.opps),sort:pdOppFn},
-    // ENTRADA
+    // ENTRADA/CONVERSÃO/OUTPUT da semana atual
     {key:'contA',label:'Contatados · sem.',align:'c',icon:TI.c,render:r=>`<span class="mono">${fN(contOwnerAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>contOwnerAt(r,week))),sort:r=>contOwnerAt(r,week)},
-    // CONVERSÃO C1 (contato→conexão na mesma semana) · atual e 2 anteriores
     {key:'connA',label:'C1 · sem.',align:'c',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,week)!=null?cohAt(r,week)+'%':'—'}</span>`,agg:rows=>c2Agg(rows,week),sort:r=>cohAt(r,week)},
-    {key:'connB',label:'C1 · '+sB,align:'c',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,wB)!=null?cohAt(r,wB)+'%':'—'}</span>`,agg:rows=>c2Agg(rows,wB),sort:r=>cohAt(r,wB)},
-    {key:'connC',label:'C1 · '+sC,align:'c',icon:TI.conn,render:r=>`<span class="mono">${cohAt(r,wC)!=null?cohAt(r,wC)+'%':'—'}</span>`,agg:rows=>c2Agg(rows,wC),sort:r=>cohAt(r,wC)},
-    // OUTPUT (Opps geradas) · atual e 2 anteriores
     {key:'oppsA',label:'Opps · sem.',align:'c',icon:TI.opp,render:r=>`<span class="mono">${fN(oppsAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>oppsAt(r,week))),sort:r=>oppsAt(r,week)},
-    {key:'oppsB',label:'Opps · '+sB,align:'c',icon:TI.opp,render:r=>`<span class="mono">${fN(oppsAt(r,wB))}</span>`,agg:rows=>fN(sumBy(rows,r=>oppsAt(r,wB))),sort:r=>oppsAt(r,wB)},
-    {key:'oppsC',label:'Opps · '+sC,align:'c',icon:TI.opp,render:r=>`<span class="mono">${fN(oppsAt(r,wC))}</span>`,agg:rows=>fN(sumBy(rows,r=>oppsAt(r,wC))),sort:r=>oppsAt(r,wC)},
-    // MIX das opps por nível de cliente (acumulado 3 semanas)
-    {key:'n1',label:'% N2-N3',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,0)}%</span>`,agg:rows=>nivAgg(rows,0),sort:r=>nivelPct(r,0)},
-    {key:'n2',label:'% N4-N5',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,1)}%</span>`,agg:rows=>nivAgg(rows,1),sort:r=>nivelPct(r,1)},
-    {key:'n3',label:'% N6+',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,2)}%</span>`,agg:rows=>nivAgg(rows,2),sort:r=>nivelPct(r,2)},
+    // PRODUTIVIDADE por dia útil (janela de 5 semanas) — agregador = média por SDR
+    {key:'pdContacted',label:'Contat./BD · 5s',align:'c',icon:TI.pd,render:r=>bdCell(pdCont(r),BD_TGT[r.estrategia]?.contacted,1),agg:rows=>bdAgg(rows,pdCont,1,tg=>tg?.contacted),sort:pdCont},
+    {key:'pdOpp',label:'Opps/BD · 5s',align:'c',icon:TI.pd,render:r=>bdCell(pdOppFn(r),BD_TGT[r.estrategia]?.opps,2),agg:rows=>bdAgg(rows,pdOppFn,2,tg=>tg?.opps),sort:pdOppFn},
+    // CONVERSÃO C1 acumulada na janela de 5 semanas (mesmo espírito do Opp→SQL · 5s abaixo)
+    {key:'c15s',label:'C1 · 5s',align:'c',icon:TI.conn,render:r=>`<span class="mono">${cohRate5(r)!=null?cohRate5(r)+'%':'—'}</span>`,agg:c2Agg5,sort:cohRate5},
     // Opp→SQL acumulado das opps geradas nas últimas 5 semanas (janela maior, não é coorte de
     // mesma semana — mostra quanto do que o SDR gerou recentemente já avançou no Closer).
     {key:'oppSql5',label:'Opp→SQL · 5s',align:'c',icon:TI.opp,render:r=>`<span class="mono">${oppSqlRate5(r)!=null?oppSqlRate5(r)+'%':'—'}</span>`,agg:rows=>{const o=sumBy(rows,opp5Sum),s=sumBy(rows,oppSql5Sum);return o?Math.round(s/o*100)+'%':'—';},sort:oppSqlRate5},
+    // MIX das opps por nível de cliente (acumulado 3 semanas) — proporções N2-N3/N4-N5/N6+
+    {key:'n1',label:'% N2-N3',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,0)}%</span>`,agg:rows=>nivAgg(rows,0),sort:r=>nivelPct(r,0)},
+    {key:'n2',label:'% N4-N5',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,1)}%</span>`,agg:rows=>nivAgg(rows,1),sort:r=>nivelPct(r,1)},
+    {key:'n3',label:'% N6+',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,2)}%</span>`,agg:rows=>nivAgg(rows,2),sort:r=>nivelPct(r,2)},
   ];
   // TODOS que contataram (por owner_email) na janela de 3 semanas — mescla com os dados de
   // opp/nível do SDR correspondente quando existe. Assim a tabela reconcilia com o card Entradas.

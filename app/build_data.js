@@ -244,18 +244,37 @@ function pushCiclo(key, dateA, dateB) {
   return d;
 }
 
-// "SDR real" = quem o SF marca como SDR (tem sdr_email_sf em algum lead) MENOS os mal-classificados
-// e contas de time/cadência. A PÁGINA de SDR conta só esses; a tabela mantém todos (auditoria).
-const NAO_SDR = new Set(['camila.harumi@hotmart.com', 'gustavo.duarte@hotmart.com', 'bubr_bizops@hotmart.com', 'bkf-team@hotmart.com']);
-const rosterSdr = new Set();
-for (const r of fop) { const s = cleanEmail(r.sdr_email_sf); if (s) rosterSdr.add(s.toLowerCase()); }
+// "SDR real" = quem a planilha de diretório (Dados/Imagens Sales.csv — mesmo datasource
+// Astrobox "Imagens Sales" usado pra nome/foto, ver seção DIRETÓRIO abaixo) marca com
+// Cargo=SDR e Ativo=Sim. Reconciliado com o roster oficial do Power BI (`6.1d_SDR`) em
+// 28/07-29/07/2026: bate 29/29 (as 2 diferenças são gente promovida a Closer que este
+// datasource já reflete e o Power BI ainda não). Antes usávamos um heurístico (qualquer
+// email que já apareceu em sdr_email_sf, menos 4 exclusões manuais) que incluía ~2x mais
+// gente (ex-SDRs, contas de time) e inflava Estoque/coortes da página de SDR. Se a planilha
+// faltar ou não tiver ninguém com Cargo=SDR, cai de volta pro heurístico antigo (com aviso)
+// — a PÁGINA de SDR conta só quem é "real"; a tabela mantém todos (auditoria).
+const fDiretorio = readCsvOptional('Imagens Sales.csv', ',');
+let rosterSdr = new Set(fDiretorio.filter(r => (r.Cargo || '').trim() === 'SDR' && (r.Ativo || '').trim() === 'Sim').map(r => (r.Email || '').trim().toLowerCase()).filter(Boolean));
+let NAO_SDR = new Set();
+if (!rosterSdr.size) {
+  console.warn('[aviso] Dados/Imagens Sales.csv sem ninguém com Cargo=SDR — usando heurístico antigo de "SDR real" (menos preciso, ver Pendencias/README.md).');
+  NAO_SDR = new Set(['camila.harumi@hotmart.com', 'gustavo.duarte@hotmart.com', 'bubr_bizops@hotmart.com', 'bkf-team@hotmart.com']);
+  rosterSdr = new Set();
+  for (const r of fop) { const s = cleanEmail(r.sdr_email_sf); if (s) rosterSdr.add(s.toLowerCase()); }
+}
 const isRealSdr = o => { o = (o || '').toLowerCase(); return !!o && rosterSdr.has(o) && !NAO_SDR.has(o); };
+// Filtro de página do New Biz (Power BI): exclui leads PQL/PPQL (já pré-qualificados, não
+// são trabalho de prospecção do SDR) e segmentação Seed 1/Seed 2 (fora do funil padrão).
+// Confirmado batendo com o Estoque do Power BI (semana 31: 1090 = 1090) combinado com o
+// roster oficial acima.
+const leadFlowOk = r => { const lf = (r.lead_flow || '').trim(), seg = (r.lead_flow_segmentation || '').trim();
+  return lf !== 'PQL' && lf !== 'PPQL' && seg !== 'Seed 1' && seg !== 'Seed 2'; };
 let dataMaxRaw = ''; // data mais recente com resultado na base (max das datas de estágio)
 
 for (const r of fop) {
   const b = bucketFromAmount(r.amount_12_months), e = estr(r.sales_strategy);
   const sdr = cleanEmail(r.sdr_email_sf), closer = cleanEmail(r.closer_email_sf), onb = cleanEmail(r.onboarding_email_sf), owner = cleanEmail(r.owner_email);
-  const ownerReal = isRealSdr(owner); // este lead conta nas métricas SDR da página?
+  const ownerReal = isRealSdr(owner) && leadFlowOk(r); // este lead conta nas métricas SDR da página?
   // datas cruas normalizadas uma vez por lead (SELECT * pode trazer '', 'null' ou data real)
   const dates = {}; for (const [col] of STAGES) { dates[col] = cleanDate(r[col]); if (dates[col] && dates[col] > dataMaxRaw) dataMaxRaw = dates[col]; }
 
@@ -633,12 +652,12 @@ function weekEndUTC(weekKey) {
   if (w === 1) { const d = firstMondayUTC(year); d.setUTCDate(d.getUTCDate() - 1); return d; } // véspera da 1ª segunda
   const d = weekStartUTC(weekKey); d.setUTCDate(d.getUTCDate() + 6); return d;                  // domingo
 }
-const sdrLeads = fop.map(r => ({
+const sdrLeads = fop.filter(r => isRealSdr(cleanEmail(r.owner_email)) && leadFlowOk(r)).map(r => ({
   estr: estr(r.sales_strategy), owner: cleanEmail(r.owner_email),
   contacted: cleanDate(r.contacted_date), connected: cleanDate(r.connected_date),
   nurturing: cleanDate(r.nurturing_date), qualified: cleanDate(r.qualified_date),
   unqualified: cleanDate(r.unqualified_date), opp: cleanDate(r.opportunity_create_date),
-})).filter(l => l.contacted && isRealSdr(l.owner)); // estoque da página = só leads de SDR real
+})).filter(l => l.contacted); // estoque da página = só leads de SDR real, sem PQL/PPQL/Seed1-2
 const hojeStr = new Date().toISOString().slice(0, 10);
 const dataMax = dataMaxRaw && dataMaxRaw <= hojeStr ? dataMaxRaw : hojeStr; // capa no dia de hoje
 const ESTOQUE_KEYS = ['all', ...ESTRS];
@@ -787,10 +806,10 @@ const ranking = {
 
 // ---------- DIRETÓRIO DE PESSOAS (nome + foto, opcional) ----------
 // Planilha mantida à mão (Dados/Imagens Sales.csv, separador ",") — se faltar, nome/foto
-// ficam null e a interface cai de volta pro prefixo do e-mail (sem foto).
-const fimg = readCsvOptional('Imagens Sales.csv', ',');
+// ficam null e a interface cai de volta pro prefixo do e-mail (sem foto). Já lida acima
+// (fDiretorio) pra alimentar o roster de "SDR real".
 const diretorio = {};
-for (const r of fimg) {
+for (const r of fDiretorio) {
   const email = cleanEmail(r.Email); if (!email) continue;
   diretorio[email.toLowerCase()] = {
     nome: (r['Nome Completo'] || r.Nome || '').trim() || null,
@@ -947,7 +966,7 @@ console.log('ultimo mes actual:', Object.keys(actualMensal).sort().pop());
 console.log('mes fechado:', mesFechado.mes, '(anterior:', mesFechado.mesAnterior + ')');
 console.log('pessoas — sdr:', sdrList.length, '| closer:', closerList.length, '| onboarding:', onbList.length);
 const comFoto = [...sdrList, ...closerList, ...onbList].filter(p => p.foto).length;
-console.log('diretório (Imagens Sales.csv):', fimg.length, 'linhas | pessoas com foto casada:', comFoto);
+console.log('diretório (Imagens Sales.csv):', fDiretorio.length, 'linhas | pessoas com foto casada:', comFoto);
 console.log('exemplo 2026-06 total:', JSON.stringify(actualMensal['2026-06']?.total));
 console.log('budget 2026-06 total:', JSON.stringify(budgetMensal['2026-06']?.total));
 console.log('ciclo:', JSON.stringify(ciclo));
