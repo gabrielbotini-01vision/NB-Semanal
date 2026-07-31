@@ -4,6 +4,36 @@ Notas de handoff para quem continuar o desenvolvimento. Última atualização: 3
 
 ## Concluído (31/07/2026)
 
+- **Nova aba "Semanal Sales"** (item 16 do Backlog anterior, agora resolvido): mesma estrutura
+  e mesmos dados da Mensal Sales (5 KPIs Net Revenue/Opp/CW/GMV/Ativação 10K com Budget/
+  Resultado/%Atingimento, tabela YTD e "Fechamento por nível de cliente" N2-N3/N4-N5/N6+), só
+  que em cima de **semana** em vez de mês: "Semana fechada" no lugar de "Mês fechado" (com
+  variação WoW no lugar de MoM) e "YTD por semana" no lugar de YTD por mês (semana 1 → semana
+  selecionada, mesmo ano).
+  - **"Semana fechada"**: nova regra `semanaFechada` em `build_data.js` (mesmo padrão do
+    `mesFechado` já existente) — a reunião semanal é toda segunda-feira e revisa a semana que
+    ACABOU DE FECHAR, então é sempre "a semana mais recente anterior à semana de hoje" (por
+    data corrida), não "a última semana com dado". Fica estável a semana inteira até a virada
+    da próxima segunda. Testado hoje (31/07, dentro da semana 31): `semanaFechada.semana` =
+    2026-W30, correto.
+  - **Reaproveitado de propósito** (em vez de duplicar): `mensalKpiCard` ganhou um parâmetro
+    `suffix` (default `'MoM'`, a Semanal Sales passa `'WoW'`) e `nivelMiniTable` ganhou
+    parâmetros `actualSrc`/`budgetSrc` (default `D.actual.mensal`/`D.budget.mensal`, a Semanal
+    Sales passa `D.actual.semanal`/`D.budget.semanal`) — `metricsForSemana`/`nivelTotal` já
+    eram genéricos o bastante, não precisaram mudar.
+  - **Substituiu por completo** o layout antigo que já existia sob o nome "Semanal Sales"
+    (funil + KPIs + ritmo por estratégia + ranking de closers), que estava escondido da
+    navegação desde 28/07/2026 a pedido do Gabriel. Código antigo exclusivo dessa versão
+    (`kpisHTML`, `funnelHTML`, `estrHTML`, `cicloHTML`, `segHTML`, `trendHTML`, `rankingHTML`,
+    `entradasHTML`, `weeklyTotals`, consts `KPIS`/`FUNNEL`/`CIC`) foi removido — recuperável via
+    git history se precisar no futuro. `semanaLabel`/`weeksInMonth`/`metricsForSemana` foram
+    mantidos (reaproveitados por Semanal Área/1:1 Gestor ou pela nova Semanal Sales).
+  - Controles simplificados: era Mês→Semana (cascata) + Estratégia + Referência
+    (Budget/Reforecast); virou só Semana (todas do ano, sem cascata) + Estratégia — mesmo
+    padrão de 2 controles da Mensal Sales.
+  - Testado no navegador: seletor de semana troca corretamente (default = semana fechada),
+    filtro de estratégia funciona, tabela YTD tem 31 colunas (semana 1 a 30) com scroll
+    horizontal, sem erros de console.
 - **`lead_flow`/`lead_flow_segmentation` (PQL/PPQL/Seed 1-2) passou a filtrar TODAS as
   contagens de funil, não só o Estoque de SDR/Onboarding — validado com match EXATO contra o
   Power BI.** O Gabriel mandou print do painel "Dashboard | Página Principal" do Power BI
@@ -542,22 +572,14 @@ Regenerar: `node app/build_data.js` (lê `Dados/*.csv` locais).
     aparecer uma tabela-ponte (produtor/conta → país) com chave pro `opp_id`, dá pra tentar de
     novo. Mesma limitação estrutural já existia pro `sdrEstoque` (não documentada à parte
     porque lá o roster oficial sozinho já foi suficiente pra bater exato).
-16. **Nova aba "Semanal Sales" (30/07/2026, ainda não desenhada — só anotado a pedido do
-    Gabriel antes de seguir):** ele quer um layout igual ao da **Mensal Sales** (cards
-    N2-N3/N4-N5/N6+ com linhas Opps/CW/Ativação/Net Revenue, colunas Actual/Meta/%Ating.), só
-    que em vez de "Mês fechado" + "Year to date" (YTD), as duas colunas seriam **"Semana
-    fechada"** + **"MTD"** (Month to date — semanas do mês corrente até a semana selecionada).
-    ⚠️ Perguntei se era pra **substituir** a aba "Semanal Sales" que já existe no código mas
-    está escondida da navegação (`MEETINGS` em `index.html`, a pedido do Gabriel em 28/07 —
-    tem outro layout: funil + KPIs + ritmo por estratégia) ou criar uma aba **separada, nova**
-    — ainda sem resposta, perguntar de novo antes de implementar. A base de dados que essa nova
-    aba reaproveitaria é a mesma da Mensal Sales hoje (`D.actual.mensal`/`D.budget.mensal` em
-    `build_data.js`, junção de `01_receita_semana_nivel_estrategia.csv` com
-    `06_operacional_raw.csv` — ver explicação completa dada ao Gabriel no chat em 30/07), só
-    que precisaria também da versão SEMANAL equivalente (`D.actual.semanal`/`D.budget.semanal`,
-    que já existe e alimenta a Semanal Área/Semanal Sales escondida) pro "MTD" (soma das
-    semanas do mês corrente até a semana selecionada, mesmo espírito do YTD atual mas em cima
-    de semanas em vez de meses).
+16. ~~Nova aba "Semanal Sales" igual à Mensal Sales, com Semana fechada~~ — **resolvido
+    (31/07/2026)**, ver "Concluído 31/07" acima. Implementado com **"YTD por semana"** (semana
+    1 → semana selecionada) no lugar de "Mês fechado"+YTD — o Gabriel não confirmou o "MTD"
+    cogitado aqui em 30/07 quando descreveu o pedido de novo, então segui o mais literal ("mesma
+    estrutura/dados da Mensal Sales"). Se ele quiser trocar por MTD depois, é só mudar o cálculo
+    de `ytdWeeks` em `renderSemanal()` (`index.html`) pra somar só as semanas do MÊS corrente
+    via `D.semanaMes`, em vez de semana 1 → selecionada. **Substituiu** a aba "Semanal Sales"
+    antiga (funil/KPIs/ritmo por estratégia, escondida desde 28/07) — código antigo removido.
 17. **Investigação do gap do `onbEstoque` (30/07/2026): achado nada conclusivo, mas relevante
     pra retomar.** De 685 leads no estoque atual, **367 (53,6%!) já estão com `onboarding_status`
     = Accomplished/Unaccomplished mas sem `onboarding_accomplished_date`/`unaccomplished_date`

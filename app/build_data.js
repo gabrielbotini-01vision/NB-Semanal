@@ -1028,6 +1028,20 @@ const mesFechado = {
   mesAnterior: mesesComActual[closedIdx - 1] || null,
 };
 
+// ---------- SEMANA FECHADA (para a aba Semanal Sales) ----------
+// Mesma lógica do mesFechado, em semanas: a reunião semanal é toda segunda-feira e revisa a
+// semana anterior (a que acabou de fechar) — "semana fechada" = a semana mais recente ANTERIOR
+// à semana de HOJE (por data corrida, não "a última semana com dado"), pra ficar estável a
+// semana inteira até a virada da próxima segunda.
+const semanaAtualKey = anoSemana(hojeStr);
+const semanasAsc = [...semanas].sort();
+let idxSemFechada = -1;
+for (let i = semanasAsc.length - 1; i >= 0; i--) { if (semanasAsc[i] < semanaAtualKey) { idxSemFechada = i; break; } }
+const semanaFechada = {
+  semana: idxSemFechada >= 0 ? semanasAsc[idxSemFechada] : null,
+  semanaAnterior: idxSemFechada >= 1 ? semanasAsc[idxSemFechada - 1] : null,
+};
+
 // ---------- OUTPUT ----------
 const meses = [...new Set([...Object.keys(actualMensal), ...Object.keys(budgetMensal), ...Object.keys(reforecastMensal)])].sort();
 const DATA = {
@@ -1045,13 +1059,14 @@ const DATA = {
   diasUteisSemana, closerEstoque, onbEstoque,
   closerCohort, closerCohortSqlCw, closerLost, closerCw: closerCwAcc, closerCohortStatus, closerOppFte, closerCwFte,
   onbCohort, onbAct: onbActAcc, onbCohortStatus, onbCwFte, onbActFte,
-  mesFechado,
+  mesFechado, semanaFechada,
 };
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(outDir + 'app_data.js', 'window.DATA = ' + JSON.stringify(DATA) + ';');
 console.log('OK app_data.js — meses:', meses.length, '| semanas:', semanas.length, '| leads (operacional_raw):', fop.length);
 console.log('ultimo mes actual:', Object.keys(actualMensal).sort().pop());
 console.log('mes fechado:', mesFechado.mes, '(anterior:', mesFechado.mesAnterior + ')');
+console.log('semana fechada:', semanaFechada.semana, '(anterior:', semanaFechada.semanaAnterior + ')');
 console.log('pessoas — sdr:', sdrList.length, '| closer:', closerList.length, '| onboarding:', onbList.length);
 const comFoto = [...sdrList, ...closerList, ...onbList].filter(p => p.foto).length;
 console.log('diretório (Imagens Sales.csv):', fDiretorio.length, 'linhas | pessoas com foto casada:', comFoto);

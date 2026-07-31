@@ -275,11 +275,8 @@
       <div class="appbar-title"><h1 id="pageTitle">—</h1><div class="crumb" id="ctxLine"></div></div>
       <div class="appbar-right">
         <div class="controls" id="wsalesControls">
-          <div class="ctl"><label>Mês</label><select id="selMes" class="sel"></select></div>
           <div class="ctl"><label>Semana</label><select id="selSemana" class="sel"></select></div>
           <div class="ctl"><label>Estratégia</label><select id="selEstr" class="sel"></select></div>
-          <div class="ctl"><label>Referência</label><select id="selRef" class="sel">
-            <option value="budget">Budget</option><option value="reforecast">Reforecast</option></select></div>
         </div>
         <div class="controls" id="wareaControls" style="display:none">
           <div class="ctl"><label>Mês</label><select id="selMesArea" class="sel"></select></div>
@@ -358,10 +355,7 @@ const IC={
   warea:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>',
   oneone:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'
 };
-// "Semanal Sales" ocultada da navegação por enquanto (a pedido do Gabriel, 28/07/2026) — o
-// código/render (renderSemanal, viewSemanal etc.) continua intacto, só não aparece no menu.
-// Pra reativar: devolver {k:'wsales',label:'Semanal Sales'} aqui (entre mensal e warea).
-const MEETINGS=[{k:'mensal',label:'Mensal Sales'},{k:'warea',label:'Semanal Área'},{k:'oneone',label:'1:1 Gestor'}];
+const MEETINGS=[{k:'mensal',label:'Mensal Sales'},{k:'wsales',label:'Semanal Sales'},{k:'warea',label:'Semanal Área'},{k:'oneone',label:'1:1 Gestor'}];
 const AREA_TABS=[{k:'sdr',label:'SDR'},{k:'closers',label:'Closers'},{k:'onboarding',label:'Onboarding'}];
 
 function mesLabel(m){if(!m)return '—';const [y,mm]=m.split('-');const nomes=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];return nomes[+mm-1]+'/'+y;}
@@ -465,14 +459,14 @@ const MENSAL_KPIS=[
   {k:'gmv',lbl:'GMV',cur:1,desc:'Volume bruto transacionado'},
   {k:'activation',lbl:'Ativação 10K',cur:0,desc:'Contas ativadas (10k GMV)'},
 ];
-function mensalKpiCard(c,act,bud,actPrev,mes){
+function mensalKpiCard(c,act,bud,actPrev,mes,suffix){
   const a=act?.[c.k]||0, b=bud?.[c.k]||0, aprev=actPrev?.[c.k];
   const att=pct(a,b);
   const mom=aprev?Math.round((a-aprev)/aprev*100):null;
   return `<div class="kpi"><span class="rail"></span><div class="lbl">${c.lbl}</div>
     <div class="sub2">${c.desc||''}</div>
     <div class="num${c.cur?'':' n'}">${c.cur?fBRL(a):fN(a)}</div>
-    <div class="sub"><span>de ${c.cur?fBRL(b):fN(b)} budget${att!=null?` · <span class="attText ${attClass(att)}">${att}%</span>`:''}</span>${mom!=null?`<span class="att ${mom>=0?'hi':'lo'}">${mom>=0?'▲':'▼'} ${Math.abs(mom)}% MoM</span>`:''}</div></div>`;
+    <div class="sub"><span>de ${c.cur?fBRL(b):fN(b)} budget${att!=null?` · <span class="attText ${attClass(att)}">${att}%</span>`:''}</span>${mom!=null?`<span class="att ${mom>=0?'hi':'lo'}">${mom>=0?'▲':'▼'} ${Math.abs(mom)}% ${suffix||'MoM'}</span>`:''}</div></div>`;
 }
 function metricsForMes(src,mes,estr){
   const m=D[src]?.mensal?.[mes]; if(!m) return null;
@@ -488,9 +482,10 @@ function nivelTotal(mesesList,dataset,nivel,metric,estr){
   },0);
 }
 const NIVEL_ROWS=[['Opps','opps',0],['CW','cw',0],['Ativação','activation',0],['Net Revenue','receita',1]];
-function nivelMiniTable(nivel,mesesList,estr){
+function nivelMiniTable(nivel,mesesList,estr,actualSrc,budgetSrc){
+  actualSrc=actualSrc||D.actual.mensal; budgetSrc=budgetSrc||D.budget.mensal;
   const trs=NIVEL_ROWS.map(([label,key,cur])=>{
-    const a=nivelTotal(mesesList,D.actual.mensal,nivel,key,estr), b=nivelTotal(mesesList,D.budget.mensal,nivel,key,estr);
+    const a=nivelTotal(mesesList,actualSrc,nivel,key,estr), b=nivelTotal(mesesList,budgetSrc,nivel,key,estr);
     const p=pct(a,b);
     return `<tr><td style="font-weight:600">${label}</td>
       <td class="r mono">${cur?fBRL(a):fN(a)}</td>
@@ -518,6 +513,9 @@ function initMensalControls(){
 }
 function renderMensal(){
   const mes=state.mesMensal, estr=state.estrMensal;
+  // subtítulo do topo ("Mês fechado · mmm/aaaa") só era atualizado no render() geral (troca de
+  // aba) — ficava desatualizado ao trocar o mês no seletor, que chama só renderMensal() direto.
+  if($('ctxLine')) $('ctxLine').textContent=CTX.mensal+(mes?(' · '+mesLabel(mes)):'');
   const idx=D.meses.indexOf(mes), prev=D.meses[idx-1];
   const act=metricsForMes('actual',mes,estr), bud=metricsForMes('budget',mes,estr), actPrev=metricsForMes('actual',prev,estr);
   if(!mes||!act){ $('viewMensal').innerHTML='<div class="card"><span class="miss">Sem dado suficiente para este mês/estratégia — rode build_data.js com os CSVs atualizados.</span></div>'; return; }
@@ -550,160 +548,69 @@ function renderMensal(){
 }
 
 // ================= SEMANAL SALES =================
+// Mesma estrutura/dados da Mensal Sales (mensalKpiCard/nivelMiniTable reaproveitados, com
+// dataset semanal), só que "Semana fechada" no lugar de "Mês fechado" e "YTD por semana" no
+// lugar de YTD por mês — a pedido do Gabriel (31/07/2026). Antes disso, esta aba tinha um
+// layout bem diferente (funil/KPIs/ritmo por estratégia); ficava escondida da navegação desde
+// 28/07 e foi totalmente substituída por este novo formato.
 function semanaLabel(w){ if(!w)return '—'; const [y,ww]=w.split('-W'); return 'semana '+(+ww)+'/'+y; }
 function weeksInMonth(mes,pool){ return pool.filter(w=>D.semanaMes[w]===mes); }
-// filtro em cascata Mês → Semana: o select de Mês restringe quais semanas aparecem no select
-// de Semana (só as que pertencem àquele mês, via D.semanaMes calculado no build_data.js).
-function initWsalesControls(){
-  const semanasAtivas=D.semanas.filter(w=>D.actual.semanal[w]||D.budget.semanal[w]);
-  const mesesAtivos=[...new Set(semanasAtivas.map(w=>D.semanaMes[w]))].filter(m=>m.startsWith(FILTRO_ANO)).sort();
-  const comFunil=Object.keys(D.actual.semanal).filter(w=>D.actual.semanal[w].total.contacted>0).sort();
-  const def=comFunil.pop()||Object.keys(D.actual.semanal).sort().pop();
-  state.semana=def&&semanasAtivas.includes(def)?def:semanasAtivas[semanasAtivas.length-1];
-  state.mes=D.semanaMes[state.semana]||mesesAtivos[mesesAtivos.length-1];
-
-  function renderSemanaOptions(){
-    const ws=weeksInMonth(state.mes,semanasAtivas);
-    $('selSemana').innerHTML=ws.map(w=>`<option value="${w}">${semanaLabel(w)}</option>`).join('');
-    if(!ws.includes(state.semana)) state.semana=ws[ws.length-1];
-    $('selSemana').value=state.semana;
-  }
-
-  $('selMes').innerHTML=mesesAtivos.map(m=>`<option value="${m}">${mesLabel(m)}</option>`).join('');
-  $('selMes').value=state.mes;
-  renderSemanaOptions();
-  $('selEstr').innerHTML=`<option value="all">Todas</option>`+STR_ORDER.map(s=>`<option value="${s}">${s}</option>`).join('');
-
-  $('selMes').onchange=e=>{
-    state.mes=e.target.value;
-    const ws=weeksInMonth(state.mes,semanasAtivas);
-    state.semana=ws[ws.length-1]||state.semana;
-    renderSemanaOptions();
-    renderSemanal();
-  };
-  $('selSemana').onchange=e=>{state.semana=e.target.value;renderSemanal();};
-  $('selEstr').onchange=e=>{state.estr=e.target.value;renderSemanal();};
-  $('selRef').onchange=e=>{state.ref=e.target.value;renderSemanal();};
-}
 function metricsForSemana(src,semana,estr){
   const m=D[src]?.semanal?.[semana]; if(!m)return null;
   if(estr==='all')return m.total;
   return m.porEstrategia?.[estr]||null;
 }
-const KPIS=[{k:'receita',lbl:'Net Revenue',cur:1,desc:'Receita líquida da semana'},{k:'gmv',lbl:'GMV',cur:1,desc:'Volume bruto transacionado'},
-  {k:'cw',lbl:'Closed Won',cur:0,desc:'Negócios fechados na semana'},{k:'activation',lbl:'Ativações',cur:0,desc:'Contas ativadas (10k GMV)'},{k:'sap',lbl:'SAP',cur:0,desc:'Sales Accepted Prospects'}];
-function kpisHTML(act,ref){
-  return KPIS.map(c=>{
-    const a=act?act[c.k]:0, b=ref?ref[c.k]:0;
-    const p=pct(a,b);
-    const val=a>0?(c.cur?fBRL(a):fN(a)):'<span class="miss">—</span>';
-    const budv=b>0?(c.cur?fBRL(b):fN(b)):'—';
-    const w=p==null?0:Math.min(100,p);
-    return `<div class="kpi"><span class="rail"></span>
-      <div class="lbl">${c.lbl}</div>
-      <div class="sub2">${c.desc||''}</div>
-      <div class="num ${c.cur?'':'n'}">${val}</div>
-      <div class="sub"><span>meta ${budv}</span>${p!=null?`<span class="att ${attClass(p)}">${p}%</span>`:''}</div>
-      <div class="prog"><i style="width:${w}%;background:${p!=null&&p<80?'var(--danger)':'var(--accent)'}"></i></div>
-    </div>`;
-  }).join('');
+function initWsalesControls(){
+  const semanasComActual=Object.keys(D.actual.semanal).filter(w=>w.startsWith(FILTRO_ANO)).sort();
+  state.semana=D.semanaFechada?.semana&&semanasComActual.includes(D.semanaFechada.semana)?D.semanaFechada.semana:semanasComActual[semanasComActual.length-1];
+  $('selSemana').innerHTML=semanasComActual.map(w=>`<option value="${w}">${semanaLabel(w)}</option>`).join('');
+  $('selSemana').value=state.semana;
+  $('selEstr').innerHTML=`<option value="all">Todas</option>`+STR_ORDER.map(s=>`<option value="${s}">${s}</option>`).join('');
+  state.estr=state.estr||'all';
+  $('selEstr').value=state.estr;
+  $('selSemana').onchange=e=>{state.semana=e.target.value;renderSemanal();};
+  $('selEstr').onchange=e=>{state.estr=e.target.value;renderSemanal();};
 }
-const FUNNEL=[['Contacted','contacted'],['Connected','connected'],['Opps','opps'],['SQL','sql'],['CW','cw'],['Activation','activation']];
-function funnelHTML(act,ref){
-  const vals=FUNNEL.map(([,k])=>act?act[k]:0);
-  const max=Math.max(...vals,1);
-  let h='';
-  FUNNEL.forEach(([nm,k],i)=>{
-    const v=act?act[k]:0, b=ref?ref[k]:0;
-    const w=25+(v/max)*75;
-    const bpos=b>0?Math.min(100,25+(b/max)*75):null;
-    h+=`<div class="fstage"><div class="nm">${nm}</div>
-      <div class="track"><div class="fill" style="width:${w}%;background:${i>=4?'var(--accent)':'#344054'}">${fN(v)}</div>
-      ${bpos!=null?`<div class="bud" style="left:${bpos}%" data-b="${fN(b)}"></div>`:''}</div></div>`;
-    if(i<FUNNEL.length-1){const nx=act?act[FUNNEL[i+1][1]]:0;const c=v>0?Math.round(nx/v*100):0;
-      h+=`<div class="conv">↓ ${c}%</div>`;}
-  });
-  return h;
-}
-function estrHTML(semana){
-  const m=D.actual.semanal[semana], mb=D[state.ref].semanal[semana];
-  const rows=STR_ORDER.map(s=>({s,cw:m?.porEstrategia?.[s]?.cw||0,bud:mb?.porEstrategia?.[s]?.cw||0}));
-  const max=Math.max(...rows.map(r=>Math.max(r.cw,r.bud)),1);
-  return rows.map(r=>`<div class="barrow">
-    <div class="top"><span>${r.s}</span><span class="v">${fN(r.cw)}${r.bud>0?` / <span style="color:var(--text-faint)">${fN(r.bud)}</span>`:''}</span></div>
-    <div class="bar"><i style="width:${r.cw/max*100}%;background:${STR_COLOR[r.s]}"></i>${r.bud>0?`<span class="tgt" style="left:${Math.min(100,r.bud/max*100)}%"></span>`:''}</div>
-  </div>`).join('');
-}
-const CIC=[['dias_contato_conectado','Contato→Conect.'],['dias_conectado_opp','Conect.→Opp'],['dias_opp_sql','Opp→SQL'],['dias_sql_won','SQL→CW'],['dias_won_ativacao','CW→Ativação']];
-function cicloHTML(){
-  return CIC.map(([k,l])=>`<div class="tile"><div class="v">${D.ciclo?.[k]??'—'}</div><div class="k">${l}</div></div>`).join('');
-}
-function segHTML(semana,key,cur){
-  const m=D.actual.semanal[semana], mb=D[state.ref].semanal[semana];
-  const rows=NIV.map(n=>({n,a:m?.porNivel?.[n]?.[key]||0,b:mb?.porNivel?.[n]?.[key]||0}));
-  const max=Math.max(...rows.map(r=>Math.max(r.a,r.b)),1);
-  return rows.map(r=>`<div class="barrow">
-    <div class="top"><span>${r.n}</span><span class="v">${cur?fBRL(r.a):fN(r.a)}${r.b>0?` <span style="color:var(--text-faint)">/ ${cur?fBRL(r.b):fN(r.b)}</span>`:''}</span></div>
-    <div class="bar"><i style="width:${r.a/max*100}%;background:${NIV_COLOR[r.n]}"></i>${r.b>0?`<span class="tgt" style="left:${Math.min(100,r.b/max*100)}%"></span>`:''}</div>
-  </div>`).join('');
-}
-function trendHTML(){
-  const ws=D.semanas.slice(-20);
-  const vals=ws.map(w=>D.actual.semanal[w]?.total?.cw||0);
-  const max=Math.max(...vals,1);
-  return ws.map((w,i)=>`<div class="col" title="${w}: ${fN(vals[i])} CW">
-    <div class="b" style="height:${Math.max(2,vals[i]/max*120)}px"></div>
-    <div class="cap">${w.replace('2025-','25').replace('2026-','26')}</div></div>`).join('');
-}
-function rankingHTML(){
-  const rows=D.ranking?.closers||[]; if(!rows.length) return '<span class="miss">Sem dado de ranking.</span>';
-  const max=Math.max(...rows.map(r=>r.cw),1);
-  return rows.map((r,i)=>`<tr>
-    <td class="mono" style="color:var(--text-faint)">${i+1}</td>
-    <td>${shortEmail(r.email)}</td>
-    <td class="r num-cell">${fN(r.cw)}</td>
-    <td class="r mono">${fN(r.ativados)}</td>
-    <td><div class="rankbar"><i style="width:${r.cw/max*100}%"></i></div></td></tr>`).join('');
-}
-function entradasHTML(){
-  const defs=[
-    {key:'contacted',label:'Contatado',color:'#344054',cap:'topo · hoje'},
-    {key:'opps',label:'Opp in',color:'#344054',cap:'~2–3 sem depois'},
-    {key:'cw',label:'CW in',color:'#344054',cap:'~4–8 sem depois'},
-    {key:'activation',label:'Ativação in',color:'var(--accent)',cap:'~6–12 sem depois'},
-  ];
-  return `<div class="grid g4">${defs.map(d=>{
-    const series=weeklyTotals(D.semanalPorNivel?.[d.key]).slice(-4);
-    return `<div>${weekTrendHTML({label:d.label,color:d.color,series})}<div class="eyebrow" style="color:var(--text-faint);margin-top:6px;letter-spacing:.04em">${d.cap}</div></div>`;
-  }).join('')}</div>`;
-}
+const SEMANAL_KPIS=[
+  {k:'receita',lbl:'Net Revenue',cur:1,desc:'Receita líquida na semana fechada'},
+  {k:'opps',lbl:'Opp',cur:0,desc:'Oportunidades criadas na semana'},
+  {k:'cw',lbl:'CW',cur:0,desc:'Negócios fechados (Closed Won)'},
+  {k:'gmv',lbl:'GMV',cur:1,desc:'Volume bruto transacionado'},
+  {k:'activation',lbl:'Ativação 10K',cur:0,desc:'Contas ativadas (10k GMV)'},
+];
 function renderSemanal(){
-  const act=metricsForSemana('actual',state.semana,state.estr);
-  const ref=metricsForSemana(state.ref,state.semana,state.estr);
+  const semana=state.semana, estr=state.estr;
+  // subtítulo do topo — mesma correção aplicada na Mensal Sales (30/07): sem isso, ficava
+  // desatualizado ao trocar a semana no seletor, que chama renderSemanal() direto.
+  if($('ctxLine')) $('ctxLine').textContent=CTX.wsales+(semana?(' · '+semanaLabel(semana)):'');
+  const idx=D.semanas.indexOf(semana), prev=D.semanas[idx-1];
+  const act=metricsForSemana('actual',semana,estr), bud=metricsForSemana('budget',semana,estr), actPrev=metricsForSemana('actual',prev,estr);
+  if(!semana||!act){ $('viewSemanal').innerHTML='<div class="card"><span class="miss">Sem dado suficiente para esta semana/estratégia — rode build_data.js com os CSVs atualizados.</span></div>'; return; }
+
+  const kpis=`<div class="grid g5">${SEMANAL_KPIS.map(c=>mensalKpiCard(c,act,bud,actPrev,semana,'WoW')).join('')}</div>`;
+
+  const year=semana.slice(0,4);
+  const ytdWeeks=D.semanas.filter(w=>w.startsWith(year)&&w<=semana).sort();
+  const yearVals=ytdWeeks.map(w=>({w,a:metricsForSemana('actual',w,estr)?.receita||0,b:metricsForSemana('budget',w,estr)?.receita||0}));
+  const chart=`
+    <table class="tbl" style="box-shadow:none">
+      <thead><tr><th></th>${yearVals.map(v=>`<th style="text-align:center">${semanaLabel(v.w)}</th>`).join('')}</tr></thead>
+      <tbody>
+        <tr><td style="font-weight:600">Actual</td>${yearVals.map(v=>`<td class="mono" style="text-align:center">${fBRL(v.a)}</td>`).join('')}</tr>
+        <tr><td style="font-weight:600;color:var(--text-muted)">Budget</td>${yearVals.map(v=>`<td class="mono" style="text-align:center;color:var(--text-muted)">${fBRL(v.b)}</td>`).join('')}</tr>
+        <tr><td style="font-weight:600">Ating.</td>${yearVals.map(v=>{const p=pct(v.a,v.b);return `<td class="mono" style="text-align:center;font-weight:700">${p!=null?`<span class="att ${attClass(p)}">${p}%</span>`:'—'}</td>`;}).join('')}</tr>
+      </tbody></table>`;
+
   $('viewSemanal').innerHTML=`
-    <div class="sec"><div class="sec-head"><h2>Realização vs meta</h2><span class="hint">${semanaLabel(state.semana)} · ${state.estr==='all'?'todas estratégias':state.estr} · vs ${state.ref==='budget'?'Budget':'Reforecast'}</span></div>
-      <div class="grid g5">${kpisHTML(act,ref)}</div></div>
-    <div class="sec"><div class="sec-head"><h2>Entradas do funil · últimas 4 semanas</h2><span class="hint">coortes em janelas distintas — a semana forte de um estágio não é a mesma dos seguintes</span></div>
-      <div class="card">${entradasHTML()}</div></div>
-    <div class="grid g2">
-      <div class="sec"><div class="sec-head"><h2>Funil</h2><span class="hint">volume por etapa (semana) · marca = meta</span></div>
-        <div class="card"><div class="funnel">${funnelHTML(act,ref)}</div></div></div>
-      <div class="sec"><div class="sec-head"><h2>Motor de aquisição</h2><span class="hint">CW por estratégia</span></div>
-        <div class="card">${estrHTML(state.semana)}</div>
-        <div class="sec-head" style="margin-top:24px"><h2>Tempos de ciclo</h2><span class="hint">média em dias</span></div>
-        <div class="grid g5">${cicloHTML()}</div></div>
-    </div>
-    <div class="grid g2">
-      <div class="sec"><div class="sec-head"><h2>Net Revenue por nível</h2><span class="hint">todas as estratégias · marca = meta</span></div>
-        <div class="card">${segHTML(state.semana,'receita',1)}</div></div>
-      <div class="sec"><div class="sec-head"><h2>Closed Won por nível</h2><span class="hint">todas as estratégias · marca = meta</span></div>
-        <div class="card">${segHTML(state.semana,'cw',0)}</div></div>
-    </div>
-    <div class="sec"><div class="sec-head"><h2>Closed Won semanal</h2><span class="hint">deals ganhos por semana (2025-W01 → atual)</span></div>
-      <div class="card"><div class="trend">${trendHTML()}</div></div></div>
-    <div class="sec"><div class="sec-head"><h2>Ranking de closers</h2><span class="hint">por Closed Won acumulado (2025+)</span></div>
-      <table class="tbl"><thead><tr><th>#</th><th>Closer</th><th class="r">Closed Won</th><th class="r">Ativações</th><th style="width:220px">Volume</th></tr></thead>
-      <tbody>${rankingHTML()}</tbody></table></div>`;
+    <div class="sec"><div class="sec-head"><h2>Realização vs meta · semana fechada</h2><span class="hint">${semanaLabel(semana)} · ${estr==='all'?'todas estratégias':estr}</span></div>${kpis}</div>
+    <div class="sec"><div class="sec-head"><h2>Net Revenue · ${year} (YTD)</h2><span class="hint">actual vs budget, semana 1 → semana selecionada</span></div>
+      <div class="card" style="padding:24px;overflow-x:auto">${chart}</div></div>
+    <div class="sec"><div class="sec-head"><h2>Fechamento por nível de cliente</h2><span class="hint">realizado vs meta</span></div>
+      <div class="grid g2">
+        <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Semana fechada — ${semanaLabel(semana)}</div>${NIV.map(n=>nivelMiniTable(n,[semana],estr,D.actual.semanal,D.budget.semanal)).join('')}</div>
+        <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Year to date — ${year}</div>${NIV.map(n=>nivelMiniTable(n,ytdWeeks,estr,D.actual.semanal,D.budget.semanal)).join('')}</div>
+      </div>
+    </div>`;
 }
 
 // ================= SEMANAL ÁREA =================
@@ -1529,7 +1436,7 @@ function renderOneOne(){
 }
 
 // ================= NAV / RENDER =================
-const CTX={mensal:'Mês fechado',wsales:'Semana · estoque do funil + produtividade por nível',warea:'Semana · detalhe por FTE',oneone:'Semana · 1:1 gestor ↔ funcionário'};
+const CTX={mensal:'Mês fechado',wsales:'Semana fechada',warea:'Semana · detalhe por FTE',oneone:'Semana · 1:1 gestor ↔ funcionário'};
 function renderTabs(){
   $('tabs').innerHTML=MEETINGS.map(t=>`<div class="tab ${state.meeting===t.k?'on':''}" data-k="${t.k}"><span class="ic">${IC[t.k]||''}</span><span>${t.label}</span></div>`).join('');
   $('tabs').querySelectorAll('.tab').forEach(el=>el.onclick=()=>{state.meeting=el.dataset.k;document.body.classList.remove('side-open');render();});
