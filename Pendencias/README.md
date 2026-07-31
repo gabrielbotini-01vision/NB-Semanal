@@ -1,6 +1,73 @@
 # Pendências · New Business Cockpit
 
-Notas de handoff para quem continuar o desenvolvimento. Última atualização: 30/07/2026.
+Notas de handoff para quem continuar o desenvolvimento. Última atualização: 31/07/2026.
+
+## Concluído (31/07/2026)
+
+- **`lead_flow`/`lead_flow_segmentation` (PQL/PPQL/Seed 1-2) passou a filtrar TODAS as
+  contagens de funil, não só o Estoque de SDR/Onboarding — validado com match EXATO contra o
+  Power BI.** O Gabriel mandou print do painel "Dashboard | Página Principal" do Power BI
+  (Oportunidades/Closed Wons/Ativações, MTD/MTE vs budget), com os filtros "em todas as
+  páginas" visíveis: `Current_office = BRAZIL`, `lead_flow` não é PPQL/PQL,
+  `lead_flow_segmentation` não é Seed 1/Seed 2. Comparei contra o nosso Mensal Sales: pra
+  jul/2026 MTD, o Power BI mostrava Opp=349/CW=141/Ativação=102 e o nosso card mostrava
+  359/146/102 — pequena diferença em Opp/CW.
+  - **Testei os dois filtros isolados nos dados de julho/2026**: aplicar só
+    `lead_flow`/`lead_flow_segmentation` deu **349/141/102 — bate EXATO** com o Power BI.
+    Aplicar `Current_office=BRAZIL` sozinho derruba pra 48/62/102 (mesma armadilha já
+    documentada no Estoque de Onboarding, item 15 do Backlog — não usar).
+  - **A causa**: `leadFlowOk()` já existia no `build_data.js` desde muito antes, mas só era
+    aplicado no `sdrLeads`/`sdrEstoque`, no `onbLeadsMap`/`onbEstoque` e no `ownerReal` (que só
+    gateava as métricas específicas da página SDR — FTE, coorte, opps por nível). **O loop
+    principal que monta `funCell`/`funCellSemanal`** — a fonte de `D.actual.mensal`/
+    `D.actual.semanal`, que alimenta os cards de Mensal Sales, Semanal Sales e Semanal Área —
+    **nunca aplicava esse filtro**, então Contacted/Connected/Opps/SQL/CW/Ativação vinham
+    inflados com PQL/PPQL/Seed 1-2 em TODAS as abas, não só onde já sabíamos do problema.
+  - **Implementado**: `lfOk = leadFlowOk(r)` calculado uma vez por linha e usado no mesmo ponto
+    de gating do fix de `is_lead_br_funnel`/`is_opp_br_funnel` de mais cedo hoje — zera o valor
+    de qualquer campo de `STAGES` se `!lfOk`, então todo código que já checava
+    `if (dates.xxx_date)` ficou protegido automaticamente (cohortes, ciclo, tabela por pessoa,
+    FTE — tudo dentro do loop principal). `_lostD` (lost_deal_date, fora do `dates{}`) ganhou o
+    gate explícito `&& lfOk` também. **`closerEstoque` continua SEM esse filtro** (mantido de
+    propósito — testado em 30/07 e piora o ajuste do "Tamanho Carteira de Opps", ver Backlog
+    item 9/comentário no código; é um visual de ESTOQUE, diferente do visual de THROUGHPUT MTD
+    validado aqui).
+  - **Resultado no histórico inteiro**: queda relevante em TUDO, não só num mês — Contacted
+    -13,2% (49.639→43.106), Connected -11,2% (30.780→27.348), Opps -3,1%, SQL -2,9%, CW -3,5%,
+    Ativação -1,5%. É uma correção grande porque PQL/PPQL/Seed 1-2 nunca tinham sido excluídos
+    das contagens gerais antes — só do Estoque de SDR. Conferido também visualmente no
+    navegador: card de Mensal Sales jul/2026 mostra exatamente Opp 349 / CW 141 / Ativação 102.
+  - Dados já regenerados (`app_data.js`). **Ainda não commitado** — pedido pro Gabriel revisar
+    antes, dado o tamanho do impacto.
+- **Filtro de Brasil corrigido: agora é por OBJETO Salesforce (Lead vs. Opportunity), não por
+  linha inteira.** O `06_operacional_raw.sql` filtrava a linha inteira com `is_lead_br_funnel =
+  true` — e isso descartava, antes mesmo de chegar no `build_data.js`, **opps criadas sem lead
+  ou com lead de outro office** (mas com a própria Opportunity válida no funil BR). A pedido do
+  Gabriel (31/07/2026): o WHERE do SQL agora usa `OR` (`is_lead_br_funnel = true OR
+  is_opp_br_funnel = true`, [Querys/06_operacional_raw.sql:68](../Querys/06_operacional_raw.sql#L68))
+  pra não perder mais essas linhas, e é o `build_data.js` quem decide, **campo a campo**, qual
+  filtro usar:
+  - **Objeto Lead** (`contacted_date`, `connected_date`, `nurturing_date`, `qualified_date`,
+    `unqualified_date`) → `is_lead_br_funnel`.
+  - **Objeto Opportunity** (`opportunity_create_date`, `issues_identified_date`, `sql_date`,
+    `offer_presented_date`, `contract_sent_date`, `closed_won_date`, `lost_deal_date`,
+    `activation_date_10k`/`1k`/`5k`, `onboarding_status`) → `is_opp_br_funnel` (já estava certo
+    pro Estoque de Closer/Onboarding via `oppValidOk`, que já checava esse campo — a lacuna era
+    só nas contagens principais de funil e no Estoque de SDR).
+  - Implementado com um único ponto de gating: `STAGES` (`build_data.js`) ganhou uma 3ª tag
+    (`'lead'`/`'opp'`) por estágio, e a construção de `dates{}` no loop principal já zera o
+    valor de cada campo se o objeto correspondente não for BR — o resto do código, que já
+    checava `if (dates.xxx_date)` antes de usar, ficou automaticamente protegido sem precisar
+    tocar em cada bloco individual. Só 2 leituras "soltas" (fora de um `if (dates...)`) precisaram
+    de gate explícito: `ownerReal` (agora exige `leadBrOk`) e `lost_deal_date` (agora exige
+    `oppBrOk`).
+  - **Resultado, comparando o histórico inteiro antes/depois do fix**: `contacted`/`connected`
+    (lado Lead) **não mudaram nada** (confirma que não regrediu nada) — `opps` +75, `sql` +74,
+    `cw` +56, `ativação` +39 no acumulado geral. Efeito real mas modesto (edge case, não a
+    maioria dos dados) — bate com o esperado pelo Gabriel.
+  - Dados puxados de novo via `scripts/atualizar_dados.py` (só a query 06) e `app_data.js`
+    regenerado. Roster de pessoas também mudou um pouco (63→71 SDR, 51→55 Closer, 55→59
+    Onboarding no total histórico — gente que só aparecia em opps antes invisíveis).
 
 ## Concluído (30/07/2026)
 
@@ -475,6 +542,42 @@ Regenerar: `node app/build_data.js` (lê `Dados/*.csv` locais).
     aparecer uma tabela-ponte (produtor/conta → país) com chave pro `opp_id`, dá pra tentar de
     novo. Mesma limitação estrutural já existia pro `sdrEstoque` (não documentada à parte
     porque lá o roster oficial sozinho já foi suficiente pra bater exato).
+16. **Nova aba "Semanal Sales" (30/07/2026, ainda não desenhada — só anotado a pedido do
+    Gabriel antes de seguir):** ele quer um layout igual ao da **Mensal Sales** (cards
+    N2-N3/N4-N5/N6+ com linhas Opps/CW/Ativação/Net Revenue, colunas Actual/Meta/%Ating.), só
+    que em vez de "Mês fechado" + "Year to date" (YTD), as duas colunas seriam **"Semana
+    fechada"** + **"MTD"** (Month to date — semanas do mês corrente até a semana selecionada).
+    ⚠️ Perguntei se era pra **substituir** a aba "Semanal Sales" que já existe no código mas
+    está escondida da navegação (`MEETINGS` em `index.html`, a pedido do Gabriel em 28/07 —
+    tem outro layout: funil + KPIs + ritmo por estratégia) ou criar uma aba **separada, nova**
+    — ainda sem resposta, perguntar de novo antes de implementar. A base de dados que essa nova
+    aba reaproveitaria é a mesma da Mensal Sales hoje (`D.actual.mensal`/`D.budget.mensal` em
+    `build_data.js`, junção de `01_receita_semana_nivel_estrategia.csv` com
+    `06_operacional_raw.csv` — ver explicação completa dada ao Gabriel no chat em 30/07), só
+    que precisaria também da versão SEMANAL equivalente (`D.actual.semanal`/`D.budget.semanal`,
+    que já existe e alimenta a Semanal Área/Semanal Sales escondida) pro "MTD" (soma das
+    semanas do mês corrente até a semana selecionada, mesmo espírito do YTD atual mas em cima
+    de semanas em vez de meses).
+17. **Investigação do gap do `onbEstoque` (30/07/2026): achado nada conclusivo, mas relevante
+    pra retomar.** De 685 leads no estoque atual, **367 (53,6%!) já estão com `onboarding_status`
+    = Accomplished/Unaccomplished mas sem `onboarding_accomplished_date`/`unaccomplished_date`
+    preenchida** — por isso nunca saem do nosso estoque (`onbLeadsMap.close` depende só da
+    data). 362 desses 367 são de CW fechado em 2024 (quase nenhum recente), o que bate com o
+    padrão observado: semanas mais antigas têm gap maior vs. o Power BI (~18%), semanas
+    recentes menor (~12%). Todos os 367 têm `last_onboarding_date` preenchido (100%), que
+    daria um proxy razoável de quando "esfriaram". **Mas**: como `Onboarding_close_date` é uma
+    **coluna calculada** no Power BI (confirmado pelo Gabriel, mesma fórmula
+    `IF(LEN(accomplished_date)>3, ...)`) a partir dos MESMOS campos de data que a gente lê, é
+    bem provável que o Power BI tenha essa mesma trava — ou seja, corrigir isso do nosso lado
+    (usando status+`last_onboarding_date` como fallback) deixaria o dado operacionalmente mais
+    correto, mas não necessariamente mais perto do número do Power BI, e poderia até afastar.
+    Descartado nessa mesma investigação: `current_office=BRAZIL` estrito (derruba o estoque pra
+    ~357-519, abaixo do alvo) e tirar `leadFlowOk`/`oppValidOk` (muda só ±20, não é isso).
+    **Próximo passo sugerido**: separar uma lista de `opp_id` desses 367 travados pro Gabriel
+    conferir 2-3 exemplos direto no Power BI/Redshift e confirmar se ele TAMBÉM os conta como
+    estoque hoje (se sim, é limitação dos dois lados, não vale corrigir só aqui; se não, tem
+    alguma fonte/coluna com a data preenchida que a gente não está enxergando no export).
+    Pausado a pedido do Gabriel em 30/07 pra tratar outras coisas primeiro.
 
 ## Convenções do projeto (não esquecer)
 

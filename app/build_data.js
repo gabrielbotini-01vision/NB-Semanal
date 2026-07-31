@@ -169,13 +169,19 @@ for (const r of f01) {
 // abaixo, POR NOME — nunca fazemos spread da linha inteira. Se for adicionar um campo novo
 // ao app_data.js (o arquivo que vai pro navegador), confirme antes que não é PII.
 const fop = readCsv('06_operacional_raw.csv');
+// 3º elemento = objeto Salesforce de origem do campo — 'lead' (Contact/Lead, filtra por
+// is_lead_br_funnel) ou 'opp' (Opportunity, filtra por is_opp_br_funnel). Necessário desde
+// 30/07/2026: o WHERE do 06_operacional_raw.sql passou a trazer a linha se QUALQUER UM dos
+// dois objetos for BR (antes só olhava is_lead_br_funnel e descartava opps sem lead ou com
+// lead de outro office) — então agora é o build_data.js que decide, campo a campo, se aquele
+// dado específico é elegível. Ver leadBrOk/oppBrOk logo abaixo e o uso em `dates`.
 const STAGES = [
-  ['contacted_date', 'contacted'],
-  ['connected_date', 'connected'],
-  ['opportunity_create_date', 'opps'],
-  ['sql_date', 'sql'],
-  ['closed_won_date', 'cw'],
-  ['activation_date_10k', 'activation'],
+  ['contacted_date', 'contacted', 'lead'],
+  ['connected_date', 'connected', 'lead'],
+  ['opportunity_create_date', 'opps', 'opp'],
+  ['sql_date', 'sql', 'opp'],
+  ['closed_won_date', 'cw', 'opp'],
+  ['activation_date_10k', 'activation', 'opp'],
 ];
 const CUTOFF = '2025-01-01';
 
@@ -289,7 +295,14 @@ const isRealCloser = o => { o = (o || '').toLowerCase(); return !!o && rosterClo
 // Mesmos campos usados também pelo Power BI como 'f_salesfunnel_dates'[is_opp_valid/is_opp_br_funnel]
 // — não achamos essa tabela separada no Redshift (só produtos de automação sem relação; ver
 // Pendencias/README.md), o mais provável é ser o mesmo dado importado 2x no modelo do Power BI.
-const oppValidOk = r => (r.is_opp_valid || '').trim() === 'True' && (r.is_opp_br_funnel || '').trim() === 'True';
+// leadBrOk/oppBrOk (30/07/2026): filtro Brasil por OBJETO, não por linha inteira — desde que o
+// WHERE do 06_operacional_raw.sql passou a trazer a linha se QUALQUER UM dos dois for BR (pra
+// não perder opps sem lead/com lead de outro office), é aqui que cada campo é filtrado pelo seu
+// objeto de origem: is_lead_br_funnel pros campos do objeto Lead, is_opp_br_funnel pros campos
+// do objeto Opportunity. Usado no loop principal (ver STAGES) e no sdrLeads/oppValidOk abaixo.
+const leadBrOk = r => (r.is_lead_br_funnel || '').trim() === 'True';
+const oppBrOk = r => (r.is_opp_br_funnel || '').trim() === 'True';
+const oppValidOk = r => (r.is_opp_valid || '').trim() === 'True' && oppBrOk(r);
 // ⚠️ Testado em 30/07/2026: adicionar leadFlowOk (PQL/PPQL + Seed 1/2) ao Estoque de Closer
 // afasta o número do Power BI em vez de aproximar (o visual "Tamanho Carteira de Opps" não
 // parece aplicar esse filtro) — por isso o closerLeads abaixo usa só isRealCloser+oppValidOk,
@@ -306,9 +319,31 @@ let dataMaxRaw = ''; // data mais recente com resultado na base (max das datas d
 for (const r of fop) {
   const b = bucketFromAmount(r.amount_12_months), e = estr(r.sales_strategy);
   const sdr = cleanEmail(r.sdr_email_sf), closer = cleanEmail(r.closer_email_sf), onb = cleanEmail(r.onboarding_email_sf), owner = cleanEmail(r.owner_email);
-  const ownerReal = isRealSdr(owner) && leadFlowOk(r); // este lead conta nas métricas SDR da página?
-  // datas cruas normalizadas uma vez por lead (SELECT * pode trazer '', 'null' ou data real)
-  const dates = {}; for (const [col] of STAGES) { dates[col] = cleanDate(r[col]); if (dates[col] && dates[col] > dataMaxRaw) dataMaxRaw = dates[col]; }
+  // leadOk/oppOk: já que o WHERE do SQL agora deixa passar a linha se qualquer um dos dois
+  // objetos for BR (ver STAGES), aqui é onde cada objeto é filtrado pelo seu próprio campo.
+  const leadOk = leadBrOk(r), oppOk = oppBrOk(r);
+  // lfOk (31/07/2026): lead_flow/lead_flow_segmentation (PQL/PPQL/Seed 1/2) é o filtro global
+  // "em todas as páginas" do painel principal do Power BI — confirmado batendo EXATO (349 Opp /
+  // 141 CW / 102 Ativação, jul/2026 MTD) quando aplicado em TODAS as contagens (não só
+  // contacted/connected como antes). Diferente de leadOk/oppOk acima, não depende do objeto —
+  // vale igual pra Lead e Opportunity (é atributo de origem/segmentação que persiste após a
+  // conversão). ⚠️ current_office=BRAZIL foi testado no mesmo painel e afasta bem do Power BI
+  // (48/62/102) — mesma armadilha já documentada no Estoque de Onboarding, não usar aqui.
+  const lfOk = leadFlowOk(r);
+  const ownerReal = isRealSdr(owner) && lfOk && leadOk; // este lead conta nas métricas SDR da página?
+  // datas cruas normalizadas uma vez por lead (SELECT * pode trazer '', 'null' ou data real).
+  // Campo vira null se !lfOk (qualquer objeto) OU se o objeto específico não for BR (leadOk/
+  // oppOk) — dali pra baixo, todo código que já checa `if (dates.xxx_date)` fica
+  // automaticamente protegido (a maioria dos usos de opportunity_create_date/sql_date/
+  // closed_won_date/activation_date_10k/contacted_date/connected_date no resto do loop está
+  // aninhada dentro de um desses checks).
+  const dates = {};
+  for (const [col, , obj] of STAGES) {
+    let v = cleanDate(r[col]);
+    if (v && (!lfOk || (obj === 'lead' && !leadOk) || (obj === 'opp' && !oppOk))) v = null;
+    dates[col] = v;
+    if (v && v > dataMaxRaw) dataMaxRaw = v;
+  }
 
   // coorte semanal contato→conexão (por estratégia): denom = contatado em W; num = conectou em W.
   const _estrLead = estr(r.sales_strategy);
@@ -371,7 +406,7 @@ for (const r of fop) {
     (closerOppFteSet.all[wo] = closerOppFteSet.all[wo] || new Set()).add(closer);
     if (e) (closerOppFteSet[e][wo] = closerOppFteSet[e][wo] || new Set()).add(closer);
   }
-  if (_lostD && closer) {
+  if (_lostD && closer && oppOk && lfOk) { // lost_deal_date é campo do objeto Opportunity, não do Lead
     const wl = anoSemana(_lostD);
     closerLost.all[wl] = (closerLost.all[wl] || 0) + 1; if (e) closerLost[e][wl] = (closerLost[e][wl] || 0) + 1;
   }
@@ -691,7 +726,7 @@ function weekEndUTC(weekKey) {
   if (w === 1) { const d = firstMondayUTC(year); d.setUTCDate(d.getUTCDate() - 1); return d; } // véspera da 1ª segunda
   const d = weekStartUTC(weekKey); d.setUTCDate(d.getUTCDate() + 6); return d;                  // domingo
 }
-const sdrLeads = fop.filter(r => isRealSdr(cleanEmail(r.owner_email)) && leadFlowOk(r)).map(r => ({
+const sdrLeads = fop.filter(r => isRealSdr(cleanEmail(r.owner_email)) && leadFlowOk(r) && leadBrOk(r)).map(r => ({
   estr: estr(r.sales_strategy), owner: cleanEmail(r.owner_email),
   contacted: cleanDate(r.contacted_date), connected: cleanDate(r.connected_date),
   nurturing: cleanDate(r.nurturing_date), qualified: cleanDate(r.qualified_date),
