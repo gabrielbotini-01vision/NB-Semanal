@@ -1403,8 +1403,9 @@ const ROLE_CFG={
   onb:{label:'Onboarding',color:'var(--accent)',metricKey:'activated',metricLabel:'Ativações / semana'},
 };
 function allPeople(){
-  // 1:1 Gestor é reunião com quem está na casa hoje — só entra quem a planilha de
-  // diretório (Imagens Sales.csv) marca como Ativo = "Sim". Sem match = fica de fora.
+  // 1:1 Gestor é reunião com quem está no papel HOJE — p.ativo (build_data.js) já exige Ativo =
+  // "Sim" E o Cargo atual da planilha bater com o papel da lista (SDR/Closer/Onboarding), então
+  // alguém promovido (ex.: Olivio/Lucas Guerrero, hoje Closer) não aparece mais como SDR aqui.
   return [
     ...(D.porPessoa?.sdr||[]).map(p=>({p,kind:'sdr'})),
     ...(D.porPessoa?.closer||[]).map(p=>({p,kind:'closer'})),

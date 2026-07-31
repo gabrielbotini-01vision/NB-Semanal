@@ -857,13 +857,18 @@ for (const r of fDiretorio) {
     nome: (r['Nome Completo'] || r.Nome || '').trim() || null,
     foto: (r.Image || '').trim() || null,
     ativo: (r.Ativo || '').trim().toLowerCase() === 'sim',
+    cargo: (r.Cargo || '').trim(),
   };
 }
-function enrichPessoa(p) {
+// cargoEsperado (opcional): além de Ativo=Sim, exige que o Cargo atual no diretório bata com o
+// papel da lista (SDR/Closer/Onboarding) — usado pelo 1:1 Gestor (30/07/2026) pra não mostrar,
+// por ex., o Olivio/Lucas Guerrero (incluídos manualmente no funil histórico de SDR via
+// SDR_MANUAL_INCLUI) como se ainda fossem SDR hoje: o Cargo deles no diretório já é "Closer".
+function enrichPessoa(p, cargoEsperado) {
   const d = diretorio[p.email.toLowerCase()];
   p.nome = d?.nome || null;
   p.foto = d?.foto || null;
-  p.ativo = d?.ativo === true; // só "Sim" na planilha conta como ativo (sem match = inativo)
+  p.ativo = d?.ativo === true && (!cargoEsperado || d?.cargo === cargoEsperado); // "Sim" + Cargo atual bate com o papel (sem match = inativo)
   return p;
 }
 
@@ -935,7 +940,7 @@ const sdrList = Object.values(porPessoaSdr).map(p => enrichPessoa({
   oppNivel: NIVEIS.map(n => Math.round((p.oppNivel || {})[n] || 0)),
   metricaSemanal: 'opps', semanal: last4Weekly(p.semanal, semanas),
   porSemana: buildPessoaSemanaSdr(p),
-})).sort((a, b) => b.opps - a.opps);
+}, 'SDR')).sort((a, b) => b.opps - a.opps);
 
 const closerList = Object.values(porPessoaCloser).map(p => enrichPessoa({
   email: p.email, estrategia: p.estrategia || null,
@@ -947,7 +952,7 @@ const closerList = Object.values(porPessoaCloser).map(p => enrichPessoa({
   cwNivel: NIVEIS.map(n => Math.round((p.cwNivel || {})[n] || 0)),
   metricaSemanal: 'cw', semanal: last4Weekly(p.semanal, semanas),
   porSemana: buildPessoaSemanaCloser(p),
-})).sort((a, b) => b.cw - a.cw);
+}, 'Closer')).sort((a, b) => b.cw - a.cw);
 
 const onbList = Object.values(porPessoaOnb).map(p => enrichPessoa({
   email: p.email, estrategia: p.estrategia || null,
@@ -957,7 +962,7 @@ const onbList = Object.values(porPessoaOnb).map(p => enrichPessoa({
   actNivel: NIVEIS.map(n => Math.round((p.actNivel || {})[n] || 0)),
   metricaSemanal: 'activated', semanal: last4Weekly(p.semanal, semanas),
   porSemana: buildPessoaSemanaOnb(p),
-})).sort((a, b) => b.activated - a.activated);
+}, 'Onboarding')).sort((a, b) => b.activated - a.activated);
 
 // ---------- SÉRIES SEMANAIS POR NÍVEL (direto do unpivot acima) ----------
 function roundNivelWeek(obj) {

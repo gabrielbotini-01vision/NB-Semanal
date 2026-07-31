@@ -1,6 +1,19 @@
 # Pendências · New Business Cockpit
 
-Notas de handoff para quem continuar o desenvolvimento. Última atualização: 29/07/2026.
+Notas de handoff para quem continuar o desenvolvimento. Última atualização: 30/07/2026.
+
+## Concluído (30/07/2026)
+
+- **Aba "1:1 Gestor" só mostra quem está ativo NO PAPEL certo hoje** (`enrichPessoa` em
+  `build_data.js` ganhou um parâmetro `cargoEsperado`): antes, `p.ativo` só checava `Ativo='Sim'`
+  na planilha de diretório, sem olhar o `Cargo` — então alguém como Olivio Blach/Lucas Guerrero
+  (incluídos manualmente no roster de SDR via `SDR_MANUAL_INCLUI`, pra manter o histórico do
+  funil de quando eram SDR) continuava aparecendo como SDR no 1:1 mesmo já promovidos a Closer.
+  Agora `sdrList`/`closerList`/`onbList` passam o cargo esperado (`'SDR'`/`'Closer'`/
+  `'Onboarding'`) e `p.ativo` só fica `true` se o `Cargo` atual na planilha bater com a lista.
+  Resultado após o ajuste: **27 SDR / 17 Closer / 16 Onboarding** ativos no 1:1 (antes, o
+  Olivio/Guerrero apareciam duplicados em SDR e Closer). Não afeta o Estoque/tabela por pessoa
+  de nenhuma das 3 abas (só o 1:1 Gestor usa `p.ativo`).
 
 ## Concluído (29/07/2026)
 
