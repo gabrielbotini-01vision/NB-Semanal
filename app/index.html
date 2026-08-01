@@ -583,11 +583,16 @@ function renderSemanal(){
   // subtítulo do topo — mesma correção aplicada na Mensal Sales (30/07): sem isso, ficava
   // desatualizado ao trocar a semana no seletor, que chama renderSemanal() direto.
   if($('ctxLine')) $('ctxLine').textContent=CTX.wsales+(semana?(' · '+semanaLabel(semana)):'');
-  const idx=D.semanas.indexOf(semana), prev=D.semanas[idx-1];
+  const idx=D.semanas.indexOf(semana), prev=D.semanas[idx-1], prevPrev=D.semanas[idx-2];
   const act=metricsForSemana('actual',semana,estr), bud=metricsForSemana('budget',semana,estr), actPrev=metricsForSemana('actual',prev,estr);
   if(!semana||!act){ $('viewSemanal').innerHTML='<div class="card"><span class="miss">Sem dado suficiente para esta semana/estratégia — rode build_data.js com os CSVs atualizados.</span></div>'; return; }
 
   const kpis=`<div class="grid g5">${SEMANAL_KPIS.map(c=>mensalKpiCard(c,act,bud,actPrev,semana,'WoW')).join('')}</div>`;
+  // "Semana Anterior" (31/07/2026, a pedido do Gabriel): os mesmos 5 cards, uma semana antes da
+  // selecionada (sempre relativo ao seletor, não fixo — se trocar a semana no topo, esta seção
+  // acompanha). actPrev vira actPrevPrev aqui, pra manter o próprio WoW dessa seção também.
+  const actPrevWk=metricsForSemana('actual',prev,estr), budPrevWk=metricsForSemana('budget',prev,estr), actPrevPrevWk=metricsForSemana('actual',prevPrev,estr);
+  const kpisPrev=`<div class="grid g5">${SEMANAL_KPIS.map(c=>mensalKpiCard(c,actPrevWk,budPrevWk,actPrevPrevWk,prev,'WoW')).join('')}</div>`;
 
   const year=semana.slice(0,4);
   const ytdWeeks=D.semanas.filter(w=>w.startsWith(year)&&w<=semana).sort();
@@ -603,6 +608,7 @@ function renderSemanal(){
 
   $('viewSemanal').innerHTML=`
     <div class="sec"><div class="sec-head"><h2>Realização vs meta · semana fechada</h2><span class="hint">${semanaLabel(semana)} · ${estr==='all'?'todas estratégias':estr}</span></div>${kpis}</div>
+    <div class="sec"><div class="sec-head"><h2>Realização vs meta · Semana Anterior</h2><span class="hint">${semanaLabel(prev)} · ${estr==='all'?'todas estratégias':estr}</span></div>${kpisPrev}</div>
     <div class="sec"><div class="sec-head"><h2>Net Revenue · ${year} (YTD)</h2><span class="hint">actual vs budget, semana 1 → semana selecionada</span></div>
       <div class="card" style="padding:24px;overflow-x:auto">${chart}</div></div>
     <div class="sec"><div class="sec-head"><h2>Fechamento por nível de cliente</h2><span class="hint">realizado vs meta</span></div>

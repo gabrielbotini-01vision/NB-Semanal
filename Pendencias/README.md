@@ -34,6 +34,12 @@ Notas de handoff para quem continuar o desenvolvimento. Última atualização: 3
   - Testado no navegador: seletor de semana troca corretamente (default = semana fechada),
     filtro de estratégia funciona, tabela YTD tem 31 colunas (semana 1 a 30) com scroll
     horizontal, sem erros de console.
+  - **Segunda seção de cards "Realização vs meta · Semana Anterior"** logo abaixo da primeira
+    (mesmo dia, a pedido do Gabriel): os mesmos 5 KPIs, sempre **1 semana antes da que estiver
+    selecionada no topo** (não fixo em "semana fechada − 2"; se o usuário trocar a semana no
+    seletor, essa segunda seção acompanha, ficando sempre "a anterior à selecionada"). Reaproveita
+    `prev` (`D.semanas[idx-1]`), que já existia pro cálculo de WoW da primeira seção — a segunda
+    seção tem seu próprio WoW, contra `D.semanas[idx-2]`.
 - **`lead_flow`/`lead_flow_segmentation` (PQL/PPQL/Seed 1-2) passou a filtrar TODAS as
   contagens de funil, não só o Estoque de SDR/Onboarding — validado com match EXATO contra o
   Power BI.** O Gabriel mandou print do painel "Dashboard | Página Principal" do Power BI
