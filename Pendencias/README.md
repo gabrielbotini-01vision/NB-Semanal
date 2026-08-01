@@ -1,8 +1,38 @@
 # Pendências · New Business Cockpit
 
-Notas de handoff para quem continuar o desenvolvimento. Última atualização: 31/07/2026.
+Notas de handoff para quem continuar o desenvolvimento. Última atualização: 01/08/2026.
 
-## Concluído (31/07/2026)
+## Concluído (01/08/2026)
+
+- **Filtro de Nível (N2-N3/N4-N5/N6+) na Semanal Área — só Closer e Onboarding, não SDR.**
+  A pedido do Gabriel: um segundo `<select>` (`selNivelArea`) ao lado do de Estratégia,
+  **independente** dele (escolher um reseta o outro pra "Todos/Todas" — nunca os dois filtrando
+  ao mesmo tempo, decisão explícita do Gabriel pra não precisar de um produto cartesiano
+  estr×nível). Só aparece nas sub-abas Closers/Onboarding (`ctlNivelArea` some em SDR).
+  - **`build_data.js`**: novo `CO_KEYS = ['all', ...ESTRS, ...NIVEIS]` — as 12 estruturas de
+    Closer/Onboarding que já eram indexadas por estratégia (`closerCohort`,
+    `closerCohortStatus`, `closerCohortSqlCw`, `closerLost`, `closerCwAcc`, `closerOppFteSet`,
+    `closerCwFteSet`, `closerEstoque`, `onbCohort`, `onbCohortStatus`, `onbActAcc`,
+    `onbCwFteSet`, `onbActFteSet`, `onbEstoque`) ganharam as 3 chaves de nível como **entradas
+    irmãs** no mesmo dicionário (não um cruzamento estr×nível — cabe porque o filtro é
+    independente). `closerLeads`/`onbLeadsMap` ganharam o campo `nivel` (via
+    `bucketFromAmount`) pros dois estoques conseguirem bucketizar por nível também.
+    `sdrEstoque`/`sdrOppFte`/`sdrContactFte` **não foram tocados** (continuam só com
+    `ESTOQUE_KEYS`, sem nível — átomo do pedido do Gabriel).
+  - **`index.html`**: `renderAreaClosers()`/`renderAreaOnboarding()` ganharam `filtF =
+    state.nivelArea!=='all' ? state.nivelArea : estrF` — todas as buscas em `D.closerXxx`/
+    `D.onbXxx` (KPIs, Estoque, Status, C4, FTE/produtividade) passaram de `[estrF]` pra
+    `[filtF]`. `renderAreaSdr()` não foi tocado.
+  - ⚠️ **Escopo consciente**: a tabela "Closers/Onboarding · por pessoa" **não é filtrada por
+    nível** — nível é atributo do NEGÓCIO (cliente), não da pessoa (um closer atende contas de
+    vários níveis), e a tabela por pessoa usa `porSemana` por pessoa que não tem quebra por
+    nível hoje. Filtrar isso exigiria uma reestruturação bem maior (nível dentro de
+    `porPessoaCloser[].porSemana[semana]`), fora do escopo pedido — a tabela continua mostrando
+    todo mundo, só os cards/estoque/status acima dela é que respeitam o filtro de Nível.
+  - Testado no navegador: nos dois sentidos (Nível reseta Estratégia e vice-versa), KPIs mudam
+    de valor ao trocar de nível, filtro some corretamente ao voltar pra SDR, sem erros de
+    console.
+
 
 - **Nova aba "Semanal Sales"** (item 16 do Backlog anterior, agora resolvido): mesma estrutura
   e mesmos dados da Mensal Sales (5 KPIs Net Revenue/Opp/CW/GMV/Ativação 10K com Budget/

@@ -265,7 +265,7 @@
 <div class="scrim" id="scrim"></div>
 <div class="layout">
   <aside class="sidebar" id="sidebar">
-    <div class="side-brand"><div class="side-logo"><span class="hotmark">hotmart</span><small>New Business · Cockpit</small></div></div>
+    <div class="side-brand"><div class="side-logo"><span class="hotmark">Hotmart</span><small>New Business · Semanal</small></div></div>
     <nav class="side-nav" id="tabs"></nav>
     <div class="side-foot"><div class="side-note"><b>Dados agregados</b> das bases NB + budget/reforecast.<br><span id="genAt"></span></div></div>
   </aside>
@@ -282,6 +282,7 @@
           <div class="ctl"><label>Mês</label><select id="selMesArea" class="sel"></select></div>
           <div class="ctl"><label>Semana</label><select id="selSemanaArea" class="sel"></select></div>
           <div class="ctl" id="ctlEstrArea"><label>Estratégia</label><select id="selEstrArea" class="sel"></select></div>
+          <div class="ctl" id="ctlNivelArea" style="display:none"><label>Nível</label><select id="selNivelArea" class="sel"></select></div>
           <div class="ctl"><label>Referência</label><select id="selRefArea" class="sel">
             <option value="budget">Budget</option><option value="reforecast">Reforecast</option></select></div>
         </div>
@@ -347,7 +348,7 @@ function avatarHTML(p,size){
 function median(arr){const a=[...arr].filter(v=>v!=null).sort((x,y)=>x-y);const n=a.length;if(!n)return 0;return n%2?a[(n-1)/2]:(a[n/2-1]+a[n/2])/2;}
 
 // ---- estado ----
-let state={meeting:'mensal',area:'sdr',mes:null,semana:null,estr:'all',ref:'budget',mesArea:null,semanaArea:null,refArea:'budget',estrArea:'all',mesMensal:null,estrMensal:'all',pessoa:null,sdrSort:null,closerSort:null,onbSort:null,mesOneOne:null,semanaOneOne:null};
+let state={meeting:'mensal',area:'sdr',mes:null,semana:null,estr:'all',ref:'budget',mesArea:null,semanaArea:null,refArea:'budget',estrArea:'all',nivelArea:'all',mesMensal:null,estrMensal:'all',pessoa:null,sdrSort:null,closerSort:null,onbSort:null,mesOneOne:null,semanaOneOne:null};
 
 const IC={
   mensal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>',
@@ -958,17 +959,24 @@ function renderAreaClosers(){
   const list=base.map(p=>weekView(p,week,CLOSER_DEF)).sort((a,b)=>b.cw-a.cw);
   // ===== filtro de sales_strategy (Outbound/Inbound/Hunting) — mesmo padrão da página SDR =====
   const estrF=state.estrArea||'all';
+  // filtro de Nível (N2-N3/N4-N5/N6+) — independente do de Estratégia (31/07/2026, só
+  // Closer/Onboarding): quando ativo, "substitui" a Estratégia nas buscas em D.closerXxx (as
+  // estruturas ganharam as 3 chaves de nível como irmãs de all/Outbound/Inbound/Hunting, ver
+  // CO_KEYS em build_data.js). Não filtra a LISTA de pessoas (listF/listTbl) — nível é atributo
+  // do negócio, não do closer, então a tabela "por pessoa" continua mostrando todo mundo.
+  const nivelF=state.nivelArea||'all';
+  const filtF=nivelF!=='all'?nivelF:estrF;
   const listF=estrF==='all'?list:list.filter(p=>p.estrategia===estrF);
   // Entradas/saídas vêm das estruturas já gateadas por closer atribuído (lead-level, não soma
   // de pessoa) — mesmo padrão do SDR (sdrCohort/sdrOppsNivel em vez de somar a lista).
-  const coh=(D.closerCohort?.[estrF]||{})[week]||null;
+  const coh=(D.closerCohort?.[filtF]||{})[week]||null;
   const totOpps=coh?.opp||0;
-  const totCw=(D.closerCw?.[estrF]||{})[week]||0;
-  const totLost=(D.closerLost?.[estrF]||{})[week]||0;
-  const refAgg=estrF==='all'?D[state.refArea]?.semanal?.[week]?.total:D[state.refArea]?.semanal?.[week]?.porEstrategia?.[estrF];
+  const totCw=(D.closerCw?.[filtF]||{})[week]||0;
+  const totLost=(D.closerLost?.[filtF]||{})[week]||0;
+  const refAgg=filtF==='all'?D[state.refArea]?.semanal?.[week]?.total:(nivelF!=='all'?D[state.refArea]?.semanal?.[week]?.porNivel?.[filtF]:D[state.refArea]?.semanal?.[week]?.porEstrategia?.[filtF]);
   const refT=refAgg;
-  // Estoque do funil na POSIÇÃO da semana selecionada (snapshot), na estratégia filtrada
-  const eCur=(D.closerEstoque?.[estrF]||[]).find(e=>e.semana===week);
+  // Estoque do funil na POSIÇÃO da semana selecionada (snapshot), no filtro ativo (estratégia ou nível)
+  const eCur=(D.closerEstoque?.[filtF]||[]).find(e=>e.semana===week);
   const estTot=eCur?eCur.opp+eCur.issues+eCur.sql+eCur.offer+eCur.contract:null;
   const totSaidas=totCw+totLost;
   const winRatePct=totSaidas?Math.round(totCw/totSaidas*100):null;
@@ -977,17 +985,17 @@ function renderAreaClosers(){
   const deltaPill=`Δ estoque <span class="att ${deltaEst>=0?'hi':'lo'}">${deltaEst>=0?'▲ +':'▼ '}${fN(deltaEst)}</span>`;
   // C4 · SQL→CW — coorte isolada, ancorada na semana do SQL (não do opp): dos que chegaram a
   // SQL em W, quantos fecharam (CW) na MESMA semana.
-  const cohSqlCw=(D.closerCohortSqlCw?.[estrF]||{})[week]||null;
+  const cohSqlCw=(D.closerCohortSqlCw?.[filtF]||{})[week]||null;
   const c4Pct=cohSqlCw&&cohSqlCw.sql?Math.round(cohSqlCw.cw/cohSqlCw.sql*100):null;
   // FTE — closers que de fato receberam opp / fecharam CW na semana (mesma aproximação do SDR)
-  const oppFteCount=(D.closerOppFte?.[estrF]||{})[week]||0;
-  const cwFteCount=(D.closerCwFte?.[estrF]||{})[week]||0;
+  const oppFteCount=(D.closerOppFte?.[filtF]||{})[week]||0;
+  const cwFteCount=(D.closerCwFte?.[filtF]||{})[week]||0;
   const oppsFte=totOpps/Math.max(1,oppFteCount);
   const cwFte=totCw/Math.max(1,cwFteCount);
   const diasUteis=D.diasUteisSemana?.[week]||0;
   const oppsFteDia=diasUteis?oppsFte/diasUteis:null;
   const cwFteDia=diasUteis?cwFte/diasUteis:null;
-  const bdt=BD_TGT_CLOSER[estrF]||{};
+  const bdt=BD_TGT_CLOSER[filtF]||{};
   const bdPill=(val,tgt)=>tgt?` <span class="att ${val!=null&&val>=tgt?'hi':'lo'}">${val!=null?Math.round(val/tgt*100):0}%</span>`:'';
   const oppBD=(bdt.opps?`meta ${bdt.opps}/BD${bdPill(oppsFteDia,bdt.opps)} · `:'')+`média ${oppsFte.toFixed(2)}/FTE · ${oppFteCount} closers · ${diasUteis} BD`;
   const cwBD=(bdt.cw?`meta ${bdt.cw}/BD${bdPill(cwFteDia,bdt.cw)} · `:'')+`média ${cwFte.toFixed(2)}/FTE · ${cwFteCount} closers · ${diasUteis} BD`;
@@ -1008,7 +1016,7 @@ function renderAreaClosers(){
     return `<div class="card">${weekTrendHTML({label:n,color:'#667085',series:ser,targets:tg,flat:true,accentLabel:true})}</div>`; }).join('');
   // resumo de produtividade por FTE (uma linha) — mesmo padrão do SDR.
   const prodResumo=`<div class="card" style="display:flex;gap:30px;flex-wrap:wrap;align-items:center;padding:16px 22px">
-    <span class="eyebrow">Produtividade por FTE · ${semanaLabel(week)}${estrF!=='all'?' · '+estrF:''}</span>
+    <span class="eyebrow">Produtividade por FTE · ${semanaLabel(week)}${filtF!=='all'?' · '+filtF:''}</span>
     <span><b style="font-size:16px">${oppFteCount}</b> <span style="color:var(--text-muted);font-size:12px">FTEs (receberam opp)</span></span>
     <span><b style="font-size:16px">${oppsFte.toFixed(2)}</b> <span style="color:var(--text-muted);font-size:12px">opps/FTE</span></span>
     <span><b style="font-size:16px">${oppsFteDia!=null?oppsFteDia.toFixed(2):'—'}</b> <span style="color:var(--text-muted);font-size:12px">opps/FTE/dia útil (${diasUteis}d)</span></span>
@@ -1077,12 +1085,12 @@ function renderAreaClosers(){
   if(estrF!=='all') listTbl=listTbl.filter(r=>r.estrategia===estrF);
   const table=groupedTable({rows:listTbl,groupBy:r=>r.estrategia||'Sem estratégia',groupOrder:[...STR_ORDER,'Sem estratégia'],cols,kind:'closer',totals:true,sort:state.closerSort,hd:cardHd(KIC.users,'Closers · por pessoa','opps, C1, mix por nível e produtividade/BD')});
   $('viewArea').innerHTML=`
-    <div class="sec"><div class="sec-head"><h2>Resultado semanal</h2><span class="hint">${semanaLabel(week)}${estrF!=='all'?' · '+estrF:''}</span></div>
+    <div class="sec"><div class="sec-head"><h2>Resultado semanal</h2><span class="hint">${semanaLabel(week)}${filtF!=='all'?' · '+filtF:''}</span></div>
       <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d,cls,icon])=>`<div class="kpi ${cls||''}">${icon?`<span class="kpi-ic">${icon}</span>`:''}<span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div></div>
     <div class="sec"><div class="sec-head"><h2>Evolução do resultado</h2></div>
       <div class="grid g2">
-        <div class="card">${cardHd(KIC.estoque,'Estoque do funil Closer','snapshot no fim de cada semana · últ. 16 · Opp → Issues → SQL → Offer → Contract')}${closerEstoqueHTML(estrF)}</div>
-        <div class="card">${cardHd(KIC.check,'Status atual por semana de entrada (opp)','virou opp × situação hoje · últ. 16')}${closerStatusHTML(estrF)}</div>
+        <div class="card">${cardHd(KIC.estoque,'Estoque do funil Closer','snapshot no fim de cada semana · últ. 16 · Opp → Issues → SQL → Offer → Contract')}${closerEstoqueHTML(filtF)}</div>
+        <div class="card">${cardHd(KIC.check,'Status atual por semana de entrada (opp)','virou opp × situação hoje · últ. 16')}${closerStatusHTML(filtF)}</div>
       </div></div>
     <div class="sec"><div class="sec-head"><h2>CW por nível de cliente</h2><span class="hint">fechamentos por semana · últimas 8 semanas</span></div>
       <div class="grid g3">${wt}</div></div>
@@ -1102,16 +1110,21 @@ function renderAreaOnboarding(){
   const list=base.map(p=>weekView(p,week,ONB_DEF)).sort((a,b)=>b.activated-a.activated);
   // ===== filtro de sales_strategy (Outbound/Inbound/Hunting) — mesmo padrão de SDR/Closers =====
   const estrF=state.estrArea||'all';
+  // filtro de Nível (N2-N3/N4-N5/N6+) — independente do de Estratégia (31/07/2026), mesmo
+  // esquema do renderAreaClosers acima: substitui a Estratégia nas buscas, não filtra a lista
+  // de pessoas (nível é atributo do negócio, não do onboarder).
+  const nivelF=state.nivelArea||'all';
+  const filtF=nivelF!=='all'?nivelF:estrF;
   const listF=estrF==='all'?list:list.filter(p=>p.estrategia===estrF);
   // Entradas/saídas vêm das estruturas gateadas por onboarder atribuído (lead-level), mesmo
   // padrão de SDR/Closer (onbCohort/onbAct em vez de somar a lista de pessoas).
-  const coh=(D.onbCohort?.[estrF]||{})[week]||null;
+  const coh=(D.onbCohort?.[filtF]||{})[week]||null;
   const totCwIn=coh?.cw||0;
-  const totAct=(D.onbAct?.[estrF]||{})[week]||0;
-  const refAgg=estrF==='all'?D[state.refArea]?.semanal?.[week]?.total:D[state.refArea]?.semanal?.[week]?.porEstrategia?.[estrF];
+  const totAct=(D.onbAct?.[filtF]||{})[week]||0;
+  const refAgg=filtF==='all'?D[state.refArea]?.semanal?.[week]?.total:(nivelF!=='all'?D[state.refArea]?.semanal?.[week]?.porNivel?.[filtF]:D[state.refArea]?.semanal?.[week]?.porEstrategia?.[filtF]);
   const refT=refAgg;
-  // Estoque do funil na POSIÇÃO da semana selecionada (snapshot), na estratégia filtrada
-  const eCur=(D.onbEstoque?.[estrF]||[]).find(e=>e.semana===week);
+  // Estoque do funil na POSIÇÃO da semana selecionada (snapshot), no filtro ativo (estratégia ou nível)
+  const eCur=(D.onbEstoque?.[filtF]||[]).find(e=>e.semana===week);
   const estTot=eCur?eCur.cw+eCur.a1k+eCur.a5k:null;
   // delta de estoque da semana = entradas − saídas = fechou (CW) − ativou 10k (única saída
   // conhecida aqui — não há "lost"/churn documentado no funil de ativação).
@@ -1123,14 +1136,14 @@ function renderAreaOnboarding(){
   // natureza (a maioria só ativa em semanas futuras) — não é sinal de erro.
   const c10kPct=coh&&coh.cw?Math.round((coh.a10k||0)/coh.cw*100):null;
   // FTE — onboarders que de fato receberam CW / ativaram 10k na semana (mesma aproximação do SDR/Closer)
-  const cwFteCount=(D.onbCwFte?.[estrF]||{})[week]||0;
-  const actFteCount=(D.onbActFte?.[estrF]||{})[week]||0;
+  const cwFteCount=(D.onbCwFte?.[filtF]||{})[week]||0;
+  const actFteCount=(D.onbActFte?.[filtF]||{})[week]||0;
   const cwFte=totCwIn/Math.max(1,cwFteCount);
   const actFte=totAct/Math.max(1,actFteCount);
   const diasUteis=D.diasUteisSemana?.[week]||0;
   const cwFteDia=diasUteis?cwFte/diasUteis:null;
   const actFteDia=diasUteis?actFte/diasUteis:null;
-  const bdt=BD_TGT_ONB[estrF]||{};
+  const bdt=BD_TGT_ONB[filtF]||{};
   const bdPill=(val,tgt)=>tgt?` <span class="att ${val!=null&&val>=tgt?'hi':'lo'}">${val!=null?Math.round(val/tgt*100):0}%</span>`:'';
   const cwBD=(bdt.cw?`meta ${bdt.cw}/BD${bdPill(cwFteDia,bdt.cw)} · `:'')+`média ${cwFte.toFixed(2)}/FTE · ${cwFteCount} onboarders · ${diasUteis} BD`;
   const actBD=(bdt.act?`meta ${bdt.act}/BD${bdPill(actFteDia,bdt.act)} · `:'')+`média ${actFte.toFixed(2)}/FTE · ${actFteCount} onboarders · ${diasUteis} BD`;
@@ -1150,7 +1163,7 @@ function renderAreaOnboarding(){
     return `<div class="card">${weekTrendHTML({label:n,color:'#667085',series:ser,targets:tg,flat:true,accentLabel:true})}</div>`; }).join('');
   // resumo de produtividade por FTE (uma linha) — mesmo padrão do SDR/Closer.
   const prodResumo=`<div class="card" style="display:flex;gap:30px;flex-wrap:wrap;align-items:center;padding:16px 22px">
-    <span class="eyebrow">Produtividade por FTE · ${semanaLabel(week)}${estrF!=='all'?' · '+estrF:''}</span>
+    <span class="eyebrow">Produtividade por FTE · ${semanaLabel(week)}${filtF!=='all'?' · '+filtF:''}</span>
     <span><b style="font-size:16px">${cwFteCount}</b> <span style="color:var(--text-muted);font-size:12px">FTEs (receberam CW)</span></span>
     <span><b style="font-size:16px">${cwFte.toFixed(2)}</b> <span style="color:var(--text-muted);font-size:12px">CW/FTE</span></span>
     <span><b style="font-size:16px">${cwFteDia!=null?cwFteDia.toFixed(2):'—'}</b> <span style="color:var(--text-muted);font-size:12px">CW/FTE/dia útil (${diasUteis}d)</span></span>
@@ -1217,12 +1230,12 @@ function renderAreaOnboarding(){
   if(estrF!=='all') listTbl=listTbl.filter(r=>r.estrategia===estrF);
   const table=groupedTable({rows:listTbl,groupBy:r=>r.estrategia||'Sem estratégia',groupOrder:[...STR_ORDER,'Sem estratégia'],cols,kind:'onb',totals:true,sort:state.onbSort,hd:cardHd(KIC.users,'Onboarding · por pessoa','CW recebido, coorte C1, mix por nível e produtividade/BD')});
   $('viewArea').innerHTML=`
-    <div class="sec"><div class="sec-head"><h2>Resultado semanal</h2><span class="hint">${semanaLabel(week)}${estrF!=='all'?' · '+estrF:''}</span></div>
+    <div class="sec"><div class="sec-head"><h2>Resultado semanal</h2><span class="hint">${semanaLabel(week)}${filtF!=='all'?' · '+filtF:''}</span></div>
       <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d,cls,icon])=>`<div class="kpi ${cls||''}">${icon?`<span class="kpi-ic">${icon}</span>`:''}<span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div></div>
     <div class="sec"><div class="sec-head"><h2>Evolução do resultado</h2></div>
       <div class="grid g2">
-        <div class="card">${cardHd(KIC.estoque,'Estoque de ativação','snapshot no fim de cada semana · últ. 16 · CW → 1k → 5k')}${onbEstoqueHTML(estrF)}</div>
-        <div class="card">${cardHd(KIC.check,'Status atual por semana de entrada (CW)','fechou × situação hoje · últ. 16')}${onbStatusHTML(estrF)}</div>
+        <div class="card">${cardHd(KIC.estoque,'Estoque de ativação','snapshot no fim de cada semana · últ. 16 · CW → 1k → 5k')}${onbEstoqueHTML(filtF)}</div>
+        <div class="card">${cardHd(KIC.check,'Status atual por semana de entrada (CW)','fechou × situação hoje · últ. 16')}${onbStatusHTML(filtF)}</div>
       </div></div>
     <div class="sec"><div class="sec-head"><h2>Ativação por nível de cliente</h2><span class="hint">ativações 10k por semana · últimas 8 semanas</span></div>
       <div class="grid g3">${wt}</div></div>
@@ -1267,7 +1280,12 @@ function initWareaControls(){
   $('selSemanaArea').onchange=e=>{state.semanaArea=e.target.value;renderArea();};
   $('selEstrArea').innerHTML=`<option value="all">Todas</option>`+STR_ORDER.map(s=>`<option value="${s}">${s}</option>`).join('');
   $('selEstrArea').value=state.estrArea;
-  $('selEstrArea').onchange=e=>{state.estrArea=e.target.value;renderArea();};
+  // Nível (N2-N3/N4-N5/N6+) é INDEPENDENTE de Estratégia — só Closer/Onboarding (31/07/2026, a
+  // pedido do Gabriel): escolher um desativa o outro (nunca os dois filtrando ao mesmo tempo).
+  $('selEstrArea').onchange=e=>{state.estrArea=e.target.value; if(e.target.value!=='all') state.nivelArea='all'; $('selNivelArea').value='all'; renderArea();};
+  $('selNivelArea').innerHTML=`<option value="all">Todos</option>`+NIV.map(n=>`<option value="${n}">${n}</option>`).join('');
+  $('selNivelArea').value=state.nivelArea;
+  $('selNivelArea').onchange=e=>{state.nivelArea=e.target.value; if(e.target.value!=='all') state.estrArea='all'; $('selEstrArea').value='all'; renderArea();};
   $('selRefArea').value=state.refArea;
   $('selRefArea').onchange=e=>{state.refArea=e.target.value;renderArea();};
 }
@@ -1468,6 +1486,7 @@ function render(){
   $('otherControls').style.display=state.meeting==='oneone'?'flex':'none';
   $('subbar').style.display=state.meeting==='warea'?'block':'none';
   if($('ctlEstrArea')) $('ctlEstrArea').style.display=state.meeting==='warea'?'flex':'none';
+  if($('ctlNivelArea')) $('ctlNivelArea').style.display=(state.meeting==='warea'&&state.area!=='sdr')?'flex':'none';
   $('viewMensal').style.display=state.meeting==='mensal'?'block':'none';
   $('viewSemanal').style.display=state.meeting==='wsales'?'block':'none';
   $('viewArea').style.display=state.meeting==='warea'?'block':'none';
