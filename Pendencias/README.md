@@ -4,6 +4,21 @@ Notas de handoff para quem continuar o desenvolvimento. Última atualização: 0
 
 ## Concluído (01/08/2026)
 
+- **Toggle Semana/Mês nos gráficos de Estoque e Status atual (Semanal Área — SDR, Closer e
+  Onboarding).** Um botão só (`granToggleHTML()`, estado compartilhado `state.evolGran`) acima
+  das duas seções "Evolução do resultado" (Estoque + Status), nas 3 sub-abas — trocar em uma
+  página mantém a escolha ao navegar pras outras.
+  - **Dois jeitos diferentes de agregar por mês**, dependendo do tipo de gráfico:
+    - **Estoque** (`sdrEstoque`/`closerEstoque`/`onbEstoque`) é um **snapshot** (quantos estão
+      parados agora) — não dá pra somar semanas. `estoqueParaMes()` pega o snapshot da
+      **última semana de cada mês** (fim de mês), não soma nada.
+    - **Status atual** (`sdrCohortStatus`/`closerCohortStatus`/`onbCohortStatus`) é
+      **coorte/throughput** (quantos entraram naquela semana × situação hoje) — dá pra somar.
+      `statusParaMes()` **soma** as contagens de todas as semanas do mês.
+  - Visão mensal mostra últimos 12 meses (em vez de 16 semanas); rótulo do eixo vira
+    `mesLabelShort` (ex. "jul/26"); "Variação do estoque · WoW" vira "· MoM" no modo mensal.
+  - Testado no navegador nas 3 sub-abas: alterna corretamente, valores mudam, volta pra semana
+    sem problema, sem erros de console.
 - **Filtro de Nível (N2-N3/N4-N5/N6+) na Semanal Área — só Closer e Onboarding, não SDR.**
   A pedido do Gabriel: um segundo `<select>` (`selNivelArea`) ao lado do de Estratégia,
   **independente** dele (escolher um reseta o outro pra "Todos/Todas" — nunca os dois filtrando
@@ -636,6 +651,30 @@ Regenerar: `node app/build_data.js` (lê `Dados/*.csv` locais).
     estoque hoje (se sim, é limitação dos dois lados, não vale corrigir só aqui; se não, tem
     alguma fonte/coluna com a data preenchida que a gente não está enxergando no export).
     Pausado a pedido do Gabriel em 30/07 pra tratar outras coisas primeiro.
+18. **Estoque de ativação (Onboarding): reclassificar em "nunca vendeu" / "vendendo" / "ativos"
+    (01/08/2026, registrado a pedido do Gabriel — ainda NÃO implementado, faltam definições).**
+    Pedido: trocar as 3 faixas atuais do gráfico "Estoque de ativação" — `CW (ainda não 1k)` /
+    `1k+ (ainda não 5k)` / `5k+ (ainda não 10k)` — por 3 categorias novas: **nunca vendeu**,
+    **vendendo**, **ativos**. Duas mudanças de regra vieram junto:
+    - **Saída do estoque muda**: hoje sai por `ativou 10k` OU `accomplished/unaccomplished`
+      (ver `onbEstoque` em `build_data.js`). O pedido é que **só saia por
+      accomplished/unaccomplished** — quem virar "ativo" **não sai mais do estoque** (fica
+      acumulando ali, snapshot de quem está ativo agora). Isso é uma mudança de comportamento
+      grande: hoje `l.a10k && l.a10k<=T` tira do estoque, teria que ser removido.
+    - **Entrada continua sendo o CW** (`closed_won_date`) — isso não muda.
+    - ⚠️ **Bloqueado**: falta a definição do que é "**ativo**" — o Gabriel disse explicitamente
+      que precisa "acrescentar o ativo", ou seja, **não é** necessariamente o mesmo conceito de
+      `activation_date_10k` que já usamos — pode ser um campo/status novo que ainda não vem no
+      `06_operacional_raw.csv` (precisaria de query/coluna nova no Redshift) ou algo já existente
+      que ainda não identificamos (`onboarding_status`? `current_platform`? outro). **Perguntar
+      ao Gabriel qual é a fonte exata antes de implementar.**
+    - ⚠️ **Também em aberto**: a relação exata entre "vendendo"/"nunca vendeu" e os campos que já
+      temos (`activation_date_1k`/`activation_date_5k`). Sugeri "nunca vendeu = CW sem
+      `activation_date_1k`; vendendo = tem 1k ou 5k mas ainda não é 'ativo'" — o Gabriel não
+      confirmou nem corrigiu ainda, só pediu pra registrar a pendência. **Perguntar de novo antes
+      de implementar.**
+    - Nada implementado ainda — só documentado. Quando retomar: mexe em `onbEstoque` (entrada/
+      saída/classificação) e `onbEstoqueHTML` (legenda/cores) em `build_data.js`/`index.html`.
 
 ## Convenções do projeto (não esquecer)
 
