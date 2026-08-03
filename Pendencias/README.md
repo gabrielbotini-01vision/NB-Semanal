@@ -4,6 +4,13 @@ Notas de handoff para quem continuar o desenvolvimento. Última atualização: 0
 
 ## Concluído (03/08/2026)
 
+- **Gráfico "Status atual por semana de entrada (CW)" (Onboarding): Ativado 10k movido pra
+  base da barra + botão Absoluto/100%** — a pedido do Gabriel, só nesse gráfico específico
+  (SDR/Closer não foram tocados). Ordem do array `ST` invertida (`cw` primeiro/topo,
+  `ativado_10k` último/base — `.ecol` empilha em `flex-direction:column`, 1º elemento = topo).
+  Novo estado `state.onbStatusPct100`: no modo 100%, cada barra normaliza pelo PRÓPRIO total
+  (não pelo máximo da série) e os segmentos mostram % em vez do valor absoluto; testado nos
+  dois sentidos (alturas somam exatamente 180px = 100% no modo novo).
 - **Card "CW → 10K" (KPIs de Onboarding, Semanal Área) virou "Ativação 10K"** — a pedido do
   Gabriel: era uma coorte (% que ativou 10k na MESMA semana do CW, ficava baixo por natureza
   já que o ciclo é ~50 dias); agora é throughput simples — quantas contas ativaram 10k GMV
