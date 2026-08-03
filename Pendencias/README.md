@@ -4,6 +4,11 @@ Notas de handoff para quem continuar o desenvolvimento. Última atualização: 0
 
 ## Concluído (03/08/2026)
 
+- **Card "CW → 10K" (KPIs de Onboarding, Semanal Área) virou "Ativação 10K"** — a pedido do
+  Gabriel: era uma coorte (% que ativou 10k na MESMA semana do CW, ficava baixo por natureza
+  já que o ciclo é ~50 dias); agora é throughput simples — quantas contas ativaram 10k GMV
+  **na semana** (`D.onbAct`, mesmo dado já usado no cálculo de FTE), com `meta X · %` quando
+  há budget (mesmo padrão do card "Entradas"). Variável `c10kPct` (não usada mais) removida.
 - **Fallback CW+90d estendido pro Accomplished também** (mesma regra do Unaccomplished, a
   pedido do Gabriel): se `onboarding_status === 'Accomplished'` e `onboarding_accomplished_date`
   vier vazia, usa `closed_won_date + 90 dias`. Campo `accompFallback` (espelha
