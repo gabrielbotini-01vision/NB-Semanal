@@ -19,10 +19,20 @@
 --   Accomplished/Unaccomplished (Onboarding): join com
 --   dhm_data_business.f_operational_sales_touched (schema DIFERENTE — "dhm_data_business",
 --   não "data_business") por lead_id, só pra trazer onboarding_accomplished_date/
---   onboarding_unaccomplished_date — campos que NÃO existem em dhmv_sales_touched.
---   Confirmado 28/07/2026 que lead_id é único nessa tabela pra linhas com lead_id
---   preenchido (a única "duplicidade" era de linhas com lead_id NULL, que não afetam
---   o JOIN) — LEFT JOIN por lead_id não multiplica linha nenhuma do export.
+--   onboarding_unaccomplished_date/onboarding_status — campos que NÃO existem em
+--   dhmv_sales_touched. Confirmado 28/07/2026 que lead_id é único nessa tabela pra linhas
+--   com lead_id preenchido (a única "duplicidade" era de linhas com lead_id NULL, que não
+--   afetam o JOIN) — LEFT JOIN por lead_id não multiplica linha nenhuma do export.
+--   ⚠️ 03/08/2026: achado (caso real reportado pelo Gabriel, opp_id 006SG00000VO9rZYAT) que
+--   opps SEM lead_id (nos dois lados, t e f_operational_sales_touched — ~4.459 linhas nessa
+--   última) nunca casavam pelo JOIN antigo, mesmo a linha existindo em f com o status/data
+--   certos (NULL nunca é igual a NULL em SQL). Fix: fallback pra opp_id quando lead_id de t
+--   for nulo. f_operational_sales_touched tem uns poucos opp_id duplicados (6, de 40 mil) —
+--   dedup via ROW_NUMBER (Redshift não tem DISTINCT ON), preferindo a linha com alguma data de
+--   accomplished/unaccomplished preenchida. Testado direto no Redshift antes de aplicar aqui:
+--   recupera status pra +191 linhas do recorte atual, sem multiplicar nenhuma linha de t (as
+--   poucas duplicatas de opp_id que aparecem já existiam em t antes de qualquer JOIN — não são
+--   causadas por esta mudança).
 --
 -- Filtro: só Brasil -> is_lead_br_funnel = true OU is_opp_br_funnel = true (30/07/2026: WHERE
 --   antes só usava is_lead_br_funnel, e isso descartava opps criadas SEM lead ou com lead de
@@ -55,6 +65,20 @@
 --   snapshot em vez de tentar bucketizar por semana com a data)
 -- =============================================================================
 
+WITH f AS (
+    -- dedup de f_operational_sales_touched por COALESCE(lead_id, opp_id) — pega a linha com
+    -- alguma data de accomplished/unaccomplished preenchida, quando existir mais de uma.
+    SELECT lead_id, opp_id, onboarding_accomplished_date, onboarding_unaccomplished_date, onboarding_status
+    FROM (
+        SELECT lead_id, opp_id, onboarding_accomplished_date, onboarding_unaccomplished_date, onboarding_status,
+               ROW_NUMBER() OVER (
+                 PARTITION BY COALESCE(NULLIF(TRIM(lead_id), ''), TRIM(opp_id))
+                 ORDER BY (CASE WHEN onboarding_accomplished_date IS NOT NULL OR onboarding_unaccomplished_date IS NOT NULL THEN 0 ELSE 1 END)
+               ) AS rn
+        FROM dhm_data_business.f_operational_sales_touched
+    ) x
+    WHERE rn = 1
+)
 SELECT
     t.*,
     u.username AS owner_email,
@@ -64,8 +88,9 @@ SELECT
 FROM data_business.dhmv_sales_touched t
 LEFT JOIN dhaf_salesforce."user" u
     ON u.id = t.lead_owner_id
-LEFT JOIN dhm_data_business.f_operational_sales_touched f
-    ON f.lead_id = t.lead_id
+LEFT JOIN f
+    ON (t.lead_id IS NOT NULL AND f.lead_id = t.lead_id)
+    OR (t.lead_id IS NULL AND f.opp_id = t.opp_id)
 WHERE (t.is_lead_br_funnel::boolean = true OR t.is_opp_br_funnel::boolean = true)
   AND (
         NULLIF(NULLIF(TRIM(t.contacted_date),          ''), 'null')::date >= DATE '2024-01-01'

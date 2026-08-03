@@ -1,6 +1,113 @@
 # Pendências · New Business Cockpit
 
-Notas de handoff para quem continuar o desenvolvimento. Última atualização: 01/08/2026.
+Notas de handoff para quem continuar o desenvolvimento. Última atualização: 03/08/2026.
+
+## Concluído (03/08/2026)
+
+- **Fallback CW+90d estendido pro Accomplished também** (mesma regra do Unaccomplished, a
+  pedido do Gabriel): se `onboarding_status === 'Accomplished'` e `onboarding_accomplished_date`
+  vier vazia, usa `closed_won_date + 90 dias`. Campo `accompFallback` (espelha
+  `unaccompFallback` já existente) marca quando o valor é estimado.
+  - **Impacto grande no bucket "ativos"** (muitos CW com `activation_date_10k` preenchida
+    tinham status Accomplished sem data, então ficavam contando como ativos em vez de
+    sair): 567→281 na última semana (240 nuncaVendeu / 86 vendendo / 281 ativos = 607 total).
+  - 290 registros receberam o fallback de Accomplished, 754 o de Unaccomplished (1.044 no
+    total, de 4.743).
+  - Tela de validação (`validacao_onboarding_pessoa.html`) atualizada: checkbox e busca agora
+    cobrem os dois tipos de fallback, selo "estimado: CW+90d" aparece tanto em Accomplished
+    quanto em Unaccomplished no painel de detalhe.
+- **Bug real encontrado e corrigido no JOIN de `Querys/06_operacional_raw.sql`: opps sem
+  `lead_id` nunca traziam `onboarding_status`/accomplished/unaccomplished, mesmo quando a
+  fonte tinha o dado certo.** Achado a partir de um caso concreto que o Gabriel reportou (opp_id
+  `006SG00000VO9rZYAT`, onboarder Phellipe Leão, contando como "ativo" quando deveria ter saído
+  do estoque há meses).
+  - **Causa raiz**: o JOIN com `dhm_data_business.f_operational_sales_touched` era só por
+    `lead_id` (`ON f.lead_id = t.lead_id`). Quando `lead_id` é NULL nas duas tabelas (opp sem
+    lead — mesmo cenário do fix de `is_lead_br_funnel`/`is_opp_br_funnel` de 31/07), o JOIN
+    nunca casa (`NULL = NULL` é sempre falso em SQL), então a linha nunca traz o status —
+    mesmo a linha existindo em `f_operational_sales_touched` com o dado certo. Confirmado
+    rodando query ad-hoc direto no Redshift (via Astrobox, reaproveitando `load_token`/
+    `run_query` do `scripts/atualizar_dados.py`): o registro em questão existe lá com
+    `onboarding_status='Unaccomplished'`, `onboarding_unaccomplished_date='2026-03-26'`,
+    `onboarding_unacomplished_reason='Ghost'` — exatamente a data que o Gabriel informou.
+  - **Descoberta útil**: `f_operational_sales_touched` **tem uma coluna `opp_id`** (~160
+    colunas na tabela, listadas via `SELECT * LIMIT 1` — `information_schema` não funciona
+    nesse datasource). 4.459 linhas nela têm `opp_id` preenchido mas `lead_id` vazio — essa é
+    a população inteira que ficava invisível.
+  - **Fix**: JOIN agora casa por `lead_id` quando existir, senão cai pra `opp_id`
+    (`ON (t.lead_id IS NOT NULL AND f.lead_id = t.lead_id) OR (t.lead_id IS NULL AND
+    f.opp_id = t.opp_id)`). `f_operational_sales_touched` tem uns poucos `opp_id` duplicados
+    (6 de 40 mil) — usei um `ROW_NUMBER() OVER (PARTITION BY COALESCE(lead_id, opp_id) ...)`
+    pra dedup antes do JOIN (Redshift não tem `DISTINCT ON` nem `FILTER`, testado e confirmado
+    via erro de sintaxe). **Validado no Redshift antes de aplicar**: recupera status pra +191
+    linhas do recorte atual (8.475→8.666), e as poucas duplicatas de `opp_id` que aparecem
+    depois do JOIN já existiam em `dhmv_sales_touched` sozinha, antes de qualquer JOIN — não são
+    causadas por essa mudança.
+  - **Impacto depois de re-puxar os dados**: estoque de ativação caiu mais um pouco (954→897
+    na última semana: nuncaVendeu 256→242, vendendo 91→88, ativos 607→567) — menor que o fix
+    do fallback CW+90d (que resolveu a maioria dos casos antigos sem `lead_id` nenhum), mas
+    real. O opp_id do exemplo agora aparece corretamente como "saiu", com a data REAL (não
+    fallback) — `unaccompFallback: false` na tela de validação.
+- **Tela de validação atualizada** (`validacao_onboarding_pessoa.html`): dropdown de consulta
+  por `opp_id` ganhou busca (por id/onboarder/e-mail), checkbox "só registros com data
+  estimada" e um selo visual ("estimado: CW+90d") no painel de detalhe quando a data de
+  Unaccomplished veio do fallback em vez da fonte — pra distinguir os dois casos na
+  homologação.
+- **Fallback pro `onboarding_unaccomplished_date` vazio: CW + 90 dias, quando o status já é
+  "Unaccomplished"** — a pedido do Gabriel, resolve de vez o item 17 do Backlog (achado de
+  30-31/07: 367 leads travados no estoque por terem status certo mas data vazia). Em
+  `onbLeadsMap` (`build_data.js`): se `onboarding_status === 'Unaccomplished'` e
+  `onboarding_unaccomplished_date` vier vazia, usa `closed_won_date + 90 dias` no lugar (nova
+  função `addDaysStr`). Só se aplica a Unaccomplished — Accomplished sem data não foi pedido e
+  não foi mexido.
+  - **Impacto grande, como esperado** (isso destrava os leads que ficavam presos pra sempre):
+    estoque de ativação caiu de 1.701 pra 954 (nuncaVendeu 541→256, vendendo 219→91, ativos
+    941→607) na última semana. Dos 4.743 registros na tela de validação, 3.789 agora saem do
+    estoque corretamente (accomplished/unaccomplished), contra bem menos antes.
+  - Testado: números do dashboard batem exato com a tela de validação (`validacao_onboarding_
+    pessoa.html`) depois do rebuild.
+- **Estoque de ativação (Onboarding) reclassificado: nunca vendeu / vendendo / ativos** —
+  resolve o item 18 do Backlog (registrado em 01/08, as definições vieram agora). Campos e
+  regra final:
+  - **ativo** = `activation_date_10k` preenchida — era exatamente o campo que já usávamos
+    (`a10k`), só que agora com um papel diferente (ver saída, abaixo). Não precisou de nenhum
+    campo/query novo.
+  - **vendendo** = tem `activation_date_1k` OU `activation_date_5k` preenchida, mas ainda não é
+    "ativo" (não chegou em 10k) — "já tem GMV, ainda não é ativo".
+  - **nunca vendeu** = CW sem nenhuma das três datas de ativação — "sem GMV nenhum ainda".
+  - **Entrada do estoque continua sendo o CW** (`closed_won_date`) — sem mudança.
+  - **Saída do estoque mudou**: antes saía por `ativou 10k` OU `accomplished/unaccomplished`;
+    agora **só sai por accomplished/unaccomplished** — "ativo" deixou de ser uma saída e virou
+    uma faixa que fica acumulando no estoque (por isso o total do estoque cresceu bastante —
+    ~800 → ~1.700 na última semana — esperado, é a mudança pedida, "ativos não saem").
+  - Implementado em `onbEstoque` (`build_data.js`) e `onbEstoqueHTML` (`index.html`, legenda/
+    cores/tooltip). O card "Status atual por semana de entrada (CW)" (`onbStatusHTML`) **não
+    foi tocado** — continua com as faixas antigas (CW/1k+/5k+/Ativado 10k), que é uma coisa
+    diferente (coorte por semana de entrada, não estoque).
+  - ⚠️ **Não mexido de propósito**: o pill "Δ estoque" do KPI "Estoque atual" (`renderAreaOnboarding`
+    em `index.html`) calcula saídas como `totAct` (throughput de ativações 10k na semana), não
+    como accomplished+unaccomplished — ficou desalinhado da nova regra de saída do estoque (já
+    era impreciso antes dessa mudança também, não é uma regressão nova). Se quiser que o Δ
+    reflita exatamente entradas−saídas do novo estoque, trocar `totAct` por
+    `coh.accomplished+coh.unaccomplished` nesse cálculo.
+  - Testado no navegador: legenda/tooltip corretos, números batem (541/219/941 = 1.701 na
+    semana 32), toggle Semana/Mês funciona igual, sem erros de console.
+- **Tela temporária de homologação** (`app/validacao_onboarding_pessoa.html`), a pedido do
+  Gabriel, pra conferir a reclassificação acima manualmente:
+  - Tabela agregada por onboarder (nunca vendeu/vendendo/ativos/total), lendo
+    `D.onbEstoquePorPessoa` (novo campo em `app_data.js`, snapshot de HOJE — não por semana).
+  - Consulta individual por `opp_id`: campo de busca (por id/onboarder/e-mail) + dropdown +
+    painel mostrando as datas cruas (CW/1k/5k/10k/accomplished/unaccomplished) e a situação
+    calculada daquele registro. Dado (4.743 registros) fica num arquivo **à parte**
+    (`app/validacao_onboarding_data.js`, gerado pelo `build_data.js` junto com o `app_data.js`)
+    pra não inflar o arquivo principal que o dashboard todo carrega.
+  - ⚠️ **Bug pego no meio do caminho**: o campo `ativos` (contagem) no `onbEstoquePorPessoa`
+    tinha sido nomeado `ativo` (singular) na primeira versão — colidia com o campo `ativo`
+    (booleano, status no roster) que `enrichPessoa()` já seta em qualquer pessoa. Renomeado pra
+    `ativos` (plural); conferido que a soma por pessoa bate exata com o agregado semanal.
+  - ⚠️ **Temporário, tirar depois de homologado**: os dois arquivos
+    (`validacao_onboarding_pessoa.html`, `validacao_onboarding_data.js`) e o campo
+    `onbEstoquePorPessoa`/bloco que o gera em `build_data.js` não fazem parte do dashboard.
 
 ## Concluído (01/08/2026)
 
@@ -631,50 +738,16 @@ Regenerar: `node app/build_data.js` (lê `Dados/*.csv` locais).
     de `ytdWeeks` em `renderSemanal()` (`index.html`) pra somar só as semanas do MÊS corrente
     via `D.semanaMes`, em vez de semana 1 → selecionada. **Substituiu** a aba "Semanal Sales"
     antiga (funil/KPIs/ritmo por estratégia, escondida desde 28/07) — código antigo removido.
-17. **Investigação do gap do `onbEstoque` (30/07/2026): achado nada conclusivo, mas relevante
-    pra retomar.** De 685 leads no estoque atual, **367 (53,6%!) já estão com `onboarding_status`
-    = Accomplished/Unaccomplished mas sem `onboarding_accomplished_date`/`unaccomplished_date`
-    preenchida** — por isso nunca saem do nosso estoque (`onbLeadsMap.close` depende só da
-    data). 362 desses 367 são de CW fechado em 2024 (quase nenhum recente), o que bate com o
-    padrão observado: semanas mais antigas têm gap maior vs. o Power BI (~18%), semanas
-    recentes menor (~12%). Todos os 367 têm `last_onboarding_date` preenchido (100%), que
-    daria um proxy razoável de quando "esfriaram". **Mas**: como `Onboarding_close_date` é uma
-    **coluna calculada** no Power BI (confirmado pelo Gabriel, mesma fórmula
-    `IF(LEN(accomplished_date)>3, ...)`) a partir dos MESMOS campos de data que a gente lê, é
-    bem provável que o Power BI tenha essa mesma trava — ou seja, corrigir isso do nosso lado
-    (usando status+`last_onboarding_date` como fallback) deixaria o dado operacionalmente mais
-    correto, mas não necessariamente mais perto do número do Power BI, e poderia até afastar.
-    Descartado nessa mesma investigação: `current_office=BRAZIL` estrito (derruba o estoque pra
-    ~357-519, abaixo do alvo) e tirar `leadFlowOk`/`oppValidOk` (muda só ±20, não é isso).
-    **Próximo passo sugerido**: separar uma lista de `opp_id` desses 367 travados pro Gabriel
-    conferir 2-3 exemplos direto no Power BI/Redshift e confirmar se ele TAMBÉM os conta como
-    estoque hoje (se sim, é limitação dos dois lados, não vale corrigir só aqui; se não, tem
-    alguma fonte/coluna com a data preenchida que a gente não está enxergando no export).
-    Pausado a pedido do Gabriel em 30/07 pra tratar outras coisas primeiro.
-18. **Estoque de ativação (Onboarding): reclassificar em "nunca vendeu" / "vendendo" / "ativos"
-    (01/08/2026, registrado a pedido do Gabriel — ainda NÃO implementado, faltam definições).**
-    Pedido: trocar as 3 faixas atuais do gráfico "Estoque de ativação" — `CW (ainda não 1k)` /
-    `1k+ (ainda não 5k)` / `5k+ (ainda não 10k)` — por 3 categorias novas: **nunca vendeu**,
-    **vendendo**, **ativos**. Duas mudanças de regra vieram junto:
-    - **Saída do estoque muda**: hoje sai por `ativou 10k` OU `accomplished/unaccomplished`
-      (ver `onbEstoque` em `build_data.js`). O pedido é que **só saia por
-      accomplished/unaccomplished** — quem virar "ativo" **não sai mais do estoque** (fica
-      acumulando ali, snapshot de quem está ativo agora). Isso é uma mudança de comportamento
-      grande: hoje `l.a10k && l.a10k<=T` tira do estoque, teria que ser removido.
-    - **Entrada continua sendo o CW** (`closed_won_date`) — isso não muda.
-    - ⚠️ **Bloqueado**: falta a definição do que é "**ativo**" — o Gabriel disse explicitamente
-      que precisa "acrescentar o ativo", ou seja, **não é** necessariamente o mesmo conceito de
-      `activation_date_10k` que já usamos — pode ser um campo/status novo que ainda não vem no
-      `06_operacional_raw.csv` (precisaria de query/coluna nova no Redshift) ou algo já existente
-      que ainda não identificamos (`onboarding_status`? `current_platform`? outro). **Perguntar
-      ao Gabriel qual é a fonte exata antes de implementar.**
-    - ⚠️ **Também em aberto**: a relação exata entre "vendendo"/"nunca vendeu" e os campos que já
-      temos (`activation_date_1k`/`activation_date_5k`). Sugeri "nunca vendeu = CW sem
-      `activation_date_1k`; vendendo = tem 1k ou 5k mas ainda não é 'ativo'" — o Gabriel não
-      confirmou nem corrigiu ainda, só pediu pra registrar a pendência. **Perguntar de novo antes
-      de implementar.**
-    - Nada implementado ainda — só documentado. Quando retomar: mexe em `onbEstoque` (entrada/
-      saída/classificação) e `onbEstoqueHTML` (legenda/cores) em `build_data.js`/`index.html`.
+17. ~~Investigação do gap do `onbEstoque`: leads travados por status certo mas data vazia~~ —
+    **resolvido (03/08/2026)**, ver "Concluído 03/08" acima: fallback `CW + 90 dias` quando
+    status é Unaccomplished e a data vem vazia. (A ressalva de que o Power BI pode ter a mesma
+    trava — já que `Onboarding_close_date` é coluna calculada lá também — continua válida: essa
+    correção deixa nosso dado operacionalmente mais correto, mas não necessariamente bate mais
+    perto do número exato do Power BI. `current_office=BRAZIL` e tirar `leadFlowOk`/`oppValidOk`
+    continuam descartados, ver investigação original preservada no histórico do arquivo.)
+18. ~~Estoque de ativação (Onboarding): reclassificar em "nunca vendeu" / "vendendo" /
+    "ativos"~~ — **resolvido (03/08/2026)**, ver "Concluído 03/08" acima pro detalhe completo
+    (definições, campos usados, o que ficou de fora de propósito no pill "Δ estoque").
 
 ## Convenções do projeto (não esquecer)
 

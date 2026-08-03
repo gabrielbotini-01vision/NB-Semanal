@@ -820,13 +820,19 @@ for (const w of semanas) {
   CO_KEYS.forEach(k => closerEstoque[k].push({ semana: w, ...acc[k] }));
 }
 
+// soma N dias a uma data 'AAAA-MM-DD', devolve string no mesmo formato.
+function addDaysStr(dateStr, days) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 // ---------- ESTOQUE DE ATIVAÇÃO (Onboarding) — snapshot no FIM de cada semana ----------
-// Mesmo conceito, no funil pós-CW: quantas oportunidades (opp_id) fechadas (CW) estão
-// paradas em cada faixa de ativação — CW mas ainda não 1k / 1k mas ainda não 5k / 5k mas
-// ainda não 10k — no fim de cada semana. Sai do estoque ao ativar 10k (fora do escopo do
-// Onboarding, já é "ativado") OU ao ser marcado accomplished/unaccomplished sem ativar (mesmo
-// papel do "Onboarding_close_date" do Power BI — COALESCE(accomplished_date,
-// unaccomplished_date), campos que já lemos pro card Accomplished/Unaccomplished da página).
+// 01/08→03/08/2026, a pedido do Gabriel: reclassificado em 3 faixas — nuncaVendeu (CW sem
+// nenhum GMV, nunca chegou nem em 1k) / vendendo (já tem GMV — 1k ou 5k — mas ainda não é
+// "ativo") / ativo (activation_date_10k preenchida). Sai do estoque SÓ por
+// accomplished/unaccomplished (mesmo papel do "Onboarding_close_date" do Power BI —
+// COALESCE(accomplished_date, unaccomplished_date)) — ativar 10k NÃO tira mais do estoque
+// (antes tirava; agora "ativo" é uma faixa que fica ali até fechar accomplished/unaccomplished).
 // Contagem por opp_id (não lead_id), igual à métrica de referência.
 const onbLeadsMap = new Map();
 for (const r of fop) {
@@ -835,28 +841,38 @@ for (const r of fop) {
   const oppId = (r.opp_id || '').trim(); if (!oppId || onbLeadsMap.has(oppId)) continue;
   // Onboarding_close_date (DAX do Power BI): accomplished_date se preenchido, senão
   // unaccomplished_date, senão "nunca" — accomplished tem prioridade (não é o menor dos dois).
-  const accomp = cleanDate(r.onboarding_accomplished_date), unaccomp = cleanDate(r.onboarding_unaccomplished_date);
+  let accomp = cleanDate(r.onboarding_accomplished_date);
+  let unaccomp = cleanDate(r.onboarding_unaccomplished_date);
+  // Fallback (03/08/2026, a pedido do Gabriel): status certo mas sem a data — usa CW + 90 dias
+  // no lugar (resolve os ~367 leads "travados" no estoque documentados em Pendencias/README.md,
+  // item 17 — CW de 2024 com status certo mas data nunca preenchida). Vale pros dois status,
+  // mesma regra: Unaccomplished sem unaccomplished_date OU Accomplished sem accomplished_date.
+  // accompFallback/unaccompFallback marcam quando o valor é ESTIMADO (não veio da fonte) — só
+  // pra tela de validação distinguir "data real" de "data calculada", dashboard não usa isso.
+  let accompFallback = false, unaccompFallback = false;
+  if (!accomp && (r.onboarding_status || '').trim() === 'Accomplished') { accomp = addDaysStr(cw, 90); accompFallback = true; }
+  if (!unaccomp && (r.onboarding_status || '').trim() === 'Unaccomplished') { unaccomp = addDaysStr(cw, 90); unaccompFallback = true; }
   const close = accomp || unaccomp || null;
   onbLeadsMap.set(oppId, {
-    estr: estr(r.sales_strategy), nivel: bucketFromAmount(r.amount_12_months), cw, close,
-    a1k: cleanDate(r.activation_date_1k), a5k: cleanDate(r.activation_date_5k), a10k: cleanDate(r.activation_date_10k),
+    oppId, onb: cleanEmail(r.onboarding_email_sf), estr: estr(r.sales_strategy), nivel: bucketFromAmount(r.amount_12_months), cw, close,
+    accomp, unaccomp, accompFallback, unaccompFallback, a1k: cleanDate(r.activation_date_1k), a5k: cleanDate(r.activation_date_5k), a10k: cleanDate(r.activation_date_10k),
   });
 }
 const onbLeads = [...onbLeadsMap.values()];
-const onbEstoque = {}; CO_KEYS.forEach(k => onbEstoque[k] = []); // estr/nível -> [{semana,cw,a1k,a5k}]
+const onbEstoque = {}; CO_KEYS.forEach(k => onbEstoque[k] = []); // estr/nível -> [{semana,nuncaVendeu,vendendo,ativo}]
 for (const w of semanas) {
   const startStr = weekStartUTC(w).toISOString().slice(0, 10);
   if (startStr > hojeStr) continue;
   let T = weekEndUTC(w).toISOString().slice(0, 10);
   if (T > hojeStr) T = hojeStr;
-  const acc = {}; CO_KEYS.forEach(k => acc[k] = { cw: 0, a1k: 0, a5k: 0 });
+  const acc = {}; CO_KEYS.forEach(k => acc[k] = { nuncaVendeu: 0, vendendo: 0, ativo: 0 });
   for (const l of onbLeads) {
     if (l.cw > T) continue;                                 // ainda não fechou até T
-    if (l.a10k && l.a10k <= T) continue;                     // já ativou 10k — saiu do estoque
-    if (l.close && l.close <= T) continue;                   // accomplished/unaccomplished até T — saiu do estoque
-    let best = l.cw, stage = 'cw';                           // etapa mais recente até T
-    if (l.a1k && l.a1k <= T && l.a1k >= best) { best = l.a1k; stage = 'a1k'; }
-    if (l.a5k && l.a5k <= T && l.a5k >= best) { best = l.a5k; stage = 'a5k'; }
+    if (l.close && l.close <= T) continue;                   // accomplished/unaccomplished até T — ÚNICA saída do estoque
+    let stage;
+    if (l.a10k && l.a10k <= T) stage = 'ativo';                                       // já ativou 10k
+    else if ((l.a1k && l.a1k <= T) || (l.a5k && l.a5k <= T)) stage = 'vendendo';      // já tem GMV (1k ou 5k), ainda não é ativo
+    else stage = 'nuncaVendeu';                                                       // CW sem nenhum GMV ainda
     acc.all[stage]++;
     if (l.estr) acc[l.estr][stage]++;
     if (l.nivel && NIVEIS.includes(l.nivel)) acc[l.nivel][stage]++;
@@ -1016,6 +1032,48 @@ const onbList = Object.values(porPessoaOnb).map(p => enrichPessoa({
   porSemana: buildPessoaSemanaOnb(p),
 }, 'Onboarding')).sort((a, b) => b.activated - a.activated);
 
+// ---------- TELA TEMPORÁRIA DE HOMOLOGAÇÃO (03/08/2026) ----------
+// Snapshot do Estoque de ativação POR ONBOARDER, na data de HOJE (não por semana) — só pra
+// validar manualmente a reclassificação nunca vendeu/vendendo/ativo (ver onbEstoque acima),
+// contra o que o time já sabe da operação. Mesma lógica de classificação, T fixo = hoje.
+// ⚠️ Tirar do app_data.js depois que a homologação terminar (não faz parte do dashboard).
+// Campo é "ativos" (plural), não "ativo" — enrichPessoa já usa "ativo" (singular) pro status
+// de Ativo=Sim no roster; um sobrescrevia o outro (bug pego no teste, contagem virava true/false).
+const onbEstoquePorPessoaMap = {};
+for (const l of onbLeads) {
+  if (!l.onb) continue;
+  if (l.cw > hojeStr) continue;                                 // ainda não fechou até hoje
+  if (l.close && l.close <= hojeStr) continue;                  // já saiu do estoque (accomplished/unaccomplished)
+  let stage;
+  if (l.a10k && l.a10k <= hojeStr) stage = 'ativos';
+  else if ((l.a1k && l.a1k <= hojeStr) || (l.a5k && l.a5k <= hojeStr)) stage = 'vendendo';
+  else stage = 'nuncaVendeu';
+  const p = onbEstoquePorPessoaMap[l.onb] || (onbEstoquePorPessoaMap[l.onb] = { email: l.onb, nuncaVendeu: 0, vendendo: 0, ativos: 0 });
+  p[stage]++;
+}
+const onbEstoquePorPessoa = Object.values(onbEstoquePorPessoaMap)
+  .map(p => enrichPessoa({ ...p, total: p.nuncaVendeu + p.vendendo + p.ativos }))
+  .sort((a, b) => b.total - a.total);
+// registro por registro (opp_id) — pro dropdown de validação individual da tela temporária:
+// mesma classificação de hoje, mas com as datas cruas visíveis, pra rastrear um caso específico.
+// Escrito num arquivo À PARTE (validacao_onboarding_data.js, não app_data.js) — são ~4-5 mil
+// registros, não faz sentido inflar o app_data.js principal (que o dashboard inteiro carrega)
+// com dado que só a tela de homologação usa.
+const onbLeadsValidacao = onbLeads.filter(l => l.onb).map(l => {
+  const saiu = l.close && l.close <= hojeStr;
+  let situacao;
+  if (saiu) situacao = 'saiu (accomplished/unaccomplished)';
+  else if (l.a10k && l.a10k <= hojeStr) situacao = 'ativos';
+  else if ((l.a1k && l.a1k <= hojeStr) || (l.a5k && l.a5k <= hojeStr)) situacao = 'vendendo';
+  else situacao = 'nuncaVendeu';
+  return {
+    oppId: l.oppId, onbEmail: l.onb, onbNome: diretorio[l.onb.toLowerCase()]?.nome || null,
+    estr: l.estr, nivel: l.nivel, cw: l.cw,
+    a1k: l.a1k, a5k: l.a5k, a10k: l.a10k, accomp: l.accomp, unaccomp: l.unaccomp, accompFallback: l.accompFallback, unaccompFallback: l.unaccompFallback,
+    situacao,
+  };
+}).sort((a, b) => (b.cw || '').localeCompare(a.cw || ''));
+
 // ---------- SÉRIES SEMANAIS POR NÍVEL (direto do unpivot acima) ----------
 function roundNivelWeek(obj) {
   const out = {};
@@ -1077,10 +1135,15 @@ const DATA = {
   closerCohort, closerCohortSqlCw, closerLost, closerCw: closerCwAcc, closerCohortStatus, closerOppFte, closerCwFte,
   onbCohort, onbAct: onbActAcc, onbCohortStatus, onbCwFte, onbActFte,
   mesFechado, semanaFechada,
+  onbEstoquePorPessoa, // ⚠️ temporário — homologação do Estoque de ativação (03/08/2026), tirar depois
 };
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(outDir + 'app_data.js', 'window.DATA = ' + JSON.stringify(DATA) + ';');
+// ⚠️ arquivo À PARTE, só pra tela de validação (validacao_onboarding_pessoa.html) — não é lido
+// pelo app principal (index.html), tirar os dois quando a homologação terminar.
+fs.writeFileSync(outDir + 'validacao_onboarding_data.js', 'window.VALIDACAO_ONB = ' + JSON.stringify(onbLeadsValidacao) + ';');
 console.log('OK app_data.js — meses:', meses.length, '| semanas:', semanas.length, '| leads (operacional_raw):', fop.length);
+console.log('OK validacao_onboarding_data.js —', onbLeadsValidacao.length, 'registros (opp_id)');
 console.log('ultimo mes actual:', Object.keys(actualMensal).sort().pop());
 console.log('mes fechado:', mesFechado.mes, '(anterior:', mesFechado.mesAnterior + ')');
 console.log('semana fechada:', semanaFechada.semana, '(anterior:', semanaFechada.semanaAnterior + ')');

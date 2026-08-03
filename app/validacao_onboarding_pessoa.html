@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>[TEMP] Validação · Estoque de ativação por onboarder</title>
+<style>
+  body{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:#F4F5F4;color:#101828;margin:0;padding:24px}
+  h1{font-size:20px;margin:0 0 4px}
+  h2{font-size:15px;margin:32px 0 12px}
+  .sub{color:#667085;font-size:13px;margin-bottom:20px}
+  .warn{background:#FEF3F2;border:1px solid #FDA29B;color:#B42318;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:20px}
+  table{border-collapse:collapse;width:100%;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.06)}
+  th,td{padding:9px 14px;text-align:right;font-size:13px;border-bottom:1px solid #EAECF0}
+  th{background:#F9FAFB;color:#667085;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em}
+  td:first-child,th:first-child{text-align:left}
+  tr:last-child td{border-bottom:none}
+  .num{font-variant-numeric:tabular-nums}
+  .tot{font-weight:700;background:#F9FAFB}
+  .foot td{font-weight:700;background:#F2F4F7}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;margin-left:6px}
+  .inativo{background:#FEF3F2;color:#B42318}
+  .fallback{background:#FFFAEB;color:#B54708}
+  .lookup{background:#fff;border-radius:10px;padding:18px;box-shadow:0 1px 2px rgba(16,24,40,.06)}
+  .lookup label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:#667085;margin-bottom:6px}
+  .lookup input,.lookup select{width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #D0D5DD;border-radius:8px;font-size:13px;font-family:inherit;background:#fff}
+  .lookup select{margin-top:8px}
+  .detail{margin-top:16px;display:none}
+  .detail.on{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+  .df{background:#F9FAFB;border-radius:8px;padding:10px 12px}
+  .df .k{font-size:11px;color:#667085;text-transform:uppercase;letter-spacing:.03em;margin-bottom:3px}
+  .df .v{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+  .situacao{grid-column:1/-1}
+  .situacao .v{font-size:16px}
+  .sit-ativos{color:#B54708}
+  .sit-vendendo{color:#175CD3}
+  .sit-nuncaVendeu{color:#667085}
+  .sit-saiu{color:#B42318}
+</style>
+</head>
+<body>
+<h1>[TEMP] Estoque de ativação — validação</h1>
+<div class="sub" id="sub"></div>
+<div class="warn">⚠️ Tela temporária só para homologação dos números (nunca vendeu / vendendo / ativos). Não faz parte do dashboard — remover depois de validado.</div>
+
+<h2>Consulta por opp_id</h2>
+<div class="lookup">
+  <label for="filtro">Buscar (opp_id, onboarder ou e-mail)</label>
+  <input type="text" id="filtro" placeholder="digite pra filtrar a lista abaixo...">
+  <label style="display:flex;align-items:center;gap:6px;margin-top:10px;text-transform:none;font-weight:500">
+    <input type="checkbox" id="soFallback" style="width:auto"> Mostrar só registros com Accomplished/Unaccomplished estimado (CW+90d)
+  </label>
+  <select id="oppSel" size="1"></select>
+  <div class="detail" id="detail"></div>
+</div>
+
+<h2>Estoque atual por onboarder (agregado)</h2>
+<table>
+  <thead><tr>
+    <th>Onboarder</th>
+    <th>Nunca vendeu</th>
+    <th>Vendendo</th>
+    <th>Ativos</th>
+    <th class="tot">Total</th>
+  </tr></thead>
+  <tbody id="rows"></tbody>
+  <tfoot><tr class="foot"><td>Total</td><td id="ftNunca"></td><td id="ftVend"></td><td id="ftAtivo"></td><td id="ftTotal"></td></tr></tfoot>
+</table>
+
+<script src="app_data.js"></script>
+<script src="validacao_onboarding_data.js"></script>
+<script>
+const D = window.DATA;
+const VAL = window.VALIDACAO_ONB || [];
+const fN = n => (n||0).toLocaleString('pt-BR');
+const fD = d => d || '—';
+
+// ---- tabela agregada por pessoa (já existia) ----
+const rows = D.onbEstoquePorPessoa || [];
+const qtdFallback = VAL.filter(r=>r.unaccompFallback||r.accompFallback).length;
+const qtdAccompFb = VAL.filter(r=>r.accompFallback).length, qtdUnaccompFb = VAL.filter(r=>r.unaccompFallback).length;
+document.getElementById('sub').textContent = `Dados gerados em ${D.geradoEm} · snapshot de HOJE (não por semana) · ${rows.length} onboarders com estoque atual · ${VAL.length} registros (opp_id) na consulta abaixo · ${qtdFallback} com data estimada (CW+90d: ${qtdAccompFb} Accomplished + ${qtdUnaccompFb} Unaccomplished, data original vazia)`;
+document.getElementById('rows').innerHTML = rows.map(p => `
+  <tr>
+    <td>${p.nome || p.email}${p.ativo===false?'<span class="pill inativo">inativo no roster</span>':''}</td>
+    <td class="num">${fN(p.nuncaVendeu)}</td>
+    <td class="num">${fN(p.vendendo)}</td>
+    <td class="num">${fN(p.ativos)}</td>
+    <td class="num tot">${fN(p.total)}</td>
+  </tr>`).join('');
+const sum = rows.reduce((s,p)=>({nuncaVendeu:s.nuncaVendeu+p.nuncaVendeu, vendendo:s.vendendo+p.vendendo, ativos:s.ativos+p.ativos, total:s.total+p.total}), {nuncaVendeu:0,vendendo:0,ativos:0,total:0});
+document.getElementById('ftNunca').textContent = fN(sum.nuncaVendeu);
+document.getElementById('ftVend').textContent = fN(sum.vendendo);
+document.getElementById('ftAtivo').textContent = fN(sum.ativos);
+document.getElementById('ftTotal').textContent = fN(sum.total);
+
+// ---- consulta individual por opp_id ----
+const sel = document.getElementById('oppSel');
+const filtro = document.getElementById('filtro');
+const detail = document.getElementById('detail');
+function optLabel(r){
+  const fb = r.accompFallback?' (Acc. estimado)':r.unaccompFallback?' (Unacc. estimado)':'';
+  return `${(r.accompFallback||r.unaccompFallback)?'⚠ ':''}${r.oppId} — ${r.onbNome || r.onbEmail} — CW ${fD(r.cw)} — ${r.situacao}${fb}`;
+}
+function renderOptions(term){
+  const t = (term||'').toLowerCase().trim();
+  let list = t ? VAL.filter(r => r.oppId.toLowerCase().includes(t) || (r.onbNome||'').toLowerCase().includes(t) || (r.onbEmail||'').toLowerCase().includes(t)) : VAL;
+  if (document.getElementById('soFallback').checked) list = list.filter(r => r.unaccompFallback || r.accompFallback);
+  sel.innerHTML = `<option value="">— selecione (${list.length} registros) —</option>` + list.slice(0,500).map(r => `<option value="${r.oppId}">${optLabel(r)}</option>`).join('');
+  if (list.length > 500) sel.innerHTML += `<option disabled>… ${list.length-500} a mais, refine a busca</option>`;
+}
+renderOptions('');
+filtro.addEventListener('input', () => renderOptions(filtro.value));
+document.getElementById('soFallback').addEventListener('change', () => renderOptions(filtro.value));
+sel.addEventListener('change', () => {
+  const r = VAL.find(x => x.oppId === sel.value);
+  if (!r) { detail.className = 'detail'; return; }
+  detail.className = 'detail on';
+  detail.innerHTML = `
+    <div class="df"><div class="k">Opp ID</div><div class="v">${r.oppId}</div></div>
+    <div class="df"><div class="k">Onboarder</div><div class="v">${r.onbNome || r.onbEmail}</div></div>
+    <div class="df"><div class="k">Estratégia</div><div class="v">${r.estr || '—'}</div></div>
+    <div class="df"><div class="k">Nível</div><div class="v">${r.nivel || '—'}</div></div>
+    <div class="df"><div class="k">CW (entrada)</div><div class="v">${fD(r.cw)}</div></div>
+    <div class="df"><div class="k">Ativação 1k</div><div class="v">${fD(r.a1k)}</div></div>
+    <div class="df"><div class="k">Ativação 5k</div><div class="v">${fD(r.a5k)}</div></div>
+    <div class="df"><div class="k">Ativação 10k</div><div class="v">${fD(r.a10k)}</div></div>
+    <div class="df"><div class="k">Accomplished</div><div class="v">${fD(r.accomp)}${r.accompFallback?'<span class="pill fallback">estimado: CW+90d</span>':''}</div></div>
+    <div class="df"><div class="k">Unaccomplished</div><div class="v">${fD(r.unaccomp)}${r.unaccompFallback?'<span class="pill fallback">estimado: CW+90d</span>':''}</div></div>
+    <div class="df situacao"><div class="k">Situação calculada (hoje)</div><div class="v sit-${r.situacao.split(' ')[0]}">${r.situacao}</div></div>
+  `;
+});
+</script>
+</body>
+</html>
