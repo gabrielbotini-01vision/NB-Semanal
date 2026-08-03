@@ -797,8 +797,10 @@ function onbEstoqueHTML(estrF){
     <div class="edata-lbl">Variação do estoque · ${gran==='mes'?'MoM':'WoW'}</div><div class="edata">${data}</div>`;
 }
 // status ATUAL (hoje) dos leads, agrupados pela SEMANA DE ENTRADA NO ONBOARDING (CW): barras
-// empilhadas (cw/a1k/a5k/ativado_10k) — mesmo padrão do closerStatusHTML, aplicado ao funil de
-// ativação (D.onbCohortStatus vindo do build_data.js). Sem "lost" — não há saída por perda aqui.
+// empilhadas — mesmo padrão do closerStatusHTML, aplicado ao funil de ativação (D.onbCohortStatus
+// vindo do build_data.js). Sem "lost" — não há saída por perda aqui. 03/08/2026 (a pedido do
+// Gabriel): 1k+ e 5k+ unidos numa faixa só ("vendendo, não ativado 10k") — vira CW / vendendo /
+// ativado 10k, 3 faixas em vez de 4 (mesmo espírito da reclassificação do Estoque de ativação).
 function setOnbStatusPct100(v){state.onbStatusPct100=v;renderArea();}
 function onbStatusHTML(estrF){
   const gran=state.evolGran||'semana';
@@ -807,24 +809,24 @@ function onbStatusHTML(estrF){
   const src=gran==='mes'?statusParaMes(srcRaw):srcRaw;
   const weeks=Object.keys(src).sort().slice(gran==='mes'?-12:-16);
   if(!weeks.length) return '<span class="miss">Sem dado.</span>';
-  // ordem de baixo pra cima: CW (base) → 1k+ → 5k+ → Ativado 10k no topo... só que o Gabriel
-  // pediu Ativado 10k na BASE (01/08/2026) — como .ecol empilha na ordem do array (1º = topo,
-  // último = base, ver CSS .ecol{flex-direction:column}), ativado_10k fica por último aqui.
-  const ST=[['cw','#E4E7EC'],['a1k','#B0B7C3'],['a5k','#FEC6A1'],['ativado_10k','#6CE9A6']];
+  // ordem de baixo pra cima: CW (topo) → vendendo → Ativado 10k na BASE (pedido de 01/08/2026 —
+  // .ecol empilha na ordem do array, 1º = topo, último = base, ver CSS .ecol{flex-direction:column}).
+  const ST=[['cw','#E4E7EC'],['vendendo','#FEC6A1'],['ativado_10k','#6CE9A6']];
   const totW=s=>s.cw+s.a1k+s.a5k+s.ativado_10k;
   const max=Math.max(...weeks.map(w=>totW(src[w])),1), H=180;
   const cols=weeks.map(w=>{
-    const s=src[w], tot=totW(s);
+    const s0=src[w], tot=totW(s0);
+    const s={cw:s0.cw, vendendo:s0.a1k+s0.a5k, ativado_10k:s0.ativado_10k};
     const base=pct100?(tot||1):max; // 100%: cada barra normalizada pelo PRÓPRIO total, não pelo máximo da série
     const h=v=>v>0?Math.max(2,(v/base)*H):0;
     const rotulo=gran==='mes'?mesLabel(w):semanaLabel(w);
     const segs=ST.map(([k,c])=>{const hh=h(s[k]);const lbl=pct100?(tot?Math.round(s[k]/tot*100)+'%':''):fN(s[k]);return `<div class="eseg" style="height:${hh}px;background:${c}">${hh>=13?`<span class="eseglbl">${lbl}</span>`:''}</div>`;}).join('');
-    return `<div class="ecol" title="${rotulo} · ${fN(tot)} fecharam (CW) — ativado 10k ${fN(s.ativado_10k)} · 5k+ ${fN(s.a5k)} · 1k+ ${fN(s.a1k)} · CW ${fN(s.cw)}">
+    return `<div class="ecol" title="${rotulo} · ${fN(tot)} fecharam (CW) — ativado 10k ${fN(s.ativado_10k)} · vendendo (1k+/5k+) ${fN(s.vendendo)} · CW ${fN(s.cw)}">
       <div class="etot">${fN(tot)}</div>${segs}
       <div class="ecap">${gran==='mes'?mesLabelShort(w):w.replace('2025-','25').replace('2026-','26')}</div></div>`;
   }).join('');
   const legend=`<div class="legend" style="margin:0 0 10px;justify-content:space-between">
-    <span><span><i class="sw" style="background:#E4E7EC"></i>CW</span><span><i class="sw" style="background:#B0B7C3"></i>1k+</span><span><i class="sw" style="background:#FEC6A1"></i>5k+</span><span><i class="sw" style="background:#6CE9A6"></i>Ativado 10k</span></span>
+    <span><span><i class="sw" style="background:#E4E7EC"></i>CW</span><span><i class="sw" style="background:#FEC6A1"></i>Vendendo, não ativado 10k</span><span><i class="sw" style="background:#6CE9A6"></i>Ativado 10k</span></span>
     <div class="gtoggle"><button class="${!pct100?'on':''}" onclick="setOnbStatusPct100(false)">Absoluto</button><button class="${pct100?'on':''}" onclick="setOnbStatusPct100(true)">100%</button></div>
   </div>`;
   const data=weeks.map(w=>{const s=src[w],t=totW(s);const c=t?Math.round(s.ativado_10k/t*100):null;return `<div class="edcell">${c!=null?c+'%':'—'}</div>`;}).join('');

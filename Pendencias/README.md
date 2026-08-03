@@ -11,6 +11,10 @@ Notas de handoff para quem continuar o desenvolvimento. Última atualização: 0
   Novo estado `state.onbStatusPct100`: no modo 100%, cada barra normaliza pelo PRÓPRIO total
   (não pelo máximo da série) e os segmentos mostram % em vez do valor absoluto; testado nos
   dois sentidos (alturas somam exatamente 180px = 100% no modo novo).
+  - **1k+ e 5k+ unidas numa faixa só** ("Vendendo, não ativado 10k"), no mesmo gráfico — virou
+    3 faixas (CW / vendendo / ativado 10k) em vez de 4, mesmo espírito da reclassificação do
+    Estoque de ativação. Só junta na hora de renderizar (`s0.a1k+s0.a5k`); o dado por trás
+    (`D.onbCohortStatus`) continua com os 4 campos originais, sem mudança no build_data.js.
 - **Card "CW → 10K" (KPIs de Onboarding, Semanal Área) virou "Ativação 10K"** — a pedido do
   Gabriel: era uma coorte (% que ativou 10k na MESMA semana do CW, ficava baixo por natureza
   já que o ciclo é ~50 dias); agora é throughput simples — quantas contas ativaram 10k GMV
