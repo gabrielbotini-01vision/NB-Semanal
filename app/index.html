@@ -309,7 +309,7 @@
       <div id="viewArea" style="display:none"></div>
       <div id="viewOneOne" style="display:none"></div>
     </main>
-    <footer class="pagefoot">Cockpit New Business · agregação client-side sobre bases pré-tratadas (Redshift → CSV → build_data.js).</footer>
+    <footer class="pagefoot">Semanal New Business · agregação client-side sobre bases pré-tratadas (Redshift → CSV → build_data.js).</footer>
   </div>
 </div>
 
@@ -741,13 +741,19 @@ function closerStatusHTML(estrF){
       <div class="ecap">${gran==='mes'?mesLabelShort(w):w.replace('2025-','25').replace('2026-','26')}</div></div>`;
   }).join('');
   const legend=`<div class="legend" style="margin:0 0 10px"><span><i class="sw" style="background:#E4E7EC"></i>Opp</span><span><i class="sw" style="background:#98A2B3"></i>SQL</span><span><i class="sw" style="background:#B0B7C3"></i>Offer</span><span><i class="sw" style="background:#FEC6A1"></i>Contract</span><span><i class="sw" style="background:#6CE9A6"></i>Closed Won</span><span><i class="sw" style="background:#FDA29B"></i>Lost</span></div>`;
-  const data=weeks.map(w=>{const s=src[w],t=totW(s);const c=t?Math.round(s.closed_won/t*100):null;return `<div class="edcell">${c!=null?c+'%':'—'}</div>`;}).join('');
+  // Conversão (04/08/2026, a pedido do Gabriel): era closed_won/total(opp), virou closed_won/SQL
+  // — denominador = quem chegou em SQL ou além (sql+offer+contract+closed_won+lost_deal),
+  // excluindo só quem ainda está parado em "opp" (nunca chegou em SQL).
+  const sqlOuAlem=s=>s.sql+s.offer+s.contract+s.closed_won+s.lost_deal;
+  const data=weeks.map(w=>{const s=src[w],d=sqlOuAlem(s);const c=d?Math.round(s.closed_won/d*100):null;return `<div class="edcell">${c!=null?c+'%':'—'}</div>`;}).join('');
   return `${legend}<div class="estoque">${cols}</div>
-    <div class="edata-lbl">Conversão da safra · closed won / total que virou opp</div><div class="edata">${data}</div>`;
+    <div class="edata-lbl">Conversão da safra · closed won / SQL (chegou em SQL ou além)</div><div class="edata">${data}</div>`;
 }
-// estoque do funil de negociação do Closer: barras empilhadas (Opp/Issues/SQL/Offer/Contract)
-// por semana — mesmo padrão visual do estoque de SDR (legenda antes do gráfico, rótulo do
-// valor dentro de cada segmento e variação WoW abaixo), série D.closerEstoque do build_data.js.
+// estoque do funil de negociação do Closer: barras empilhadas (Opp/SQL/Offer/Contract) por
+// semana — mesmo padrão visual do estoque de SDR (legenda antes do gráfico, rótulo do valor
+// dentro de cada segmento e variação WoW abaixo), série D.closerEstoque do build_data.js.
+// 03/08/2026 (a pedido do Gabriel): Opp e Issues unidos numa faixa só ("Opp") — pra ele são a
+// mesma coisa. Só na renderização; o dado por trás (D.closerEstoque) continua com os 2 campos.
 function closerEstoqueHTML(estrF){
   const gran=state.evolGran||'semana';
   const all=(D.closerEstoque&&D.closerEstoque[estrF||'all'])||[];
@@ -756,16 +762,17 @@ function closerEstoqueHTML(estrF){
   const tots=rows.map(r=>r.opp+r.issues+r.sql+r.offer+r.contract);
   const max=Math.max(...tots,1), H=190;
   const h=v=>v>0?Math.max(2,(v/max)*H):0;
-  const ES=[['contract','var(--accent)','#fff'],['offer','#344054','#fff'],['sql','#667085','#fff'],['issues','#84919F','#fff'],['opp','#98A2B3','#fff']];
-  const cols=rows.map((r,i)=>{
+  const ES=[['contract','var(--accent)','#fff'],['offer','#344054','#fff'],['sql','#667085','#fff'],['opp','#98A2B3','#fff']];
+  const cols=rows.map((r0,i)=>{
     const tot=tots[i];
+    const r={opp:r0.opp+r0.issues, sql:r0.sql, offer:r0.offer, contract:r0.contract, semana:r0.semana};
     const rotulo=gran==='mes'?mesLabel(r.semana):semanaLabel(r.semana);
     const segs=ES.map(([k,c,lc])=>{const hh=h(r[k]);return `<div class="eseg" style="height:${hh}px;background:${c}">${hh>=13?`<span class="eseglbl" style="color:${lc}">${fN(r[k])}</span>`:''}</div>`;}).join('');
-    return `<div class="ecol" title="${rotulo} · total ${fN(tot)} — Opp ${fN(r.opp)} · Issues ${fN(r.issues)} · SQL ${fN(r.sql)} · Offer ${fN(r.offer)} · Contract ${fN(r.contract)}">
+    return `<div class="ecol" title="${rotulo} · total ${fN(tot)} — Opp ${fN(r.opp)} (inclui Issues) · SQL ${fN(r.sql)} · Offer ${fN(r.offer)} · Contract ${fN(r.contract)}">
       <div class="etot">${fN(tot)}</div>${segs}
       <div class="ecap">${gran==='mes'?mesLabelShort(r.semana):r.semana.replace('2025-','25').replace('2026-','26')}</div></div>`;
   }).join('');
-  const legend=`<div class="legend" style="margin:0 0 10px"><span><i class="sw" style="background:#98A2B3"></i>Opp</span><span><i class="sw" style="background:#84919F"></i>Issues</span><span><i class="sw" style="background:#667085"></i>SQL</span><span><i class="sw" style="background:#344054"></i>Offer</span><span><i class="sw" style="background:var(--accent)"></i>Contract</span></div>`;
+  const legend=`<div class="legend" style="margin:0 0 10px"><span><i class="sw" style="background:#98A2B3"></i>Opp</span><span><i class="sw" style="background:#667085"></i>SQL</span><span><i class="sw" style="background:#344054"></i>Offer</span><span><i class="sw" style="background:var(--accent)"></i>Contract</span></div>`;
   const data=rows.map((r,i)=>{const d=i>0?tots[i]-tots[i-1]:null;const col=d==null?'':(d>0?'var(--success)':d<0?'var(--danger)':'var(--text-faint)');return `<div class="edcell" style="${col?'color:'+col+';font-weight:700':''}">${d==null?'—':(d>0?'+':d<0?'−':'')+fN(Math.abs(d))}</div>`;}).join('');
   return `${legend}<div class="estoque">${cols}</div>
     <div class="edata-lbl">Variação do estoque · ${gran==='mes'?'MoM':'WoW'}</div><div class="edata">${data}</div>`;
@@ -1066,7 +1073,7 @@ function renderAreaClosers(){
   const kpis=[
     ['Entradas',fN(totOpps),metaSub(totOpps,refT?.opps,`${listF.length} closers`),'Oportunidades recebidas (Opp in)',null,KIC.entradas],
     ['Saídas do funil',fN(totSaidas),`${fN(totCw)} CW · ${fN(totLost)} lost${winRatePct!=null?` · win rate ${winRatePct}%`:''}`,'Fechados: ganhos + perdidos',null,KIC.saidas],
-    ['Estoque atual',estTot!=null?fN(estTot):'—',deltaPill,'Funil de negociação atual (Opp/Issues/SQL/Offer/Contract)',null,KIC.estoque],
+    ['Estoque atual',estTot!=null?fN(estTot):'—',deltaPill,'Funil de negociação atual (Opp/SQL/Offer/Contract)',null,KIC.estoque],
     ['Opps em Issues',eCur&&eCur.issues!=null?fN(eCur.issues):'—','Ainda não chegou a SQL','Estágio "Issues Identified" do funil, snapshot atual',null,KIC.estoque],
     ['C4 · SQL→CW',c4Pct!=null?c4Pct+'%':'—',cohSqlCw?`${fN(cohSqlCw.cw)}/${fN(cohSqlCw.sql)} em SQL`:'sem dado','Coorte: fechou (CW) na mesma semana do SQL',null,KIC.link],
     ['Opp / FTE / BD',oppsFteDia!=null?oppsFteDia.toFixed(2):'—',oppBD,'Oportunidades por FTE / dia útil',null,KIC.users],
@@ -1153,7 +1160,7 @@ function renderAreaClosers(){
       <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d,cls,icon])=>`<div class="kpi ${cls||''}">${icon?`<span class="kpi-ic">${icon}</span>`:''}<span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div></div>
     <div class="sec"><div class="sec-head"><h2>Evolução do resultado</h2>${granToggleHTML()}</div>
       <div class="grid g2">
-        <div class="card">${cardHd(KIC.estoque,'Estoque do funil Closer','snapshot no fim de cada semana · últ. 16 · Opp → Issues → SQL → Offer → Contract')}${closerEstoqueHTML(filtF)}</div>
+        <div class="card">${cardHd(KIC.estoque,'Estoque do funil Closer','snapshot no fim de cada semana · últ. 16 · Opp (inclui Issues) → SQL → Offer → Contract')}${closerEstoqueHTML(filtF)}</div>
         <div class="card">${cardHd(KIC.check,'Status atual por semana de entrada (opp)','virou opp × situação hoje · últ. 16')}${closerStatusHTML(filtF)}</div>
       </div></div>
     <div class="sec"><div class="sec-head"><h2>CW por nível de cliente</h2><span class="hint">fechamentos por semana · últimas 8 semanas</span></div>

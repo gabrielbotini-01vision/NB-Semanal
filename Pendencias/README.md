@@ -1,6 +1,23 @@
 # Pendências · New Business Cockpit
 
-Notas de handoff para quem continuar o desenvolvimento. Última atualização: 03/08/2026.
+Notas de handoff para quem continuar o desenvolvimento. Última atualização: 04/08/2026.
+
+## Concluído (04/08/2026)
+
+- **Gráfico "Estoque do funil Closer": Opp e Issues unidos numa faixa só ("Opp")** — a pedido
+  do Gabriel, pra ele são a mesma coisa. Passa de 5 faixas (Opp/Issues/SQL/Offer/Contract) pra
+  4 (Opp/SQL/Offer/Contract), mesmo padrão dos merges recentes (1k+/5k+ do Status de
+  Onboarding): só na renderização (`closerEstoqueHTML`, `r.opp+r0.issues`), `D.closerEstoque`
+  continua com os 2 campos originais — o card separado "Opps em Issues" (KPI) não foi tocado,
+  continua mostrando o snapshot isolado desse sub-estágio. Testado: total da barra ainda bate
+  exato com a soma dos 4 segmentos exibidos.
+- **Legenda do card "Estoque do funil Closer" (hint + descrição do KPI "Estoque atual")
+  atualizadas** pra refletir o merge acima — não mencionam mais "Issues" separado.
+- **Gráfico "Status atual por semana de entrada (opp)" (Closer): linha de conversão trocada
+  de `closed won / total que virou opp` pra `closed won / SQL`** — a pedido do Gabriel.
+  Denominador = quem chegou em SQL ou além (`sql+offer+contract+closed_won+lost_deal`),
+  excluindo só quem ainda está parado em "opp" (nunca chegou em SQL). Testado: 14 CW / (12
+  SQL + 10 Offer + 0 Contract + 14 CW + 2 Lost = 38) = 37%, bateu exato.
 
 ## Concluído (03/08/2026)
 
