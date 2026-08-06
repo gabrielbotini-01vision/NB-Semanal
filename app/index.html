@@ -602,6 +602,10 @@ function renderSemanal(){
   const year=semana.slice(0,4);
   const ytdWeeks=D.semanas.filter(w=>w.startsWith(year)&&w<=semana).sort();
   const yearVals=ytdWeeks.map(w=>({w,a:metricsForSemana('actual',w,estr)?.receita||0,b:metricsForSemana('budget',w,estr)?.receita||0}));
+  // "Fechamento por nível de cliente" (05/08/2026, a pedido do Gabriel): a coluna da direita é
+  // MTD (mês da semana fechada), não YTD — YTD nessa tabela de nível fica só na Mensal Sales.
+  const mesDaSemana=D.semanaMes[semana];
+  const mtdWeeks=D.semanas.filter(w=>D.semanaMes[w]===mesDaSemana&&w<=semana).sort();
   const chart=`
     <table class="tbl" style="box-shadow:none">
       <thead><tr><th></th>${yearVals.map(v=>`<th style="text-align:center">${semanaLabel(v.w)}</th>`).join('')}</tr></thead>
@@ -619,7 +623,7 @@ function renderSemanal(){
     <div class="sec"><div class="sec-head"><h2>Fechamento por nível de cliente</h2><span class="hint">realizado vs meta</span></div>
       <div class="grid g2">
         <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Semana fechada — ${semanaLabel(semana)}</div>${NIV.map(n=>nivelMiniTable(n,[semana],estr,D.actual.semanal,D.budget.semanal)).join('')}</div>
-        <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Year to date — ${year}</div>${NIV.map(n=>nivelMiniTable(n,ytdWeeks,estr,D.actual.semanal,D.budget.semanal)).join('')}</div>
+        <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Month to date — ${mesLabel(mesDaSemana)}</div>${NIV.map(n=>nivelMiniTable(n,mtdWeeks,estr,D.actual.semanal,D.budget.semanal)).join('')}</div>
       </div>
     </div>`;
 }
