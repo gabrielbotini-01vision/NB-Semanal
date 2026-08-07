@@ -1,6 +1,41 @@
 # Pendências · New Business Cockpit
 
-Notas de handoff para quem continuar o desenvolvimento. Última atualização: 04/08/2026.
+Notas de handoff para quem continuar o desenvolvimento. Última atualização: 06/08/2026.
+
+## Concluído (06/08/2026)
+
+- **Semanal Sales: tabela "Fechamento por nível de cliente" — coluna direita vira MTD, não
+  YTD** — a pedido do Gabriel. YTD nessa tabela por nível fica só na Mensal Sales; na Semanal
+  Sales a coluna direita agora soma as semanas do MÊS da semana fechada (`D.semanaMes[semana]`
+  + `w<=semana`), não o ano inteiro. O gráfico "Net Revenue · YTD" acima da tabela não mudou
+  (continua ano inteiro, como já era). Testado: `Semana fechada — semana 31/2026` /
+  `Month to date — jul/2026` corretos nos dois lados.
+- **1:1 Gestor: reformulado** — a pedido do Gabriel, várias mudanças juntas:
+  - **Lista lateral vira toggle por área** (SDR/Closers/Onboarding), mesmo padrão de subtabs da
+    Semanal Área, em vez de mostrar as 3 áreas juntas numa lista só. Estado próprio
+    (`state.areaOneOne`) — independente do `state.area` da Semanal Área (trocar um não afeta o
+    outro). Mapa `AREA_TO_ONEONE_KIND` traduz as chaves da Semanal Área (`sdr/closers/onboarding`)
+    pras chaves do 1:1 (`sdr/closer/onb`, convenção antiga, mantida).
+  - **Novo card "Ações em aberto"** (4º card, ao lado de Destaques/A melhorar/Ações da Semana) —
+    gerado por REGRA (não texto livre, não precisa de dado novo salvo em lugar nenhum):
+    `coaching()` agora retorna `flags` estruturais (`lowRate`/`belowMedian`) além dos textos;
+    `openActions()` compara os flags da semana selecionada com os da semana anterior — o que
+    persistiu nas duas é uma pendência que não foi resolvida entre um 1:1 e outro.
+  - **Gráficos de Estoque + Status por PESSOA** (mesmos gráficos já existentes na Semanal Área,
+    agora calculados só com os leads daquela pessoa). Exigiu agregação nova no `build_data.js`:
+    `sdrEstoquePessoa`/`closerEstoquePessoa`/`onbEstoqueSemanalPorPessoa` (snapshot, mesma regra
+    de entrada/saída dos equivalentes por estratégia/nível, chaveados por owner/closer/onboarder)
+    e `sdrCohortStatusPessoa`/`closerCohortStatusPessoa`/`onbCohortStatusPessoa` (coorte por
+    pessoa, preenchidos lazy dentro do loop principal). As 6 funções de gráfico
+    (`sdrEstoqueHTML` etc.) foram refatoradas em wrapper + núcleo `*Bars(dadosBrutos)`, reusado
+    tanto pela Semanal Área (por estratégia/nível) quanto pelo 1:1 (por pessoa). Validado:
+    soma por pessoa bate exato com o agregado "all" da Semanal Área, semana a semana.
+  - **Tabela "Informações safradas por semana"**, por pessoa, com semana por LINHA (não mais por
+    coluna) — usa o `p.porSemana` que já existia, sem precisar de dado novo. Últimas 10 semanas
+    até a selecionada, mais recente primeiro.
+  - Toggles de granularidade (Semana/Mês) e Absoluto/100% (gráfico de Status do Onboarding)
+    reaproveitados também aqui — `setEvolGran`/`setOnbStatusPct100` agora checam
+    `state.meeting` pra re-renderizar a página certa (`renderOneOne` vs `renderArea`).
 
 ## Concluído (04/08/2026)
 

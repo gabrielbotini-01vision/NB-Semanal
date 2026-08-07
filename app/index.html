@@ -247,7 +247,7 @@
   .indic{display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border);font-size:12.5px}
   .indic:first-child{border-top:none}
   .indic .k{color:var(--text-muted)} .indic .v{font-family:var(--font-mono);font-weight:600}
-  .coachgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .coachgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
   @media(max-width:860px){.coachgrid{grid-template-columns:1fr}}
   .coachbox ul{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:7px}
   .coachbox li{font-size:12.5px;line-height:1.4}
@@ -352,7 +352,10 @@ function avatarHTML(p,size){
 function median(arr){const a=[...arr].filter(v=>v!=null).sort((x,y)=>x-y);const n=a.length;if(!n)return 0;return n%2?a[(n-1)/2]:(a[n/2-1]+a[n/2])/2;}
 
 // ---- estado ----
-let state={meeting:'mensal',area:'sdr',mes:null,semana:null,estr:'all',ref:'budget',mesArea:null,semanaArea:null,refArea:'budget',estrArea:'all',nivelArea:'all',evolGran:'semana',onbStatusPct100:false,mesMensal:null,estrMensal:'all',pessoa:null,sdrSort:null,closerSort:null,onbSort:null,mesOneOne:null,semanaOneOne:null};
+let state={meeting:'mensal',area:'sdr',mes:null,semana:null,estr:'all',ref:'budget',mesArea:null,semanaArea:null,refArea:'budget',estrArea:'all',nivelArea:'all',evolGran:'semana',onbStatusPct100:false,mesMensal:null,estrMensal:'all',pessoa:null,sdrSort:null,closerSort:null,onbSort:null,mesOneOne:null,semanaOneOne:null,areaOneOne:'sdr'};
+// AREA_TABS usa as chaves da Semanal Área (sdr/closers/onboarding); o 1:1 Gestor guarda
+// pessoas com outra convenção (sdr/closer/onb, ver allPeople()) — mapa entre as duas.
+const AREA_TO_ONEONE_KIND={sdr:'sdr',closers:'closer',onboarding:'onb'};
 
 const IC={
   mensal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>',
@@ -652,7 +655,7 @@ const ONB_DEF={cwIn:0,activated:0,actRate:null,actNivel:[0,0,0],diasWonAtivacao:
 function cardHd(icon,title,hint){return `<div class="card-hd"><span class="card-ic">${icon||''}</span><h3>${title}</h3>${hint?`<span class="card-sub">${hint}</span>`:''}</div>`;}
 // toggle Semana/Mês dos gráficos de Estoque/Status (01/08/2026, a pedido do Gabriel) — um botão
 // só, estado compartilhado (state.evolGran) entre as 3 sub-abas de Semanal Área.
-function setEvolGran(g){state.evolGran=g;renderArea();}
+function setEvolGran(g){state.evolGran=g;if(state.meeting==='oneone')renderOneOne();else renderArea();}
 function granToggleHTML(){
   return `<div class="gtoggle">
     <button class="${state.evolGran==='semana'?'on':''}" onclick="setEvolGran('semana')">Semana</button>
@@ -678,9 +681,11 @@ function statusParaMes(src){
   }
   return out;
 }
-function sdrEstoqueHTML(estrF){
+function sdrEstoqueHTML(estrF){ return sdrEstoqueBars((D.sdrEstoque&&D.sdrEstoque[estrF||'all'])||[]); }
+// núcleo do gráfico de Estoque SDR — extraído (05/08/2026) pra ser reaproveitado tanto por
+// estratégia (Semanal Área) quanto por pessoa (1:1 Gestor), só trocando a série de entrada.
+function sdrEstoqueBars(all){
   const gran=state.evolGran||'semana';
-  const all=(D.sdrEstoque&&D.sdrEstoque[estrF||'all'])||[];
   const rows=gran==='mes'?estoqueParaMes(all).slice(-12):all.slice(-16);
   if(!rows.length) return '<span class="miss">Sem série de estoque — regenere o app_data.js com o build_data.js atualizado.</span>';
   const tots=rows.map(r=>r.contacted+r.connected+r.nurturing);
@@ -702,9 +707,10 @@ function sdrEstoqueHTML(estrF){
 }
 // status ATUAL (hoje) dos leads, agrupados pela SEMANA DE CONTATO: barras empilhadas
 // (contacted/connected/nurturing/qualified/unqualified) por semana — coorte × situação de hoje.
-function sdrStatusHTML(estrF){
+function sdrStatusHTML(estrF){ return sdrStatusBars((D.sdrCohortStatus&&D.sdrCohortStatus[estrF||'all'])||{}); }
+// núcleo do gráfico de Status SDR — extraído (05/08/2026), ver sdrEstoqueBars acima.
+function sdrStatusBars(srcRaw){
   const gran=state.evolGran||'semana';
-  const srcRaw=(D.sdrCohortStatus&&D.sdrCohortStatus[estrF||'all'])||{};
   const src=gran==='mes'?statusParaMes(srcRaw):srcRaw;
   const weeks=Object.keys(src).sort().slice(gran==='mes'?-12:-16);
   if(!weeks.length) return '<span class="miss">Sem dado.</span>';
@@ -727,9 +733,10 @@ function sdrStatusHTML(estrF){
 // status ATUAL (hoje) dos leads, agrupados pela SEMANA DE ENTRADA NO CLOSER (opp): barras
 // empilhadas (opp/sql/offer/contract/closed_won/lost_deal) — mesmo padrão do sdrStatusHTML,
 // aplicado ao funil de negociação (D.closerCohortStatus vindo do build_data.js).
-function closerStatusHTML(estrF){
+function closerStatusHTML(estrF){ return closerStatusBars((D.closerCohortStatus&&D.closerCohortStatus[estrF||'all'])||{}); }
+// núcleo do gráfico de Status Closer — extraído (05/08/2026), ver sdrEstoqueBars acima.
+function closerStatusBars(srcRaw){
   const gran=state.evolGran||'semana';
-  const srcRaw=(D.closerCohortStatus&&D.closerCohortStatus[estrF||'all'])||{};
   const src=gran==='mes'?statusParaMes(srcRaw):srcRaw;
   const weeks=Object.keys(src).sort().slice(gran==='mes'?-12:-16);
   if(!weeks.length) return '<span class="miss">Sem dado.</span>';
@@ -758,9 +765,10 @@ function closerStatusHTML(estrF){
 // dentro de cada segmento e variação WoW abaixo), série D.closerEstoque do build_data.js.
 // 03/08/2026 (a pedido do Gabriel): Opp e Issues unidos numa faixa só ("Opp") — pra ele são a
 // mesma coisa. Só na renderização; o dado por trás (D.closerEstoque) continua com os 2 campos.
-function closerEstoqueHTML(estrF){
+function closerEstoqueHTML(estrF){ return closerEstoqueBars((D.closerEstoque&&D.closerEstoque[estrF||'all'])||[]); }
+// núcleo do gráfico de Estoque Closer — extraído (05/08/2026), ver sdrEstoqueBars acima.
+function closerEstoqueBars(all){
   const gran=state.evolGran||'semana';
-  const all=(D.closerEstoque&&D.closerEstoque[estrF||'all'])||[];
   const rows=gran==='mes'?estoqueParaMes(all).slice(-12):all.slice(-16);
   if(!rows.length) return '<span class="miss">Sem série de estoque — regenere o app_data.js com o build_data.js atualizado.</span>';
   const tots=rows.map(r=>r.opp+r.issues+r.sql+r.offer+r.contract);
@@ -785,9 +793,10 @@ function closerEstoqueHTML(estrF){
 // semana — reclassificado em 01-03/08/2026 a pedido do Gabriel (antes era CW/1k+/5k+, saía do
 // estoque ao ativar 10k; agora "ativo" fica no estoque, só sai por accomplished/unaccomplished
 // — ver comentário em onbEstoque no build_data.js).
-function onbEstoqueHTML(estrF){
+function onbEstoqueHTML(estrF){ return onbEstoqueBars((D.onbEstoque&&D.onbEstoque[estrF||'all'])||[]); }
+// núcleo do gráfico de Estoque Onboarding — extraído (05/08/2026), ver sdrEstoqueBars acima.
+function onbEstoqueBars(all){
   const gran=state.evolGran||'semana';
-  const all=(D.onbEstoque&&D.onbEstoque[estrF||'all'])||[];
   const rows=gran==='mes'?estoqueParaMes(all).slice(-12):all.slice(-16);
   if(!rows.length) return '<span class="miss">Sem série de estoque — regenere o app_data.js com o build_data.js atualizado.</span>';
   const tots=rows.map(r=>r.nuncaVendeu+r.vendendo+r.ativo);
@@ -812,11 +821,12 @@ function onbEstoqueHTML(estrF){
 // vindo do build_data.js). Sem "lost" — não há saída por perda aqui. 03/08/2026 (a pedido do
 // Gabriel): 1k+ e 5k+ unidos numa faixa só ("vendendo, não ativado 10k") — vira CW / vendendo /
 // ativado 10k, 3 faixas em vez de 4 (mesmo espírito da reclassificação do Estoque de ativação).
-function setOnbStatusPct100(v){state.onbStatusPct100=v;renderArea();}
-function onbStatusHTML(estrF){
+function setOnbStatusPct100(v){state.onbStatusPct100=v;if(state.meeting==='oneone')renderOneOne();else renderArea();}
+function onbStatusHTML(estrF){ return onbStatusBars((D.onbCohortStatus&&D.onbCohortStatus[estrF||'all'])||{}); }
+// núcleo do gráfico de Status Onboarding — extraído (05/08/2026), ver sdrEstoqueBars acima.
+function onbStatusBars(srcRaw){
   const gran=state.evolGran||'semana';
   const pct100=state.onbStatusPct100;
-  const srcRaw=(D.onbCohortStatus&&D.onbCohortStatus[estrF||'all'])||{};
   const src=gran==='mes'?statusParaMes(srcRaw):srcRaw;
   const weeks=Object.keys(src).sort().slice(gran==='mes'?-12:-16);
   if(!weeks.length) return '<span class="miss">Sem dado.</span>';
@@ -1422,28 +1432,51 @@ function coaching(p,kind,squadArr,squadKey){
   const med=median(squadArr.map(x=>x[squadKey]));
   const mine=p[squadKey]||0;
   const d=[],m=[];let acao='';
+  // flags (05/08/2026): mesmas condições usadas nos textos de "A melhorar" abaixo, só que como
+  // booleano — servem pra comparar duas semanas estruturalmente (não por texto) no card de
+  // "Ações em aberto" (ver openActions), já que os números mudam de semana pra semana mas a
+  // CATEGORIA do gargalo é o que importa pra saber se ele persistiu.
+  const flags={lowRate:false,belowMedian:mine<med};
   if(kind==='sdr'){
     if(p.contactRate!=null&&p.contactRate>=0.6)d.push(`Boa cobertura de contatos (${pctR(p.contactRate)}%)`);
     if(mine>=med)d.push('Opps acima da mediana do squad');
-    if(p.contactRate!=null&&p.contactRate<0.45)m.push(`Cobertura de contatos baixa (${pctR(p.contactRate)}%)`);
+    flags.lowRate=p.contactRate!=null&&p.contactRate<0.45;
+    if(flags.lowRate)m.push(`Cobertura de contatos baixa (${pctR(p.contactRate)}%)`);
     if(mine<med)m.push(`Opps abaixo da mediana do squad (${fN(mine)} vs ${fN(med)})`);
     acao=mine<med?'Priorizar geração de opps essa semana para recuperar o pacing do squad.':'Manter cadência e reforçar qualificação para melhorar a taxa de conexão.';
   } else if(kind==='closer'){
     if(p.winRate!=null&&p.winRate>=0.3)d.push(`Win rate forte (${pctR(p.winRate)}%)`);
     if(mine>=med)d.push('CW acima da mediana do squad');
-    if(p.winRate!=null&&p.winRate<0.2)m.push(`Win rate abaixo do esperado (${pctR(p.winRate)}%)`);
+    flags.lowRate=p.winRate!=null&&p.winRate<0.2;
+    if(flags.lowRate)m.push(`Win rate abaixo do esperado (${pctR(p.winRate)}%)`);
     if(mine<med)m.push(`CW abaixo da mediana do squad (${fN(mine)} vs ${fN(med)})`);
     acao=(p.winRate!=null&&p.winRate<0.2)?'Revisar critério de qualificação dos deals com o gestor.':(mine<med?'Priorizar avanço das opps em aberto para recuperar o pacing.':'Manter ritmo e repassar abordagem para os pares do squad.');
   } else {
     if(p.actRate!=null&&p.actRate>=0.5)d.push(`Ativação alta (${pctR(p.actRate)}%)`);
     if(mine>=med)d.push('Ativações acima da mediana do squad');
-    if(p.actRate!=null&&p.actRate<0.35)m.push(`Ativação baixa (${pctR(p.actRate)}%)`);
+    flags.lowRate=p.actRate!=null&&p.actRate<0.35;
+    if(flags.lowRate)m.push(`Ativação baixa (${pctR(p.actRate)}%)`);
     if(mine<med)m.push(`Ativações abaixo da mediana do squad (${fN(mine)} vs ${fN(med)})`);
     acao=(p.actRate!=null&&p.actRate<0.35)?'Revisar contas paradas com o gestor antes que virem churn.':(mine<med?'Focar nas contas mais próximas de bater 10k GMV essa semana.':'Documentar o que está funcionando e replicar com o squad.');
   }
   if(!d.length)d.push('Desempenho dentro do esperado no período.');
   if(!m.length)m.push('Sem gargalo relevante identificado no período.');
-  return {destaques:d,melhorar:m,acao,med,mine};
+  return {destaques:d,melhorar:m,acao,med,mine,flags};
+}
+// "Ações em aberto" (05/08/2026, a pedido do Gabriel): gerado por regra, não por texto livre —
+// compara os FLAGS estruturais desta semana com os da semana anterior; o que persistiu nas
+// duas é uma pendência que não foi resolvida entre um 1:1 e outro.
+const OPEN_ACTION_LBL={
+  sdr:{lowRate:'Cobertura de contatos segue baixa (abaixo de 45%) há 2 semanas seguidas.',belowMedian:'Opps seguem abaixo da mediana do squad há 2 semanas seguidas.'},
+  closer:{lowRate:'Win rate segue abaixo do esperado (<20%) há 2 semanas seguidas.',belowMedian:'CW segue abaixo da mediana do squad há 2 semanas seguidas.'},
+  onb:{lowRate:'Taxa de ativação segue baixa (<35%) há 2 semanas seguidas.',belowMedian:'Ativações seguem abaixo da mediana do squad há 2 semanas seguidas.'},
+};
+function openActions(kind,flags,flagsPrev){
+  if(!flagsPrev) return ['Sem semana anterior para comparar (fora do período com dado).'];
+  const out=[];
+  for(const k of ['lowRate','belowMedian']) if(flags[k]&&flagsPrev[k]) out.push(OPEN_ACTION_LBL[kind][k]);
+  if(!out.length) out.push('Nenhuma pendência recorrente — gargalos da semana passada não se repetiram.');
+  return out;
 }
 const ONE_ONE_DEF={sdr:SDR_DEF,closer:CLOSER_DEF,onb:ONB_DEF};
 // série de 4 pontos terminando NA semana selecionada (não mais "as 4 últimas semanas com dado
@@ -1454,6 +1487,41 @@ function last4WeeklyAt(p,week,metricKey){
   const ws=D.semanas.slice(Math.max(0,idx-3),idx+1);
   return ws.map(w=>({semana:w,valor:Math.round((p.porSemana||{})[w]?.[metricKey]||0)}));
 }
+// gráficos de Estoque/Status por PESSOA (05/08/2026) — mesmos gráficos da Semanal Área, só que
+// lendo as séries por e-mail (D.xxxEstoquePessoa/D.xxxCohortStatusPessoa do build_data.js) em
+// vez de por estratégia/nível. Reaproveita os núcleos *Bars já usados na Semanal Área.
+function personEstoqueBars(kind,email){
+  if(kind==='sdr') return sdrEstoqueBars((D.sdrEstoquePessoa&&D.sdrEstoquePessoa[email])||[]);
+  if(kind==='closer') return closerEstoqueBars((D.closerEstoquePessoa&&D.closerEstoquePessoa[email])||[]);
+  return onbEstoqueBars((D.onbEstoqueSemanalPorPessoa&&D.onbEstoqueSemanalPorPessoa[email])||[]);
+}
+function personStatusBars(kind,email){
+  if(kind==='sdr') return sdrStatusBars((D.sdrCohortStatusPessoa&&D.sdrCohortStatusPessoa[email])||{});
+  if(kind==='closer') return closerStatusBars((D.closerCohortStatusPessoa&&D.closerCohortStatusPessoa[email])||{});
+  return onbStatusBars((D.onbCohortStatusPessoa&&D.onbCohortStatusPessoa[email])||{});
+}
+// tabela "safrada" por pessoa (05/08/2026): mesmas métricas semanais já calculadas em
+// p.porSemana (build_data.js), só que com SEMANA POR LINHA em vez de por coluna — mais fácil de
+// ler várias semanas seguidas de uma pessoa só no 1:1.
+const POR_SEMANA_COLS={
+  sdr:[['contacted','Contatados',v=>fN(v)],['connected','Connected',v=>fN(v)],['contactRate','Contact→Connected',v=>v!=null?pctR(v)+'%':'—'],['opps','Opp in',v=>fN(v)],['diasContatoConectado','Ciclo contato→conectado',v=>v!=null?v+'d':'—']],
+  closer:[['opps','Opp in',v=>fN(v)],['sql','SQL',v=>fN(v)],['sqlRate','Opp→SQL',v=>v!=null?pctR(v)+'%':'—'],['cw','CW',v=>fN(v)],['winRate','Win rate',v=>v!=null?pctR(v)+'%':'—'],['diasOppSql','Ciclo Opp→SQL',v=>v!=null?v+'d':'—'],['diasSqlWon','Ciclo SQL→CW',v=>v!=null?v+'d':'—']],
+  onb:[['cwIn','CW in',v=>fN(v)],['activated','Ativados 10k',v=>fN(v)],['actRate','Taxa de ativação',v=>v!=null?pctR(v)+'%':'—'],['diasWonAtivacao','Ciclo CW→Ativação',v=>v!=null?v+'d':'—']],
+};
+function lastNWeeksAt(week,n){
+  const idx=D.semanas.indexOf(week);
+  if(idx<0) return [];
+  return D.semanas.slice(Math.max(0,idx-n+1),idx+1);
+}
+function porSemanaTableHTML(p,kind,weeks){
+  const cols=POR_SEMANA_COLS[kind];
+  if(!weeks.length) return '<span class="miss">Sem semanas no período.</span>';
+  const rows=weeks.slice().sort().reverse().map(w=>{
+    const pw=(p.porSemana||{})[w]||{};
+    return `<tr><td style="font-weight:600">${semanaLabel(w)}</td>${cols.map(([k,,fmt])=>`<td class="mono" style="text-align:center">${fmt(pw[k])}</td>`).join('')}</tr>`;
+  }).join('');
+  return `<table class="tbl" style="box-shadow:none"><thead><tr><th>Semana</th>${cols.map(([,lbl])=>`<th style="text-align:center">${lbl}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
+}
 function renderOneOne(){
   // a busca re-renderiza a página inteira a cada tecla (innerHTML recria o <input>, que perde
   // foco/cursor) — guarda se o campo estava focado e a posição do cursor pra restaurar depois.
@@ -1462,20 +1530,21 @@ function renderOneOne(){
   const caret=hadFocus?searchEl0.selectionStart:null;
   const people=allPeople();
   if(!people.length){ $('viewOneOne').innerHTML='<div class="card"><span class="miss">Sem pessoas com dado — rode build_data.js com os CSVs atualizados.</span></div>'; return; }
-  if(!state.pessoa||!people.find(x=>x.p.email===state.pessoa.email&&x.kind===state.pessoa.kind)){
-    state.pessoa={email:people[0].p.email,kind:people[0].kind};
+  // 05/08/2026 (a pedido do Gabriel): a lista lateral deixa de mostrar as 3 áreas juntas e passa
+  // a alternar via subtabs (SDR/Closers/Onboarding, mesmo padrão da Semanal Área) — state.areaOneOne.
+  const curKind=AREA_TO_ONEONE_KIND[state.areaOneOne]||'sdr';
+  const peopleArea=people.filter(x=>x.kind===curKind);
+  if(!state.pessoa||state.pessoa.kind!==curKind||!peopleArea.find(x=>x.p.email===state.pessoa.email)){
+    state.pessoa=peopleArea.length?{email:peopleArea[0].p.email,kind:peopleArea[0].kind}:{email:people[0].p.email,kind:people[0].kind};
   }
   const sel=people.find(x=>x.p.email===state.pessoa.email&&x.kind===state.pessoa.kind);
   const q=(state.q||'').toLowerCase();
-  const groups=[['sdr','SDR'],['closer','Closers'],['onb','Onboarding']];
-  const sideHTML=groups.map(([kind,label])=>{
-    const items=people.filter(x=>x.kind===kind&&(shortEmail(x.p.email).toLowerCase().includes(q)||displayName(x.p).toLowerCase().includes(q)));
-    if(!items.length)return '';
-    return `<div class="eyebrow" style="margin:10px 4px 4px">${label} · ${items.length}</div>`+
-      items.map(x=>`<div class="oneone-item ${state.pessoa.email===x.p.email&&state.pessoa.kind===x.kind?'on':''}" data-email="${x.p.email}" data-kind="${x.kind}">${avatarHTML(x.p,24)}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${displayName(x.p)}</span></div>`).join('');
-  }).join('');
+  const itemsSide=peopleArea.filter(x=>shortEmail(x.p.email).toLowerCase().includes(q)||displayName(x.p).toLowerCase().includes(q));
+  const sideHTML=`<div class="eyebrow" style="margin:10px 4px 4px">${ROLE_CFG[curKind].label} · ${itemsSide.length}</div>`+
+    itemsSide.map(x=>`<div class="oneone-item ${state.pessoa.email===x.p.email&&state.pessoa.kind===x.kind?'on':''}" data-email="${x.p.email}" data-kind="${x.kind}">${avatarHTML(x.p,24)}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${displayName(x.p)}</span></div>`).join('');
 
   const week=state.semanaOneOne;
+  const idxW=D.semanas.indexOf(week), prevWeek=idxW>0?D.semanas[idxW-1]:null;
   const cfg=ROLE_CFG[sel.kind];
   const defs=ONE_ONE_DEF[sel.kind];
   // projeta a pessoa E o squad inteiro na semana selecionada (mesmo weekView usado na Semanal
@@ -1488,6 +1557,19 @@ function renderOneOne(){
   const co=coaching(selProj,sel.kind,squadArr,cfg.metricKey);
   const vsMed=co.med?Math.round((co.mine-co.med)/co.med*100):null;
   const wt=weekTrendHTML({label:displayName(sel.p).split(' ')[0],color:cfg.color,series:last4WeeklyAt(sel.p,week,cfg.metricKey)});
+  // "Ações em aberto" (regra, não texto livre) — compara os flags desta semana com os da
+  // anterior; o que persistir nas duas é pendência que não foi resolvida entre um 1:1 e outro.
+  let coPrev=null;
+  if(prevWeek){
+    const selProjPrev=weekView(sel.p,prevWeek,defs);
+    const squadArrPrev=people.filter(x=>x.kind===sel.kind).map(x=>weekView(x.p,prevWeek,defs));
+    coPrev=coaching(selProjPrev,sel.kind,squadArrPrev,cfg.metricKey);
+  }
+  const abertos=openActions(sel.kind,co.flags,coPrev&&coPrev.flags);
+
+  const estoqueHTML=personEstoqueBars(sel.kind,sel.p.email);
+  const statusHTML=personStatusBars(sel.kind,sel.p.email);
+  const semanasTabela=lastNWeeksAt(week,10);
 
   $('viewOneOne').innerHTML=`<div class="oneone">
     <div class="oneone-side">
@@ -1514,7 +1596,17 @@ function renderOneOne(){
       <div class="coachgrid" style="margin-top:16px">
         <div class="card coachbox"><div class="eyebrow" style="color:var(--success);margin-bottom:10px">Destaques</div><ul>${co.destaques.map(t=>`<li>${t}</li>`).join('')}</ul></div>
         <div class="card coachbox"><div class="eyebrow" style="color:var(--warn);margin-bottom:10px">A melhorar</div><ul>${co.melhorar.map(t=>`<li>${t}</li>`).join('')}</ul></div>
-        <div class="card coachbox"><div class="eyebrow" style="color:var(--accent);margin-bottom:10px">Ação da semana</div><ul><li>${co.acao}</li></ul></div>
+        <div class="card coachbox"><div class="eyebrow" style="color:var(--accent);margin-bottom:10px">Ações da Semana</div><ul><li>${co.acao}</li></ul></div>
+        <div class="card coachbox"><div class="eyebrow" style="color:var(--danger);margin-bottom:10px">Ações em aberto</div><ul>${abertos.map(t=>`<li>${t}</li>`).join('')}</ul></div>
+      </div>
+      <div class="sec" style="margin-top:16px"><div class="sec-head"><h2>Evolução do funil</h2>${granToggleHTML()}</div>
+        <div class="grid g2">
+          <div class="card">${cardHd(KIC.estoque,'Estoque · '+displayName(sel.p),null)}${estoqueHTML}</div>
+          <div class="card">${cardHd(KIC.check,'Status atual por safra · '+displayName(sel.p),null)}${statusHTML}</div>
+        </div>
+      </div>
+      <div class="sec" style="margin-top:16px"><div class="sec-head"><h2>Informações safradas por semana</h2><span class="hint">${displayName(sel.p)} · últimas ${semanasTabela.length} semanas, mais recente primeiro</span></div>
+        <div class="card" style="padding:20px;overflow-x:auto">${porSemanaTableHTML(sel.p,sel.kind,semanasTabela)}</div>
       </div>
     </div>
   </div>`;
@@ -1534,8 +1626,15 @@ const CTX={mensal:'Mês fechado',wsales:'Semana fechada',warea:'Semana · detalh
 function renderTabs(){
   $('tabs').innerHTML=MEETINGS.map(t=>`<div class="tab ${state.meeting===t.k?'on':''}" data-k="${t.k}"><span class="ic">${IC[t.k]||''}</span><span>${t.label}</span></div>`).join('');
   $('tabs').querySelectorAll('.tab').forEach(el=>el.onclick=()=>{state.meeting=el.dataset.k;document.body.classList.remove('side-open');render();});
-  $('subtabs').innerHTML=AREA_TABS.map(t=>`<div class="subtab ${state.area===t.k?'on':''}" data-k="${t.k}">${t.label}</div>`).join('');
-  $('subtabs').querySelectorAll('.subtab').forEach(el=>el.onclick=()=>{state.area=el.dataset.k;render();});
+  // subtabs SDR/Closers/Onboarding — reaproveitadas pelo 1:1 Gestor (05/08/2026) pra alternar
+  // de área em vez de mostrar todo mundo junto numa lista só; cada aba guarda o próprio estado
+  // (state.area pra Semanal Área, state.areaOneOne pro 1:1) pra não se atropelarem ao trocar de aba.
+  const curArea=state.meeting==='oneone'?state.areaOneOne:state.area;
+  $('subtabs').innerHTML=AREA_TABS.map(t=>`<div class="subtab ${curArea===t.k?'on':''}" data-k="${t.k}">${t.label}</div>`).join('');
+  $('subtabs').querySelectorAll('.subtab').forEach(el=>el.onclick=()=>{
+    if(state.meeting==='oneone') state.areaOneOne=el.dataset.k; else state.area=el.dataset.k;
+    render();
+  });
 }
 function updateBanner(){
   const dm=D.dataMax; const dmF=dm?dm.split('-').reverse().join('/'):'—';
@@ -1554,7 +1653,7 @@ function render(){
   $('wareaControls').style.display=state.meeting==='warea'?'flex':'none';
   $('mensalControls').style.display=state.meeting==='mensal'?'flex':'none';
   $('otherControls').style.display=state.meeting==='oneone'?'flex':'none';
-  $('subbar').style.display=state.meeting==='warea'?'block':'none';
+  $('subbar').style.display=(state.meeting==='warea'||state.meeting==='oneone')?'block':'none';
   if($('ctlEstrArea')) $('ctlEstrArea').style.display=state.meeting==='warea'?'flex':'none';
   if($('ctlNivelArea')) $('ctlNivelArea').style.display=(state.meeting==='warea'&&state.area!=='sdr')?'flex':'none';
   $('viewMensal').style.display=state.meeting==='mensal'?'block':'none';

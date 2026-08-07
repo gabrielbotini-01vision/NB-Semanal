@@ -212,6 +212,10 @@ const sdrOppFteSet = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} }; // est
 // coorte por semana de CONTATO × status ATUAL (hoje) do lead — situação mais recente entre
 // contacted/connected/nurturing/qualified/unqualified (data mais recente vence).
 const sdrCohortStatus = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} }; // estr -> W(contato) -> {status: n}
+// mesma coisa acima, por PESSOA (owner do lead) — alimenta o gráfico de Status no 1:1 Gestor
+// (05/08/2026, a pedido do Gabriel). Preenchido lazy (owner -> W -> {status:n}) dentro do loop
+// principal, junto com sdrCohortStatus.
+const sdrCohortStatusPessoa = {};
 const sdrContactFteSet = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} }; // estr -> W -> Set(owner SDR real que contatou)
 const sdrOppsNivelAcc = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} }; // opps por nível×semana, só SDR real
 // coorte de negociação POR SEMANA (funil Closer): dos leads que viraram opp na semana W,
@@ -234,6 +238,9 @@ const closerCwFteSet = blankKeys(CO_KEYS);
 // coorte por semana de ENTRADA NO CLOSER (opp) × status ATUAL (hoje) do lead — situação mais
 // recente entre opp/sql/offer/contract/closed_won/lost_deal (data mais recente vence).
 const closerCohortStatus = blankKeys(CO_KEYS); // estr/nível -> W(opp) -> {status: n}
+// mesma coisa acima, por PESSOA (closer) — alimenta o gráfico de Status no 1:1 Gestor
+// (05/08/2026, a pedido do Gabriel). Preenchido lazy (closer -> W -> {status:n}).
+const closerCohortStatusPessoa = {};
 // coorte de ativação POR SEMANA (funil Onboarding): dos leads que fecharam (CW) na semana W,
 // quantos chegaram a 1k na PRÓPRIA semana W (C1); e, do sub-coorte que chegou a 1k na mesma
 // semana, quantos chegaram a 5k também na mesma semana (C2, encadeado — mesmo padrão do
@@ -249,6 +256,9 @@ const onbActFteSet = blankKeys(CO_KEYS);
 // coorte por semana de ENTRADA NO ONBOARDING (CW) × status ATUAL (hoje) do lead — situação
 // mais recente entre cw/a1k/a5k/ativado_10k (data mais recente vence).
 const onbCohortStatus = blankKeys(CO_KEYS); // estr/nível -> W(cw) -> {status: n}
+// mesma coisa acima, por PESSOA (onboarder) — alimenta o gráfico de Status no 1:1 Gestor
+// (05/08/2026, a pedido do Gabriel). Preenchido lazy (onb -> W -> {status:n}).
+const onbCohortStatusPessoa = {};
 
 function pushCiclo(key, dateA, dateB) {
   if (!dateA || !dateB) return null;
@@ -388,6 +398,7 @@ for (const r of fop) {
     for (const k of ['connected', 'nurturing', 'qualified', 'unqualified']) if (sd[k] && sd[k] >= bestD) { bestD = sd[k]; status = k; }
     const bumpSt = o => { const cc = o[wc] || (o[wc] = { contacted: 0, connected: 0, nurturing: 0, qualified: 0, unqualified: 0 }); cc[status]++; };
     if (ownerReal) { bumpSt(sdrCohortStatus.all); if (_estrLead) bumpSt(sdrCohortStatus[_estrLead]); }
+    if (ownerReal && owner) bumpSt(sdrCohortStatusPessoa[owner] || (sdrCohortStatusPessoa[owner] = {}));
   }
 
   // coorte semanal de negociação (Closer): denom = virou opp em W; C1 = chegou a SQL em W;
@@ -413,6 +424,7 @@ for (const r of fop) {
     for (const k of ['sql', 'offer', 'contract', 'closed_won', 'lost_deal']) if (sd2[k] && sd2[k] >= bestD2) { bestD2 = sd2[k]; status2 = k; }
     const bumpCloSt = o => { const cc = o[wo] || (o[wo] = { opp: 0, sql: 0, offer: 0, contract: 0, closed_won: 0, lost_deal: 0 }); cc[status2]++; };
     bumpCloSt(closerCohortStatus.all); if (e) bumpCloSt(closerCohortStatus[e]); if (nivOk) bumpCloSt(closerCohortStatus[b]);
+    bumpCloSt(closerCohortStatusPessoa[closer] || (closerCohortStatusPessoa[closer] = {}));
 
     (closerOppFteSet.all[wo] = closerOppFteSet.all[wo] || new Set()).add(closer);
     if (e) (closerOppFteSet[e][wo] = closerOppFteSet[e][wo] || new Set()).add(closer);
@@ -459,6 +471,7 @@ for (const r of fop) {
     for (const k of ['a1k', 'a5k', 'ativado_10k']) if (sd3[k] && sd3[k] >= bestD3) { bestD3 = sd3[k]; status3 = k; }
     const bumpOnbSt = o => { const cc = o[wo2] || (o[wo2] = { cw: 0, a1k: 0, a5k: 0, ativado_10k: 0 }); cc[status3]++; };
     bumpOnbSt(onbCohortStatus.all); if (e) bumpOnbSt(onbCohortStatus[e]); if (nivOk) bumpOnbSt(onbCohortStatus[b]);
+    bumpOnbSt(onbCohortStatusPessoa[onb] || (onbCohortStatusPessoa[onb] = {}));
 
     (onbCwFteSet.all[wo2] = onbCwFteSet.all[wo2] || new Set()).add(onb);
     if (e) (onbCwFteSet[e][wo2] = onbCwFteSet[e][wo2] || new Set()).add(onb);
@@ -768,6 +781,28 @@ for (const w of semanas) {
   }
   ESTOQUE_KEYS.forEach(k => sdrEstoque[k].push({ semana: w, ...acc[k] }));
 }
+// mesmo estoque acima, por PESSOA (owner do lead) — alimenta o gráfico de Estoque no 1:1
+// Gestor (05/08/2026, a pedido do Gabriel). Mesma regra de entrada/saída do estoque de SDR,
+// só que a chave é o dono do lead em vez de estratégia/nível.
+const sdrOwnersReais = [...new Set(sdrLeads.map(l => l.owner).filter(Boolean))];
+const sdrEstoquePessoa = {}; sdrOwnersReais.forEach(o => sdrEstoquePessoa[o] = []); // owner -> [{semana,contacted,connected,nurturing}]
+for (const w of semanas) {
+  const startStr = weekStartUTC(w).toISOString().slice(0, 10);
+  if (startStr > hojeStr) continue;
+  let T = weekEndUTC(w).toISOString().slice(0, 10);
+  if (T > hojeStr) T = hojeStr;
+  const acc = {}; sdrOwnersReais.forEach(o => acc[o] = { contacted: 0, connected: 0, nurturing: 0 });
+  for (const l of sdrLeads) {
+    if (!l.owner) continue;
+    if (l.contacted > T) continue;
+    if ((l.opp && l.opp <= T) || (l.qualified && l.qualified <= T) || (l.unqualified && l.unqualified <= T)) continue;
+    let best = l.contacted, stage = 'contacted';
+    if (l.connected && l.connected <= T && l.connected >= best) { best = l.connected; stage = 'connected'; }
+    if (l.nurturing && l.nurturing <= T && l.nurturing >= best) { best = l.nurturing; stage = 'nurturing'; }
+    acc[l.owner][stage]++;
+  }
+  sdrOwnersReais.forEach(o => sdrEstoquePessoa[o].push({ semana: w, ...acc[o] }));
+}
 // SDRs distintos que geraram opp por semana (por estratégia) — denominador do "Opps / FTE"
 const sdrOppFte = { all: {}, Outbound: {}, Inbound: {}, Hunting: {} };
 for (const k of ESTOQUE_KEYS) for (const w in sdrOppFteSet[k]) sdrOppFte[k][w] = sdrOppFteSet[k][w].size;
@@ -793,7 +828,7 @@ for (const k of CO_KEYS) for (const w in onbActFteSet[k]) onbActFte[k][w] = onbA
 // viraram opp) estão parados em cada etapa — Opp / SQL / Offer / Contract — no fim de cada
 // semana. Sai do estoque ao fechar (Closed Won) ou perder (Lost Deal).
 const closerLeads = fop.filter(r => isRealCloser(cleanEmail(r.closer_email_sf)) && oppValidOk(r)).map(r => ({
-  estr: estr(r.sales_strategy), nivel: bucketFromAmount(r.amount_12_months),
+  estr: estr(r.sales_strategy), nivel: bucketFromAmount(r.amount_12_months), closer: cleanEmail(r.closer_email_sf),
   opp: cleanDate(r.opportunity_create_date), issues: cleanDate(r.issues_identified_date), sql: cleanDate(r.sql_date),
   offer: cleanDate(r.offer_presented_date), contract: cleanDate(r.contract_sent_date),
   cw: cleanDate(r.closed_won_date), lost: cleanDate(r.lost_deal_date),
@@ -818,6 +853,29 @@ for (const w of semanas) {
     if (l.nivel && NIVEIS.includes(l.nivel)) acc[l.nivel][stage]++;
   }
   CO_KEYS.forEach(k => closerEstoque[k].push({ semana: w, ...acc[k] }));
+}
+// mesmo estoque acima, por PESSOA (closer) — alimenta o gráfico de Estoque no 1:1 Gestor
+// (05/08/2026, a pedido do Gabriel). Mesma regra de entrada/saída, chave = closer_email_sf.
+const closersReais = [...new Set(closerLeads.map(l => l.closer).filter(Boolean))];
+const closerEstoquePessoa = {}; closersReais.forEach(o => closerEstoquePessoa[o] = []); // closer -> [{semana,opp,issues,sql,offer,contract}]
+for (const w of semanas) {
+  const startStr = weekStartUTC(w).toISOString().slice(0, 10);
+  if (startStr > hojeStr) continue;
+  let T = weekEndUTC(w).toISOString().slice(0, 10);
+  if (T > hojeStr) T = hojeStr;
+  const acc = {}; closersReais.forEach(o => acc[o] = { opp: 0, issues: 0, sql: 0, offer: 0, contract: 0 });
+  for (const l of closerLeads) {
+    if (!l.closer) continue;
+    if (l.opp > T) continue;
+    if ((l.cw && l.cw <= T) || (l.lost && l.lost <= T)) continue;
+    let best = l.opp, stage = 'opp';
+    if (l.issues && l.issues <= T && l.issues >= best) { best = l.issues; stage = 'issues'; }
+    if (l.sql && l.sql <= T && l.sql >= best) { best = l.sql; stage = 'sql'; }
+    if (l.offer && l.offer <= T && l.offer >= best) { best = l.offer; stage = 'offer'; }
+    if (l.contract && l.contract <= T && l.contract >= best) { best = l.contract; stage = 'contract'; }
+    acc[l.closer][stage]++;
+  }
+  closersReais.forEach(o => closerEstoquePessoa[o].push({ semana: w, ...acc[o] }));
 }
 
 // soma N dias a uma data 'AAAA-MM-DD', devolve string no mesmo formato.
@@ -878,6 +936,30 @@ for (const w of semanas) {
     if (l.nivel && NIVEIS.includes(l.nivel)) acc[l.nivel][stage]++;
   }
   CO_KEYS.forEach(k => onbEstoque[k].push({ semana: w, ...acc[k] }));
+}
+// mesmo estoque acima, por PESSOA (onboarder) — alimenta o gráfico de Estoque no 1:1 Gestor
+// (05/08/2026, a pedido do Gabriel). Mesma regra de entrada/saída, chave = onboarding_email_sf.
+// Nome diferente de onbEstoquePorPessoa (que é o TOTAL atual, sem série por semana — ver seção
+// de validação mais abaixo) pra não colidir.
+const onboardersReais = [...new Set(onbLeads.map(l => l.onb).filter(Boolean))];
+const onbEstoqueSemanalPorPessoa = {}; onboardersReais.forEach(o => onbEstoqueSemanalPorPessoa[o] = []); // onb -> [{semana,nuncaVendeu,vendendo,ativo}]
+for (const w of semanas) {
+  const startStr = weekStartUTC(w).toISOString().slice(0, 10);
+  if (startStr > hojeStr) continue;
+  let T = weekEndUTC(w).toISOString().slice(0, 10);
+  if (T > hojeStr) T = hojeStr;
+  const acc = {}; onboardersReais.forEach(o => acc[o] = { nuncaVendeu: 0, vendendo: 0, ativo: 0 });
+  for (const l of onbLeads) {
+    if (!l.onb) continue;
+    if (l.cw > T) continue;
+    if (l.close && l.close <= T) continue;
+    let stage;
+    if (l.a10k && l.a10k <= T) stage = 'ativo';
+    else if ((l.a1k && l.a1k <= T) || (l.a5k && l.a5k <= T)) stage = 'vendendo';
+    else stage = 'nuncaVendeu';
+    acc[l.onb][stage]++;
+  }
+  onboardersReais.forEach(o => onbEstoqueSemanalPorPessoa[o].push({ semana: w, ...acc[o] }));
 }
 
 // dias úteis (seg-sex) já DECORRIDOS em cada semana até hoje — pra "produtividade por dia
@@ -1136,6 +1218,10 @@ const DATA = {
   onbCohort, onbAct: onbActAcc, onbCohortStatus, onbCwFte, onbActFte,
   mesFechado, semanaFechada,
   onbEstoquePorPessoa, // ⚠️ temporário — homologação do Estoque de ativação (03/08/2026), tirar depois
+  // Estoque/Status por PESSOA (05/08/2026) — alimentam os gráficos por pessoa no 1:1 Gestor,
+  // mesmo padrão dos equivalentes por estratégia/nível acima, só que chaveados por e-mail.
+  sdrEstoquePessoa, closerEstoquePessoa, onbEstoqueSemanalPorPessoa,
+  sdrCohortStatusPessoa, closerCohortStatusPessoa, onbCohortStatusPessoa,
 };
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(outDir + 'app_data.js', 'window.DATA = ' + JSON.stringify(DATA) + ';');
