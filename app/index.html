@@ -1153,14 +1153,14 @@ function renderAreaClosers(){
   const TI={pd:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',c:KIC.users,conn:KIC.link,opp:KIC.target,niv:KIC.estoque};
   const cols=[
     {key:'contA',label:'Opp in · sem.',align:'c',icon:TI.c,render:r=>`<span class="mono">${fN(oppsAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>oppsAt(r,week))),sort:r=>oppsAt(r,week)},
-    {key:'connA',label:'C1 · sem.',align:'c',icon:TI.conn,group:'Atual',render:r=>`<span class="mono">${cohAt(r,week)!=null?cohAt(r,week)+'%':'—'}</span>`,agg:rows=>c2Agg(rows,week),sort:r=>cohAt(r,week)},
+    {key:'connA',label:'C4 · sem.',align:'c',icon:TI.conn,group:'Atual',render:r=>`<span class="mono">${cohAt(r,week)!=null?cohAt(r,week)+'%':'—'}</span>`,agg:rows=>c2Agg(rows,week),sort:r=>cohAt(r,week)},
     {key:'cwA',label:'CW · sem.',align:'c',icon:TI.opp,group:'Atual',render:r=>`<span class="mono">${fN(cwAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>cwAt(r,week))),sort:r=>cwAt(r,week)},
     {key:'n1',label:'% N2-N3',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,0)}%</span>`,agg:rows=>nivAgg(rows,0),sort:r=>nivelPct(r,0)},
     {key:'n2',label:'% N4-N5',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,1)}%</span>`,agg:rows=>nivAgg(rows,1),sort:r=>nivelPct(r,1)},
     {key:'n3',label:'% N6+',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,2)}%</span>`,agg:rows=>nivAgg(rows,2),sort:r=>nivelPct(r,2)},
     {key:'pdOpp',label:'Opps/BD · 5s',align:'c',icon:TI.pd,group:'Hist. 5 semanas',render:r=>bdCellClo(pdOppFn(r),pdOppFnPrev(r),2),agg:rows=>bdAgg(rows,pdOppFn,pdOppFnPrev,2),sort:pdOppFn},
     {key:'pdCw',label:'CW/BD · 5s',align:'c',icon:TI.pd,group:'Hist. 5 semanas',render:r=>bdCellClo(pdCwFn(r),pdCwFnPrev(r),2),agg:rows=>bdAgg(rows,pdCwFn,pdCwFnPrev,2),sort:pdCwFn},
-    {key:'c15s',label:'C1 · 5s',align:'c',icon:TI.conn,group:'Hist. 5 semanas',render:r=>`<span class="mono">${cohRate5(r)!=null?cohRate5(r)+'%':'—'}</span>`,agg:c2Agg5,sort:cohRate5},
+    {key:'c15s',label:'C4 · 5s',align:'c',icon:TI.conn,group:'Hist. 5 semanas',render:r=>`<span class="mono">${cohRate5(r)!=null?cohRate5(r)+'%':'—'}</span>`,agg:c2Agg5,sort:cohRate5},
     {key:'oppCw5',label:'Opp→CW · 5s',align:'c',icon:TI.opp,group:'Hist. 5 semanas',render:r=>`<span class="mono">${oppCwRate5(r)!=null?oppCwRate5(r)+'%':'—'}</span>`,agg:rows=>{const o=sumBy(rows,opp5Sum),c=sumBy(rows,oppCw5Sum);return o?Math.round(c/o*100)+'%':'—';},sort:oppCwRate5},
     {key:'diasOppSql',label:'Ciclo Opp→SQL',align:'c',render:r=>`<span class="mono">${r.diasOppSql!=null?r.diasOppSql+'d':'—'}</span>`},
     {key:'diasSqlWon',label:'Ciclo SQL→CW',align:'c',render:r=>`<span class="mono">${r.diasSqlWon!=null?r.diasSqlWon+'d':'—'}</span>`},
@@ -1292,23 +1292,46 @@ function renderAreaOnboarding(){
   const bdCellOnb=(v,p,dec)=>`<span class="mono">${v!=null?v.toFixed(dec):'—'}</span>${(v!=null&&p!=null)?wowDelta(v,p):''}`;
   const bdAgg=(rows,f,fPrev,dec)=>{const v=mediaAgg(rows,f,dec),n=parseFloat(v),pv=rows.map(fPrev).filter(x=>x!=null),p=pv.length?pv.reduce((s,x)=>s+x,0)/pv.length:null;return (p!=null&&!isNaN(n))?`${v}${wowDelta(n,p)}`:v;};
   const TI={pd:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',c:KIC.users,conn:KIC.link,opp:KIC.target,niv:KIC.estoque};
+  // carteira atual (05/08/2026 → 07/08/2026, a pedido do Gabriel): tamanho do book de cada
+  // onboarder HOJE (nuncaVendeu+vendendo+ativos), reaproveitando D.onbEstoquePorPessoa (já
+  // existia pra tela de validação) — é sempre "hoje", não muda com a semana selecionada na
+  // tabela (carteira é responsabilidade atual, não histórico da semana).
+  const carteiraPorPessoa={}; const ativosPorPessoa={};
+  (D.onbEstoquePorPessoa||[]).forEach(p=>{carteiraPorPessoa[p.email]=p.total; ativosPorPessoa[p.email]=p.ativos;});
+  // % Ativos (10/08/2026, a pedido do Gabriel — era "C1 · sem.", coorte CW→1k na mesma semana):
+  // % da carteira ATUAL (hoje, mesma população/fonte da coluna "Carteira atual") que já está na
+  // faixa "ativos" (activation_date_10k preenchida) — não é mais coorte semanal.
+  const pctAtivos=email=>{const tot=carteiraPorPessoa[email]||0; return tot?Math.round((ativosPorPessoa[email]||0)/tot*100):null;};
+  const pctAtivosAgg=rows=>{const tot=sumBy(rows,r=>carteiraPorPessoa[r.email]||0),at=sumBy(rows,r=>ativosPorPessoa[r.email]||0);return tot?Math.round(at/tot*100)+'%':'—';};
+  // % Ativos · 5s (10/08/2026, a pedido do Gabriel — era "C1 · 5s", coorte CW→1k das últimas 5
+  // semanas): média ponderada do %Ativos ao longo das últimas 5 semanas, pra bater com o que o
+  // nome diz (não é mais coorte). Usa o snapshot semanal por pessoa (D.onbEstoqueSemanalPorPessoa,
+  // já existia pro gráfico de Estoque do 1:1 Gestor) — soma ativo/total das 5 semanas, não média
+  // simples dos %, pra pessoas com carteira pequena não pesarem igual a quem tem carteira grande.
+  const estoqueSemanaPorEmail=email=>{const arr=(D.onbEstoqueSemanalPorPessoa&&D.onbEstoqueSemanalPorPessoa[email])||[]; const by={}; arr.forEach(x=>by[x.semana]=x); return by;};
+  const pctAtivos5Sum=email=>{const by=estoqueSemanaPorEmail(email); let ativo=0,tot=0; weeks5.forEach(w=>{const x=by[w]; if(x){ativo+=x.ativo; tot+=x.nuncaVendeu+x.vendendo+x.ativo;}}); return{ativo,tot};};
+  const pctAtivos5=email=>{const{ativo,tot}=pctAtivos5Sum(email); return tot?Math.round(ativo/tot*100):null;};
+  const pctAtivos5Agg=rows=>{let ativo=0,tot=0; rows.forEach(r=>{const s=pctAtivos5Sum(r.email); ativo+=s.ativo; tot+=s.tot;}); return tot?Math.round(ativo/tot*100)+'%':'—';};
   const cols=[
+    {key:'carteira',label:'Carteira atual',align:'c',icon:TI.niv,render:r=>`<span class="mono">${fN(carteiraPorPessoa[r.email]||0)}</span>`,agg:rows=>fN(sumBy(rows,r=>carteiraPorPessoa[r.email]||0)),sort:r=>carteiraPorPessoa[r.email]||0},
     {key:'contA',label:'CW in · sem.',align:'c',icon:TI.c,render:r=>`<span class="mono">${fN(cwAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>cwAt(r,week))),sort:r=>cwAt(r,week)},
-    {key:'connA',label:'C1 · sem.',align:'c',icon:TI.conn,group:'Atual',render:r=>`<span class="mono">${cohAt(r,week)!=null?cohAt(r,week)+'%':'—'}</span>`,agg:rows=>c2Agg(rows,week),sort:r=>cohAt(r,week)},
+    {key:'pctAtivos',label:'% Ativos',align:'c',icon:TI.conn,render:r=>`<span class="mono">${pctAtivos(r.email)!=null?pctAtivos(r.email)+'%':'—'}</span>`,agg:pctAtivosAgg,sort:r=>pctAtivos(r.email)},
     {key:'actA',label:'Ativ. · sem.',align:'c',icon:TI.opp,group:'Atual',render:r=>`<span class="mono">${fN(actAt(r,week))}</span>`,agg:rows=>fN(sumBy(rows,r=>actAt(r,week))),sort:r=>actAt(r,week)},
     {key:'n1',label:'% N2-N3',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,0)}%</span>`,agg:rows=>nivAgg(rows,0),sort:r=>nivelPct(r,0)},
     {key:'n2',label:'% N4-N5',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,1)}%</span>`,agg:rows=>nivAgg(rows,1),sort:r=>nivelPct(r,1)},
     {key:'n3',label:'% N6+',align:'c',icon:TI.niv,render:r=>`<span class="mono">${nivelPct(r,2)}%</span>`,agg:rows=>nivAgg(rows,2),sort:r=>nivelPct(r,2)},
     {key:'pdCw',label:'CW/BD · 5s',align:'c',icon:TI.pd,group:'Hist. 5 semanas',render:r=>bdCellOnb(pdCwFn(r),pdCwFnPrev(r),2),agg:rows=>bdAgg(rows,pdCwFn,pdCwFnPrev,2),sort:pdCwFn},
     {key:'pdAct',label:'Ativ./BD · 5s',align:'c',icon:TI.pd,group:'Hist. 5 semanas',render:r=>bdCellOnb(pdActFn(r),pdActFnPrev(r),2),agg:rows=>bdAgg(rows,pdActFn,pdActFnPrev,2),sort:pdActFn},
-    {key:'c15s',label:'C1 · 5s',align:'c',icon:TI.conn,group:'Hist. 5 semanas',render:r=>`<span class="mono">${cohRate5(r)!=null?cohRate5(r)+'%':'—'}</span>`,agg:c2Agg5,sort:cohRate5},
+    {key:'c15s',label:'% Ativos · 5s',align:'c',icon:TI.conn,group:'Hist. 5 semanas',render:r=>`<span class="mono">${pctAtivos5(r.email)!=null?pctAtivos5(r.email)+'%':'—'}</span>`,agg:pctAtivos5Agg,sort:r=>pctAtivos5(r.email)},
     {key:'cwAct10k5',label:'CW→10K · 5s',align:'c',icon:TI.opp,group:'Hist. 5 semanas',render:r=>`<span class="mono">${cwAct10kRate5(r)!=null?cwAct10kRate5(r)+'%':'—'}</span>`,agg:rows=>{const c=sumBy(rows,cw5Sum),a=sumBy(rows,cwAct10k5Sum);return c?Math.round(a/c*100)+'%':'—';},sort:cwAct10kRate5},
     {key:'diasWonAtivacao',label:'Ciclo CW→Ativação',align:'c',render:r=>`<span class="mono">${r.diasWonAtivacao!=null?r.diasWonAtivacao+'d':'—'}</span>`},
   ];
   // só onboarders com pelo menos 1 CW ou Ativação na janela de 5 semanas
   let listTbl=list.filter(r=>weeks5.some(w=>cwAt(r,w)>0||actAt(r,w)>0));
   if(estrF!=='all') listTbl=listTbl.filter(r=>r.estrategia===estrF);
-  const table=groupedTable({rows:listTbl,groupBy:r=>r.estrategia||'Sem estratégia',groupOrder:[...STR_ORDER,'Sem estratégia'],cols,kind:'onb',totals:true,sort:state.onbSort,hd:cardHd(KIC.users,'Onboarding · por pessoa','CW recebido, coorte C1, mix por nível e produtividade/BD')});
+  // sem quebra por Outbound/Inbound (07/08/2026, a pedido do Gabriel) — lista única, ordenável,
+  // diferente de SDR/Closer que continuam agrupados por estratégia.
+  const table=groupedTable({rows:listTbl,cols,kind:'onb',totals:true,sort:state.onbSort,hd:cardHd(KIC.users,'Onboarding · por pessoa','CW recebido, coorte C1, mix por nível e produtividade/BD')});
   $('viewArea').innerHTML=`
     <div class="sec"><div class="sec-head"><h2>Resultado semanal</h2><span class="hint">${semanaLabel(week)}${filtF!=='all'?' · '+filtF:''}</span></div>
       <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d,cls,icon])=>`<div class="kpi ${cls||''}">${icon?`<span class="kpi-ic">${icon}</span>`:''}<span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div></div>

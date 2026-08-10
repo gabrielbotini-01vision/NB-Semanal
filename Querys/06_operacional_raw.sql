@@ -16,23 +16,41 @@
 -- Fonte: data_business.dhmv_sales_touched (1 linha = 1 lead).
 --   Owner: join com dhaf_salesforce."user" (id -> username), só pra resolver o
 --   e-mail do owner — não faz parte da tabela fonte.
---   Accomplished/Unaccomplished (Onboarding): join com
---   dhm_data_business.f_operational_sales_touched (schema DIFERENTE — "dhm_data_business",
---   não "data_business") por lead_id, só pra trazer onboarding_accomplished_date/
---   onboarding_unaccomplished_date/onboarding_status — campos que NÃO existem em
---   dhmv_sales_touched. Confirmado 28/07/2026 que lead_id é único nessa tabela pra linhas
---   com lead_id preenchido (a única "duplicidade" era de linhas com lead_id NULL, que não
---   afetam o JOIN) — LEFT JOIN por lead_id não multiplica linha nenhuma do export.
---   ⚠️ 03/08/2026: achado (caso real reportado pelo Gabriel, opp_id 006SG00000VO9rZYAT) que
---   opps SEM lead_id (nos dois lados, t e f_operational_sales_touched — ~4.459 linhas nessa
---   última) nunca casavam pelo JOIN antigo, mesmo a linha existindo em f com o status/data
---   certos (NULL nunca é igual a NULL em SQL). Fix: fallback pra opp_id quando lead_id de t
---   for nulo. f_operational_sales_touched tem uns poucos opp_id duplicados (6, de 40 mil) —
---   dedup via ROW_NUMBER (Redshift não tem DISTINCT ON), preferindo a linha com alguma data de
---   accomplished/unaccomplished preenchida. Testado direto no Redshift antes de aplicar aqui:
---   recupera status pra +191 linhas do recorte atual, sem multiplicar nenhuma linha de t (as
---   poucas duplicatas de opp_id que aparecem já existiam em t antes de qualquer JOIN — não são
---   causadas por esta mudança).
+--
+--   Accomplished/Unaccomplished (Onboarding) — REESCRITO 10/08/2026, a pedido do Gabriel:
+--   até 03/08/2026 isto vinha de dhm_data_business.f_operational_sales_touched (join por
+--   lead_id, com fallback por opp_id). Investigação de homologação (10/08/2026, ver
+--   Pendencias/README.md item 19) provou, com um caso real (opp_id 006SG00000RbRMfYAN,
+--   onboarder Liana Wieloch), que essa tabela fica DESSINCRONIZADA da fonte viva do
+--   Salesforce: o registro estava "Unaccomplished" (com unaccomplished_date real,
+--   30/12/2025) na fonte, mas f_operational_sales_touched continuava mostrando
+--   "Ready for Activation" indefinidamente. Isso inflava o Estoque de ativação (confirmado
+--   contra planilha de referência do time de Onboarding: 659 no dashboard vs 551 reais).
+--
+--   Fix: join direto com dhaf_salesforce.onboarding (objeto bruto do Salesforce, a mesma
+--   fonte que a query oficial "Operational Sales Touched" do time de dados usa) +
+--   dhaf_salesforce.onboarding_history (pra extrair a data real de quando o registro virou
+--   Accomplished/Unaccomplished, via MIN(createddate) na mudança de status). Mesma lógica de
+--   JOIN/dedup da query oficial: liga por opp_id = opportunity__c (não lead_id — o onboarding
+--   é vinculado à OPORTUNIDADE, não ao lead), só quando a oportunidade é válida e tem CW, e só
+--   considera um registro de onboarding CRIADO NA OU DEPOIS da data do CW daquela oportunidade
+--   (onboarding_created_date >= closed_won_date) — isso evita que um onboarding antigo de uma
+--   compra anterior do mesmo cliente "vaze" pra uma oportunidade nova. Dedup por
+--   ROW_NUMBER() PARTITION BY opportunity__c ORDER BY onboarding_created_date DESC, rn=1 (uma
+--   oportunidade pode ter mais de um registro de onboarding ao longo do tempo — fica só o mais
+--   recente). Testado direto no Redshift antes de aplicar: JOIN por igualdade simples
+--   (opp_id = opportunity__c) é MUITO mais rápido que o antigo (que usava OR entre lead_id/
+--   opp_id e travava o otimizador do Redshift em nested loop — 60-3600s+ observado) — o
+--   dataset inteiro (21 mil oportunidades com CW) roda em ~4-5s com o JOIN novo. Confirmado
+--   que não duplica nenhuma linha do export (COUNT(*) bate com COUNT(DISTINCT opp_id), a menos
+--   de 4 duplicatas que já existiam em dhmv_sales_touched antes deste JOIN, sem relação com ele).
+--
+--   Colunas de saída mantidas com o MESMO NOME de antes (onboarding_status,
+--   onboarding_accomplished_date, onboarding_unaccomplished_date) — o build_data.js não
+--   precisou mudar nada além de passar a receber dado mais correto. Escopo do impacto: só
+--   afeta estruturas de Onboarding (Estoque de ativação, Carteira atual, KPI "Saídas do
+--   funil", telas de validação) — SDR, Closer, Mensal Sales, Semanal Sales e receita/GMV não
+--   leem esses 3 campos, não são afetados por esta troca.
 --
 -- Filtro: só Brasil -> is_lead_br_funnel = true OU is_opp_br_funnel = true (30/07/2026: WHERE
 --   antes só usava is_lead_br_funnel, e isso descartava opps criadas SEM lead ou com lead de
@@ -59,38 +77,56 @@
 --   closed_won_date, activation_date_10k, amount_12_months, sales_strategy,
 --   sdr_email_sf, closer_email_sf, onboarding_email_sf, owner_email (derivado do join),
 --   is_lead_br_funnel, is_opp_br_funnel (30/07/2026 — filtro por campo, ver acima),
---   onboarding_status (derivada do join — accomplished_date/unaccomplished_date também
---   vêm juntas mas hoje não são usadas: no recorte Brasil/2024+ a data de unaccomplished
---   sempre vem nula mesmo com status definido, então o build_data.js usa o status como
---   snapshot em vez de tentar bucketizar por semana com a data)
+--   onboarding_status, onboarding_accomplished_date, onboarding_unaccomplished_date
+--   (derivadas do join com dhaf_salesforce.onboarding/onboarding_history — ver comentário
+--   acima, reescrito 10/08/2026; as duas datas agora vêm preenchidas quando o registro já
+--   fechou, diferente da fonte antiga)
 -- =============================================================================
 
-WITH f AS (
-    -- dedup de f_operational_sales_touched por COALESCE(lead_id, opp_id) — pega a linha com
-    -- alguma data de accomplished/unaccomplished preenchida, quando existir mais de uma.
-    SELECT lead_id, opp_id, onboarding_accomplished_date, onboarding_unaccomplished_date, onboarding_status
-    FROM (
-        SELECT lead_id, opp_id, onboarding_accomplished_date, onboarding_unaccomplished_date, onboarding_status,
-               ROW_NUMBER() OVER (
-                 PARTITION BY COALESCE(NULLIF(TRIM(lead_id), ''), TRIM(opp_id))
-                 ORDER BY (CASE WHEN onboarding_accomplished_date IS NOT NULL OR onboarding_unaccomplished_date IS NOT NULL THEN 0 ELSE 1 END)
-               ) AS rn
-        FROM dhm_data_business.f_operational_sales_touched
-    ) x
-    WHERE rn = 1
+WITH obd_dedup AS (
+    SELECT
+        o.opportunity__c,
+        o.owner_email__c,
+        o.onboarding_status__c AS onboarding_stage,
+        o.createddate AS onboarding_created_date,
+        LEFT(MIN(CASE WHEN oh.newvalue = 'Accomplished' THEN oh.createddate END), 10) AS onboarding_accomplished_date,
+        LEFT(MIN(CASE WHEN oh.newvalue = 'Unaccomplished' THEN oh.createddate END), 10) AS onboarding_unaccomplished_date,
+        ROW_NUMBER() OVER (
+            PARTITION BY o.opportunity__c
+            ORDER BY o.createddate DESC
+        ) AS rn
+    FROM dhaf_salesforce.onboarding o
+    LEFT JOIN dhaf_salesforce.onboarding_history oh
+        ON o.id = oh.parentid
+    GROUP BY
+        o.id,
+        o.opportunity__c,
+        o.owner_email__c,
+        o.onboarding_status__c,
+        o.createddate
 )
 SELECT
     t.*,
     u.username AS owner_email,
     f.onboarding_accomplished_date,
     f.onboarding_unaccomplished_date,
-    f.onboarding_status
+    f.onboarding_stage AS onboarding_status,
+    -- dono ATUAL do registro de onboarding (10/08/2026) — pode ser diferente de
+    -- t.onboarding_email_sf quando o caso foi reatribuído no Salesforce depois da criação da
+    -- oportunidade. Coluna À PARTE (não sobrescreve onboarding_email_sf): usada só pra decidir
+    -- de quem é a responsabilidade na Carteira/Estoque ATUAL (onbLeadsMap); histórico
+    -- semanal/rankings continuam com t.onboarding_email_sf (quem fez o trabalho na época), a
+    -- pedido do Gabriel — ver Pendencias/README.md.
+    f.owner_email__c AS onboarding_owner_email_atual
 FROM data_business.dhmv_sales_touched t
 LEFT JOIN dhaf_salesforce."user" u
     ON u.id = t.lead_owner_id
-LEFT JOIN f
-    ON (t.lead_id IS NOT NULL AND f.lead_id = t.lead_id)
-    OR (t.lead_id IS NULL AND f.opp_id = t.opp_id)
+LEFT JOIN obd_dedup f
+    ON t.opp_id = f.opportunity__c
+    AND t.is_opp_valid::boolean = true
+    AND t.closed_won_date IS NOT NULL
+    AND LEFT(f.onboarding_created_date, 10) >= t.closed_won_date
+    AND f.rn = 1
 WHERE (t.is_lead_br_funnel::boolean = true OR t.is_opp_br_funnel::boolean = true)
   AND (
         NULLIF(NULLIF(TRIM(t.contacted_date),          ''), 'null')::date >= DATE '2024-01-01'

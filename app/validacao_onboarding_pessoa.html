@@ -20,10 +20,12 @@
   .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;margin-left:6px}
   .inativo{background:#FEF3F2;color:#B42318}
   .fallback{background:#FFFAEB;color:#B54708}
+  .tblwrap{overflow-x:auto}
   .lookup{background:#fff;border-radius:10px;padding:18px;box-shadow:0 1px 2px rgba(16,24,40,.06)}
   .lookup label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:#667085;margin-bottom:6px}
   .lookup input,.lookup select{width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #D0D5DD;border-radius:8px;font-size:13px;font-family:inherit;background:#fff}
-  .lookup select{margin-top:8px}
+  .lookup select,.lookup .row2{margin-top:8px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .detail{margin-top:16px;display:none}
   .detail.on{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
   .df{background:#F9FAFB;border-radius:8px;padding:10px 12px}
@@ -40,20 +42,34 @@
 <body>
 <h1>[TEMP] Estoque de ativação — validação</h1>
 <div class="sub" id="sub"></div>
-<div class="warn">⚠️ Tela temporária só para homologação dos números (nunca vendeu / vendendo / ativos). Não faz parte do dashboard — remover depois de validado.</div>
+<div class="warn">⚠️ Tela temporária só para homologação dos números (nunca vendeu / vendendo / ativos, e agora também o status real do funil). Não faz parte do dashboard — remover depois de validado.</div>
 
 <h2>Consulta por opp_id</h2>
 <div class="lookup">
-  <label for="filtro">Buscar (opp_id, onboarder ou e-mail)</label>
-  <input type="text" id="filtro" placeholder="digite pra filtrar a lista abaixo...">
+  <div class="row2">
+    <div>
+      <label for="statusSel">Status atual do funil de Onboarding</label>
+      <select id="statusSel"></select>
+    </div>
+    <div>
+      <label for="filtro">Buscar (opp_id, onboarder ou e-mail)</label>
+      <input type="text" id="filtro" placeholder="digite pra filtrar a lista abaixo...">
+    </div>
+  </div>
   <label style="display:flex;align-items:center;gap:6px;margin-top:10px;text-transform:none;font-weight:500">
     <input type="checkbox" id="soFallback" style="width:auto"> Mostrar só registros com Accomplished/Unaccomplished estimado (CW+90d)
   </label>
+  <label for="oppSel" style="margin-top:10px">onb_id (opp_id)</label>
   <select id="oppSel" size="1"></select>
   <div class="detail" id="detail"></div>
 </div>
 
-<h2>Estoque atual por onboarder (agregado)</h2>
+<h2>Estoque atual por onboarder × status real do funil</h2>
+<div class="tblwrap">
+<table id="tblStatus"></table>
+</div>
+
+<h2>Estoque atual por onboarder (nunca vendeu / vendendo / ativos)</h2>
 <table>
   <thead><tr>
     <th>Onboarder</th>
@@ -71,10 +87,11 @@
 <script>
 const D = window.DATA;
 const VAL = window.VALIDACAO_ONB || [];
+const STATUS_ORDEM = [...(D.onbStatusOrdem || []), 'Outros/vazio'];
 const fN = n => (n||0).toLocaleString('pt-BR');
 const fD = d => d || '—';
 
-// ---- tabela agregada por pessoa (já existia) ----
+// ---- tabela agregada por pessoa (nunca vendeu/vendendo/ativos, já existia) ----
 const rows = D.onbEstoquePorPessoa || [];
 const qtdFallback = VAL.filter(r=>r.unaccompFallback||r.accompFallback).length;
 const qtdAccompFb = VAL.filter(r=>r.accompFallback).length, qtdUnaccompFb = VAL.filter(r=>r.unaccompFallback).length;
@@ -93,22 +110,42 @@ document.getElementById('ftVend').textContent = fN(sum.vendendo);
 document.getElementById('ftAtivo').textContent = fN(sum.ativos);
 document.getElementById('ftTotal').textContent = fN(sum.total);
 
-// ---- consulta individual por opp_id ----
+// ---- tabela agregada por pessoa × status real do funil (nova, 10/08/2026) ----
+const rowsSt = D.onbEstoquePorPessoaStatus || [];
+const tblStatus = document.getElementById('tblStatus');
+const totColStatus = {}; STATUS_ORDEM.forEach(s => totColStatus[s] = 0);
+let totGeralStatus = 0;
+rowsSt.forEach(p => { STATUS_ORDEM.forEach(s => totColStatus[s] += (p[s]||0)); totGeralStatus += p.total; });
+tblStatus.innerHTML = `
+  <thead><tr><th>Onboarder</th>${STATUS_ORDEM.map(s=>`<th>${s}</th>`).join('')}<th class="tot">Total</th></tr></thead>
+  <tbody>${rowsSt.map(p => `
+    <tr>
+      <td>${p.nome || p.email}${p.ativo===false?'<span class="pill inativo">inativo no roster</span>':''}</td>
+      ${STATUS_ORDEM.map(s=>`<td class="num">${p[s]?fN(p[s]):'—'}</td>`).join('')}
+      <td class="num tot">${fN(p.total)}</td>
+    </tr>`).join('')}</tbody>
+  <tfoot><tr class="foot"><td>Total</td>${STATUS_ORDEM.map(s=>`<td class="num">${fN(totColStatus[s])}</td>`).join('')}<td class="num">${fN(totGeralStatus)}</td></tr></tfoot>`;
+
+// ---- consulta individual por opp_id (com filtro por status + busca, cascata) ----
+const statusSel = document.getElementById('statusSel');
 const sel = document.getElementById('oppSel');
 const filtro = document.getElementById('filtro');
 const detail = document.getElementById('detail');
+statusSel.innerHTML = '<option value="">— todos os status —</option>' + STATUS_ORDEM.map(s=>`<option>${s}</option>`).join('');
 function optLabel(r){
   const fb = r.accompFallback?' (Acc. estimado)':r.unaccompFallback?' (Unacc. estimado)':'';
-  return `${(r.accompFallback||r.unaccompFallback)?'⚠ ':''}${r.oppId} — ${r.onbNome || r.onbEmail} — CW ${fD(r.cw)} — ${r.situacao}${fb}`;
+  return `${(r.accompFallback||r.unaccompFallback)?'⚠ ':''}${r.oppId} — ${r.onbNome || r.onbEmail} — CW ${fD(r.cw)} — ${r.status}${fb}`;
 }
 function renderOptions(term){
   const t = (term||'').toLowerCase().trim();
   let list = t ? VAL.filter(r => r.oppId.toLowerCase().includes(t) || (r.onbNome||'').toLowerCase().includes(t) || (r.onbEmail||'').toLowerCase().includes(t)) : VAL;
+  if (statusSel.value) list = list.filter(r => r.status === statusSel.value);
   if (document.getElementById('soFallback').checked) list = list.filter(r => r.unaccompFallback || r.accompFallback);
   sel.innerHTML = `<option value="">— selecione (${list.length} registros) —</option>` + list.slice(0,500).map(r => `<option value="${r.oppId}">${optLabel(r)}</option>`).join('');
   if (list.length > 500) sel.innerHTML += `<option disabled>… ${list.length-500} a mais, refine a busca</option>`;
 }
 renderOptions('');
+statusSel.addEventListener('change', () => renderOptions(filtro.value));
 filtro.addEventListener('input', () => renderOptions(filtro.value));
 document.getElementById('soFallback').addEventListener('change', () => renderOptions(filtro.value));
 sel.addEventListener('change', () => {
@@ -121,6 +158,8 @@ sel.addEventListener('change', () => {
     <div class="df"><div class="k">Estratégia</div><div class="v">${r.estr || '—'}</div></div>
     <div class="df"><div class="k">Nível</div><div class="v">${r.nivel || '—'}</div></div>
     <div class="df"><div class="k">CW (entrada)</div><div class="v">${fD(r.cw)}</div></div>
+    <div class="df"><div class="k">Status real do funil</div><div class="v">${r.status}</div></div>
+    <div class="df"><div class="k">last_onboarding_date</div><div class="v">${fD(r.lastOnboardingDate)}</div></div>
     <div class="df"><div class="k">Ativação 1k</div><div class="v">${fD(r.a1k)}</div></div>
     <div class="df"><div class="k">Ativação 5k</div><div class="v">${fD(r.a5k)}</div></div>
     <div class="df"><div class="k">Ativação 10k</div><div class="v">${fD(r.a10k)}</div></div>

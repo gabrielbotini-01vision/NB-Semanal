@@ -298,6 +298,14 @@ const isRealSdr = o => { o = (o || '').toLowerCase(); return !!o && rosterSdr.ha
 // roster oficial acima.
 const leadFlowOk = r => { const lf = (r.lead_flow || '').trim(), seg = (r.lead_flow_segmentation || '').trim();
   return lf !== 'PQL' && lf !== 'PPQL' && seg !== 'Seed 1' && seg !== 'Seed 2'; };
+// Variante só pra Carteira/Estoque de Onboarding (10/08/2026, a pedido do Gabriel): mantém
+// PQL/PPQL/Seed 1 fora (mesmo critério de SDR/Closer), mas NÃO exclui Seed 2 — validado contra
+// a planilha de referência (551 clientes reais): sem essa exclusão de Seed 2 especificamente,
+// os 2 clientes que faltavam pra bater 100% (Yasmin Araújo) aparecem, e nenhum extra indevido
+// entra (551/551 exato, 0 extra, 0 faltando). Usada SÓ no onbLeadsMap abaixo — em todo o resto
+// (SDR, Closer, coorte semanal de Onboarding) o leadFlowOk original continua igual.
+const leadFlowOkOnb = r => { const lf = (r.lead_flow || '').trim(), seg = (r.lead_flow_segmentation || '').trim();
+  return lf !== 'PQL' && lf !== 'PPQL' && seg !== 'Seed 1'; };
 // "Closer real" = mesmo padrão do isRealSdr acima, via Dados/Imagens Sales.csv (Cargo=Closer,
 // Ativo=Sim). Reconciliado com o "Tamanho Carteira de Opps" do Power BI em 29/07/2026: o
 // total (Opp+SQL+Offer+Contract) bate de perto nas semanas recentes (~292 vs ~290 na última),
@@ -307,6 +315,16 @@ const leadFlowOk = r => { const lf = (r.lead_flow || '').trim(), seg = (r.lead_f
 // versionada). Página de Closer conta só quem é "real"; sem filtro, a tabela audita todos.
 const rosterCloser = new Set(fDiretorio.filter(r => (r.Cargo || '').trim() === 'Closer' && (r.Ativo || '').trim() === 'Sim').map(r => (r.Email || '').trim().toLowerCase()));
 const isRealCloser = o => { o = (o || '').toLowerCase(); return !!o && rosterCloser.has(o); };
+// "Onboarder real" = mesmo padrão de isRealSdr/isRealCloser acima, via Imagens Sales.csv
+// (Cargo=Onboarding, Ativo=Sim). Testado em 30/07/2026 (comentário antigo acima) e descartado
+// na época porque a fonte de status estava dessincronizada e restringir ao roster piorava o
+// número contra o Power BI — retestado em 10/08/2026, DEPOIS do fix da fonte (ver
+// Querys/06_operacional_raw.sql, join com dhaf_salesforce.onboarding), e agora bate quase
+// exato com a planilha de referência do time (550 vs 551 reais, 549 match/1 extra/2
+// faltando) — usado só no onbLeadsMap abaixo (Estoque/Carteira), não na tabela por pessoa
+// (D.porPessoa.onboarding), que segue auditando todo mundo que já atuou como onboarder.
+const rosterOnboarding = new Set(fDiretorio.filter(r => (r.Cargo || '').trim() === 'Onboarding' && (r.Ativo || '').trim() === 'Sim').map(r => (r.Email || '').trim().toLowerCase()));
+const isRealOnboarder = o => { o = (o || '').toLowerCase(); return !!o && rosterOnboarding.has(o); };
 // Filtro do Power BI (visual "Tamanho Carteira de Opps"): só opps válidas e dentro do funil
 // BR — mesmos campos de dhmv_sales_touched (is_opp_valid/is_opp_br_funnel), sem precisar de
 // join novo. Efeito pequeno sozinho (~99,7% das opps já passam), mas replicado por completude.
@@ -333,6 +351,46 @@ const oppValidOk = r => (r.is_opp_valid || '').trim() === 'True' && oppBrOk(r);
 // atribuído (quase sempre true — 4755/4756 dos CW já tem onboarding_email_sf preenchido), sem
 // exigir que essa pessoa esteja num roster "ativo hoje".
 let dataMaxRaw = ''; // data mais recente com resultado na base (max das datas de estágio)
+// hojeStr/addDaysStr movidos pra antes do loop principal (10/08/2026) — precisam estar
+// disponíveis aqui dentro pra alimentar onbCloseInfo (ver abaixo), usada tanto no loop
+// principal (coorte semanal de Onboarding) quanto no onbLeadsMap (Estoque/Carteira).
+const hojeStr = new Date().toISOString().slice(0, 10);
+// soma N dias a uma data 'AAAA-MM-DD', devolve string no mesmo formato.
+function addDaysStr(dateStr, days) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+// accomplished/unaccomplished (+ fallback) de um registro de onboarding — usado tanto no loop
+// principal (coorte semanal) quanto no onbLeadsMap (estoque), pra manter os dois consistentes.
+// Fallback: o status já diz Accomplished/Unaccomplished na fonte, mas a data em si veio vazia
+// -> usa CW+90d (a pedido do Gabriel, 03/08/2026 — resolve leads com status certo e data vazia).
+// ⚠️ 10/08/2026: testamos também um 2º fallback — tratar como Unaccomplished por timeout
+// (CW+90d) mesmo SEM nenhum status de fechamento, replicando a automação real do Salesforce
+// ("Out of Onboarding time (>90 days)", confirmada na fonte viva pro caso 006SG00000RbRMfYAN).
+// Validado contra a planilha de referência (551 clientes reais) e DESCARTADO: não é um corte
+// cego de 90 dias pra todo mundo — aplicado em geral, tirou 120 clientes que a base real ainda
+// mostra como ativos (de 551, ficou 431 match/120 faltando — pior que sem essa regra, que já
+// tinha só 7 faltando). A automação real do Salesforce deve depender de alguma condição a mais
+// que não identificamos (segmento, nível, etc.) — não replicar sem entender essa condição.
+// ⚠️ 10/08/2026: as datas de accomplished/unaccomplished agora vêm da fonte viva
+// (dhaf_salesforce.onboarding_history, MIN(createddate) de quando o registro passou por aquele
+// estágio pela 1ª vez — ver Querys/06_operacional_raw.sql). Isso expôs casos REABERTOS: o
+// registro já passou por "Unaccomplished"/"Accomplished" em algum momento (data existe), mas o
+// status ATUAL voltou a ser algo ativo (ex. "Activation & Monitoring") — cliente que "voltou".
+// Validado contra a planilha de referência (551 clientes reais, 10/08/2026): sem esse gate, 12
+// clientes reabertos ficavam saindo do estoque por engano. Por isso só confia na data quando o
+// STATUS ATUAL também bate — não é só "a data existe", é "a data existe E ainda é o status de
+// agora".
+function onbCloseInfo(r, cw) {
+  const status = (r.onboarding_status || '').trim();
+  let accomp = status === 'Accomplished' ? cleanDate(r.onboarding_accomplished_date) : null;
+  let unaccomp = status === 'Unaccomplished' ? cleanDate(r.onboarding_unaccomplished_date) : null;
+  let accompFallback = false, unaccompFallback = false;
+  if (status === 'Accomplished' && !accomp) { accomp = addDaysStr(cw, 90); accompFallback = true; }
+  if (status === 'Unaccomplished' && !unaccomp) { unaccomp = addDaysStr(cw, 90); unaccompFallback = true; }
+  return { accomp, unaccomp, accompFallback, unaccompFallback, close: accomp || unaccomp || null, status };
+}
 
 for (const r of fop) {
   const b = bucketFromAmount(r.amount_12_months), e = estr(r.sales_strategy);
@@ -456,11 +514,10 @@ for (const r of fop) {
     // semana, igual ao C3 do SDR (contato→qualificação pulando a exigência de conexão).
     const a10kSame = dates.activation_date_10k && anoSemana(dates.activation_date_10k) === wo2;
     // status ATUAL (hoje) do onboarding — não é coorte de mesma semana, é snapshot de agora,
-    // pra quem fechou (CW) naquela semana. Usado porque onboarding_unaccomplished_date vem
-    // sempre nulo no nosso recorte (Brasil/2024+), mesmo com status definido — o status em si
-    // (campo direto de dhm_data_business.f_operational_sales_touched) é mais confiável.
-    const onbStatus = (r.onboarding_status || '').trim();
-    const bumpOnbCoh = o => { const cc = o[wo2] || (o[wo2] = { cw: 0, a1k: 0, a5k: 0, a10k: 0, accomplished: 0, unaccomplished: 0 }); cc.cw++; if (a1kSame) cc.a1k++; if (a5kSame) cc.a5k++; if (a10kSame) cc.a10k++; if (onbStatus === 'Accomplished') cc.accomplished++; if (onbStatus === 'Unaccomplished') cc.unaccomplished++; };
+    // pra quem fechou (CW) naquela semana. Usa onbCloseInfo (10/08/2026) em vez do status cru —
+    // já cobre o fallback de timeout de 90 dias (ver comentário na função, perto do topo).
+    const onbClose = onbCloseInfo(r, dates.closed_won_date);
+    const bumpOnbCoh = o => { const cc = o[wo2] || (o[wo2] = { cw: 0, a1k: 0, a5k: 0, a10k: 0, accomplished: 0, unaccomplished: 0 }); cc.cw++; if (a1kSame) cc.a1k++; if (a5kSame) cc.a5k++; if (a10kSame) cc.a10k++; if (onbClose.accomp) cc.accomplished++; if (onbClose.unaccomp) cc.unaccomplished++; };
     bumpOnbCoh(onbCohort.all); if (e) bumpOnbCoh(onbCohort[e]); if (nivOk) bumpOnbCoh(onbCohort[b]);
     const pwo = wk(getP(porPessoaOnb, onb), wo2);
     pwo.cohCw = (pwo.cohCw || 0) + 1;
@@ -760,7 +817,6 @@ const sdrLeads = fop.filter(r => isRealSdr(cleanEmail(r.owner_email)) && leadFlo
   nurturing: cleanDate(r.nurturing_date), qualified: cleanDate(r.qualified_date),
   unqualified: cleanDate(r.unqualified_date), opp: cleanDate(r.opportunity_create_date),
 })).filter(l => l.contacted); // estoque da página = só leads de SDR real, sem PQL/PPQL/Seed1-2
-const hojeStr = new Date().toISOString().slice(0, 10);
 const dataMax = dataMaxRaw && dataMaxRaw <= hojeStr ? dataMaxRaw : hojeStr; // capa no dia de hoje
 const ESTOQUE_KEYS = ['all', ...ESTRS];
 const sdrEstoque = {}; ESTOQUE_KEYS.forEach(k => sdrEstoque[k] = []); // estr -> [{semana,contacted,connected,nurturing}]
@@ -878,12 +934,6 @@ for (const w of semanas) {
   closersReais.forEach(o => closerEstoquePessoa[o].push({ semana: w, ...acc[o] }));
 }
 
-// soma N dias a uma data 'AAAA-MM-DD', devolve string no mesmo formato.
-function addDaysStr(dateStr, days) {
-  const d = new Date(dateStr + 'T00:00:00Z');
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
 // ---------- ESTOQUE DE ATIVAÇÃO (Onboarding) — snapshot no FIM de cada semana ----------
 // 01/08→03/08/2026, a pedido do Gabriel: reclassificado em 3 faixas — nuncaVendeu (CW sem
 // nenhum GMV, nunca chegou nem em 1k) / vendendo (já tem GMV — 1k ou 5k — mas ainda não é
@@ -895,25 +945,34 @@ function addDaysStr(dateStr, days) {
 const onbLeadsMap = new Map();
 for (const r of fop) {
   const cw = cleanDate(r.closed_won_date); if (!cw) continue;
-  if (!cleanEmail(r.onboarding_email_sf) || !oppValidOk(r) || !leadFlowOk(r)) continue; // filtros do Power BI
+  // onboarding_owner_email_atual (10/08/2026): dono ATUAL do registro de onboarding no
+  // Salesforce — pode ser diferente de onboarding_email_sf (dono da OPORTUNIDADE, congelado
+  // desde a criação) quando o caso foi reatribuído depois. Usado SÓ aqui (Carteira/Estoque
+  // atual) — o resto do build_data.js (coorte semanal, ranking, produtividade) continua com
+  // onboarding_email_sf puro, porque ali o que importa é quem fez o trabalho NA ÉPOCA, não
+  // quem é o dono hoje. Validado contra a planilha de referência: sem isso, 11 dos 551 clientes
+  // apareciam com o onboarder errado na Carteira atual.
+  const onbEmailRaw = cleanEmail(r.onboarding_owner_email_atual) || cleanEmail(r.onboarding_email_sf);
+  // isRealOnboarder (10/08/2026): exclui leads presos com um onboarder que já saiu do time (o
+  // e-mail continua no campo onboarding_email_sf mas ninguém mais trabalha aquele lead) — ver
+  // comentário perto de rosterOnboarding, acima.
+  if (!onbEmailRaw || !oppValidOk(r) || !leadFlowOkOnb(r) || !isRealOnboarder(onbEmailRaw)) continue; // filtros do Power BI
   const oppId = (r.opp_id || '').trim(); if (!oppId || onbLeadsMap.has(oppId)) continue;
   // Onboarding_close_date (DAX do Power BI): accomplished_date se preenchido, senão
   // unaccomplished_date, senão "nunca" — accomplished tem prioridade (não é o menor dos dois).
-  let accomp = cleanDate(r.onboarding_accomplished_date);
-  let unaccomp = cleanDate(r.onboarding_unaccomplished_date);
-  // Fallback (03/08/2026, a pedido do Gabriel): status certo mas sem a data — usa CW + 90 dias
-  // no lugar (resolve os ~367 leads "travados" no estoque documentados em Pendencias/README.md,
-  // item 17 — CW de 2024 com status certo mas data nunca preenchida). Vale pros dois status,
-  // mesma regra: Unaccomplished sem unaccomplished_date OU Accomplished sem accomplished_date.
-  // accompFallback/unaccompFallback marcam quando o valor é ESTIMADO (não veio da fonte) — só
-  // pra tela de validação distinguir "data real" de "data calculada", dashboard não usa isso.
-  let accompFallback = false, unaccompFallback = false;
-  if (!accomp && (r.onboarding_status || '').trim() === 'Accomplished') { accomp = addDaysStr(cw, 90); accompFallback = true; }
-  if (!unaccomp && (r.onboarding_status || '').trim() === 'Unaccomplished') { unaccomp = addDaysStr(cw, 90); unaccompFallback = true; }
-  const close = accomp || unaccomp || null;
+  // onbCloseInfo (10/08/2026) cobre os dois fallbacks (status certo sem data + timeout de 90
+  // dias sem status nenhum) — ver comentário na função, perto do topo do arquivo.
+  const ci = onbCloseInfo(r, cw);
   onbLeadsMap.set(oppId, {
-    oppId, onb: cleanEmail(r.onboarding_email_sf), estr: estr(r.sales_strategy), nivel: bucketFromAmount(r.amount_12_months), cw, close,
-    accomp, unaccomp, accompFallback, unaccompFallback, a1k: cleanDate(r.activation_date_1k), a5k: cleanDate(r.activation_date_5k), a10k: cleanDate(r.activation_date_10k),
+    oppId, onb: onbEmailRaw, estr: estr(r.sales_strategy), nivel: bucketFromAmount(r.amount_12_months), cw, close: ci.close,
+    accomp: ci.accomp, unaccomp: ci.unaccomp, accompFallback: ci.accompFallback, unaccompFallback: ci.unaccompFallback,
+    a1k: cleanDate(r.activation_date_1k), a5k: cleanDate(r.activation_date_5k), a10k: cleanDate(r.activation_date_10k),
+    // status GRANULAR real da fonte (Pre Onboarding/Contacted/.../Ready for Activation/Activation
+    // & Monitoring/Accomplished/Unaccomplished) — diferente da classificação simplificada em 3
+    // faixas (nuncaVendeu/vendendo/ativo) usada no gráfico de Estoque. Guardado aqui pra
+    // homologação (10/08/2026, a pedido do Gabriel): tabela por onboarder × status real.
+    status: ci.status || null,
+    lastOnboardingDate: cleanDate(r.last_onboarding_date),
   });
 }
 const onbLeads = [...onbLeadsMap.values()];
@@ -1122,6 +1181,13 @@ const onbList = Object.values(porPessoaOnb).map(p => enrichPessoa({
 // Campo é "ativos" (plural), não "ativo" — enrichPessoa já usa "ativo" (singular) pro status
 // de Ativo=Sim no roster; um sobrescrevia o outro (bug pego no teste, contagem virava true/false).
 const onbEstoquePorPessoaMap = {};
+// tabela por onboarder × status REAL do funil (10/08/2026, a pedido do Gabriel) — mesma
+// população do estoque (CW até hoje, ainda sem accomplished/unaccomplished), mas contada pelo
+// `onboarding_status` granular da fonte em vez da faixa simplificada nuncaVendeu/vendendo/ativo.
+// Serve pra homologar se a simplificação do gráfico "Estoque de ativação" bate com a realidade
+// operacional (ver Pendencias/README.md item 19 — investigação da carteira inflada).
+const ONB_STATUS_ORDEM = ['Pre Onboarding', 'Contacted', 'Connected', 'Welcome', 'Product Migration', 'Ready for Activation', 'Activation & Monitoring', 'Accomplished', 'Unaccomplished'];
+const onbEstoquePorPessoaStatusMap = {};
 for (const l of onbLeads) {
   if (!l.onb) continue;
   if (l.cw > hojeStr) continue;                                 // ainda não fechou até hoje
@@ -1132,9 +1198,15 @@ for (const l of onbLeads) {
   else stage = 'nuncaVendeu';
   const p = onbEstoquePorPessoaMap[l.onb] || (onbEstoquePorPessoaMap[l.onb] = { email: l.onb, nuncaVendeu: 0, vendendo: 0, ativos: 0 });
   p[stage]++;
+  const statusKey = l.status && ONB_STATUS_ORDEM.includes(l.status) ? l.status : 'Outros/vazio';
+  const ps = onbEstoquePorPessoaStatusMap[l.onb] || (onbEstoquePorPessoaStatusMap[l.onb] = { email: l.onb });
+  ps[statusKey] = (ps[statusKey] || 0) + 1;
 }
 const onbEstoquePorPessoa = Object.values(onbEstoquePorPessoaMap)
   .map(p => enrichPessoa({ ...p, total: p.nuncaVendeu + p.vendendo + p.ativos }))
+  .sort((a, b) => b.total - a.total);
+const onbEstoquePorPessoaStatus = Object.values(onbEstoquePorPessoaStatusMap)
+  .map(p => enrichPessoa({ ...p, total: [...ONB_STATUS_ORDEM, 'Outros/vazio'].reduce((s, k) => s + (p[k] || 0), 0) }))
   .sort((a, b) => b.total - a.total);
 // registro por registro (opp_id) — pro dropdown de validação individual da tela temporária:
 // mesma classificação de hoje, mas com as datas cruas visíveis, pra rastrear um caso específico.
@@ -1153,6 +1225,8 @@ const onbLeadsValidacao = onbLeads.filter(l => l.onb).map(l => {
     estr: l.estr, nivel: l.nivel, cw: l.cw,
     a1k: l.a1k, a5k: l.a5k, a10k: l.a10k, accomp: l.accomp, unaccomp: l.unaccomp, accompFallback: l.accompFallback, unaccompFallback: l.unaccompFallback,
     situacao,
+    // status real do funil (10/08/2026) — pro dropdown de filtro por status na tela de validação.
+    status: l.status || '(vazio)', lastOnboardingDate: l.lastOnboardingDate,
   };
 }).sort((a, b) => (b.cw || '').localeCompare(a.cw || ''));
 
@@ -1218,6 +1292,7 @@ const DATA = {
   onbCohort, onbAct: onbActAcc, onbCohortStatus, onbCwFte, onbActFte,
   mesFechado, semanaFechada,
   onbEstoquePorPessoa, // ⚠️ temporário — homologação do Estoque de ativação (03/08/2026), tirar depois
+  onbEstoquePorPessoaStatus, onbStatusOrdem: ONB_STATUS_ORDEM, // ⚠️ temporário — homologação por status real (10/08/2026), tirar depois
   // Estoque/Status por PESSOA (05/08/2026) — alimentam os gráficos por pessoa no 1:1 Gestor,
   // mesmo padrão dos equivalentes por estratégia/nível acima, só que chaveados por e-mail.
   sdrEstoquePessoa, closerEstoquePessoa, onbEstoqueSemanalPorPessoa,

@@ -1,6 +1,112 @@
 # Pendências · New Business Cockpit
 
-Notas de handoff para quem continuar o desenvolvimento. Última atualização: 06/08/2026.
+Notas de handoff para quem continuar o desenvolvimento. Última atualização: 10/08/2026.
+
+## Concluído (10/08/2026)
+
+- **Tela de validação (`validacao_onboarding_pessoa.html`): tabela por Onboarder × status real
+  do funil + 2 dropdowns** — a pedido do Gabriel, pra homologar o Estoque de ativação (segue o
+  item 19 do Backlog, investigação da carteira inflada). Adicionado no `build_data.js`: campo
+  `status` (onboarding_status cru, 9 valores possíveis + fallback "Outros/vazio") e
+  `lastOnboardingDate` no registro de cada opp_id (`onbLeadsMap`/`onbLeadsValidacao`); nova
+  estrutura `onbEstoquePorPessoaStatus` (mesma população do estoque, contada pelo status real em
+  vez da faixa simplificada nuncaVendeu/vendendo/ativo) e `onbStatusOrdem` (lista ordenada dos 9
+  status), ambos exportados no `app_data.js` (⚠️ temporários, tirar quando a homologação
+  terminar). Na tela: nova tabela "Estoque atual por onboarder × status real do funil" (uma
+  coluna por status); os 2 dropdowns pedidos na consulta individual — 1º "Status atual do funil
+  de Onboarding" (filtra a lista abaixo), 2º "onb_id (opp_id)" (mesmo `opp_id` de sempre — o
+  `onboarding_id` real do Salesforce, tipo `a02SG...`, não existe no nosso export, confirmado
+  com o Gabriel). Painel de detalhe ganhou os campos "Status real do funil" e
+  "last_onboarding_date". Testado: total da nova tabela bate exato (659) com a tabela antiga de
+  3 faixas; filtro em cascata (status → opp_id) funciona.
+- **Causa raiz do Estoque de ativação inflado — encontrada e corrigida.** Resumo da
+  investigação completa (partiu do item 19 acima): a Amanda Beraldo reportou no Slack que a
+  carteira real de Onboarding é 505/551 clientes (fonte: planilha "Total de Clientes" do time,
+  depois "Validação Todos Onboarders" com opp_id — 551 registros, 16 onboarders), bem abaixo do
+  que o dashboard mostrava (659). Provado com um caso real (opp_id `006SG00000RbRMfYAN`,
+  onboarder Liana Wieloch, cliente "Ezequiel Ventura") que `dhm_data_business.
+  f_operational_sales_touched` (fonte usada até então) fica **dessincronizada** da fonte viva
+  do Salesforce: o registro estava Unaccomplished (desde 30/12/2025, motivo real "Out of
+  Onboarding time (>90 days)") mas essa tabela intermediária continuava mostrando "Ready for
+  Activation" indefinidamente — confirmado 3x em sessões diferentes, sempre o mesmo resultado.
+  Testamos e descartamos uma heurística de "timeout automático de 90 dias" no `build_data.js`
+  (piorava o resultado geral: 120 clientes reais ficavam de fora). A correção definitiva
+  (10/08/2026) foi trocar a fonte na query: **`Querys/06_operacional_raw.sql`** agora faz JOIN
+  direto com `dhaf_salesforce.onboarding` + `dhaf_salesforce.onboarding_history` (mesma fonte e
+  mesma lógica de dedup/join da query oficial "Operational Sales Touched" do time de dados —
+  por `opp_id = opportunity__c`, não mais `lead_id`), em vez da tabela intermediária. Achado
+  extra: JOIN por igualdade simples é MUITO mais rápido que o antigo (que usava `OR` entre
+  lead_id/opp_id e travava o otimizador do Redshift em nested loop, 60s-3600s+) — o dataset
+  inteiro (21 mil oportunidades com CW) roda em ~4-5s com o JOIN novo. No `build_data.js`:
+  `onbCloseInfo()` (função nova, usada tanto no loop principal quanto no `onbLeadsMap`) só
+  confia na data de accomplished/unaccomplished quando o **status atual também bate** — sem
+  esse gate, 12 clientes "reabertos" (passaram por Unaccomplished uma vez mas o status atual já
+  é outro, tipo "Activation & Monitoring") saíam do estoque por engano. Também restringido ao
+  **roster oficial de Onboarding** (`Imagens Sales.csv`, Cargo=Onboarding+Ativo=Sim — mesmo
+  padrão de `isRealSdr`/`isRealCloser`, novo `isRealOnboarder`), aplicado só no `onbLeadsMap`
+  (Estoque/Carteira) — exclui leads presos com onboarders que já saíram do time. **Resultado
+  final: 550 no dashboard vs 551 reais (549 match exato de opp_id, 1 extra, 2 faltando)** —
+  antes eram 659 vs 551 (122 extra, 14 faltando). Validado com script Node comparando opp_id a
+  opp_id contra a planilha de referência completa (551 registros), não só a contagem total.
+  Testado no navegador: KPI "Estoque atual" mostra 550, "Saídas do funil" bate com o
+  `onbCohort` pra semanas fechadas, Carteira atual e 1:1 Gestor sem erro. **Escopo confirmado**:
+  só estruturas de Onboarding foram tocadas — Mensal Sales/Semanal Sales/SDR/Closer geram
+  exatamente os mesmos números de antes (comparado campo a campo no `build_data.js`, idênticos).
+  Os 2 registros que ainda faltam parecem ser o filtro `leadFlowOk` (Seed 2) — ver item 19 pra
+  detalhe; não investigado mais a fundo, ganho residual pequeno.
+- **Fix adicional: dono (onboarder) errado em 11 clientes.** Validação por pessoa (comparando
+  a Carteira atual com a planilha de referência onboarder a onboarder, não só o total) achou
+  que embora o total batesse quase exato (550 vs 551), 11 dos 551 clientes apareciam atribuídos
+  a um onboarder diferente do real — o `opp_id` existia dos dois lados, só o dono estava
+  trocado (ex.: `006SG00000dyEjBYAU`, planilha diz Arthur Rachid, dashboard dizia Natalia
+  Silva). Causa: `onboarding_email_sf` (usado até então) é o dono da OPORTUNIDADE, travado
+  desde a criação — quando o caso é reatribuído no Salesforce depois, esse campo não
+  acompanha. Fix (`Querys/06_operacional_raw.sql`): nova coluna
+  `onboarding_owner_email_atual` (= `owner_email__c` do registro de onboarding, via o mesmo
+  JOIN novo) exportada À PARTE, sem sobrescrever `onboarding_email_sf`. No `build_data.js`, só
+  o `onbLeadsMap` (Carteira/Estoque atual) passou a preferir esse dono atual
+  (`COALESCE(onboarding_owner_email_atual, onboarding_email_sf)`) — **decisão explícita do
+  Gabriel**: coorte semanal/ranking/produtividade (1:1 Gestor, `onbCohort`) continuam com
+  `onboarding_email_sf` puro, porque ali importa quem fez o trabalho NA ÉPOCA, não quem é dono
+  hoje (reatribuir CW/ativações históricas pra quem herdou o caso depois distorceria
+  produtividade e ranking de gente que nunca trabalhou aquele caso). Resultado intermediário:
+  15/16 onboarders exatos, só Yasmin Araújo com -2 (os 2 registros Seed 2 excluídos pelo
+  `leadFlowOk`, mesmo filtro usado em SDR/Closer).
+- **Fix final: Seed 2 liberado na Carteira/Estoque de Onboarding — 551/551 exato.** O Gabriel
+  perguntou se incluir os 2 registros Seed 2 da Yasmin fechava o número certinho. Primeiro
+  teste (removendo o `leadFlowOk` inteiro) deu errado — trouxe 148 extras, quase todos de
+  Josiane Mayra Rodrigues e Pedro Brant, registros de 2024 com `onboarding_status:
+  "Unaccomplished"` mas sem a data preenchida; o script de teste tinha esquecido de replicar o
+  fallback CW+90d que a produção já tem, então pareciam "presos" no estoque por engano — falso
+  positivo do teste, não um problema real do filtro. Corrigido o teste (com o fallback direito)
+  e testado de novo só liberando Seed 2 (mantendo PQL/PPQL/Seed 1 excluídos, igual SDR/Closer):
+  **551/551 exato, 0 extra, 0 faltando, 16/16 onboarders com número idêntico à planilha**.
+  Implementado como `leadFlowOkOnb` (nova função em `build_data.js`, cópia de `leadFlowOk` sem
+  a exclusão de Seed 2) — usada SÓ no `onbLeadsMap` (Carteira/Estoque); SDR, Closer e a coorte
+  semanal de Onboarding continuam com o `leadFlowOk` original (com Seed 2 excluído). Testado no
+  navegador: KPI "Estoque atual" mostra 551.
+- **Ajuste de nome nas colunas "Hist. 5 semanas" (Closer/Onboarding)** — a pedido do Gabriel,
+  pra ficar consistente com a renomeação da coluna "Atual" feita antes. Closer: "C1 · 5s" →
+  "C4 · 5s" (mesma métrica, só renomeada). Onboarding: "C1 · 5s" era coorte CW→1k das últimas 5
+  semanas — só renomear pra "% Ativos · 5s" deixaria o nome errado (métrica diferente da coluna
+  "% Ativos" de hoje), então o CÁLCULO também mudou: agora é a média ponderada do %Ativos ao
+  longo das últimas 5 semanas (soma ativo/soma total das 5 semanas, não média simples dos %,
+  pra não pesar igual pra carteira pequena vs grande), usando o snapshot semanal por pessoa
+  (`D.onbEstoqueSemanalPorPessoa`, já existia pro gráfico de Estoque do 1:1 Gestor). Testado:
+  Mariana Salinas 37% bate exato com o cálculo manual (10+10+11+9+12 ativos / 27+27+29+27+29
+  total nas últimas 5 semanas fechadas).
+
+## Concluído (07/08/2026)
+
+- **Tabela "Onboarding · por pessoa" (Semanal Área): não quebra mais por Outbound/Inbound** —
+  a pedido do Gabriel. `groupedTable` chamada sem `groupBy`/`groupOrder` — vira lista única
+  ordenável, com só a linha "Total geral" no fim (SDR/Closer continuam agrupados por
+  estratégia, não foram tocados).
+- **Nova coluna "Carteira atual"** na mesma tabela — tamanho do book de cada onboarder HOJE
+  (nuncaVendeu+vendendo+ativos), reaproveitando `D.onbEstoquePorPessoa` (já existia pra tela de
+  validação). É sempre "hoje", não muda com a semana selecionada na tabela — carteira é
+  responsabilidade atual, não histórico da semana. Testado: valor da tabela bate exato com a
+  fonte, e ordena corretamente ao clicar no cabeçalho.
 
 ## Concluído (06/08/2026)
 
@@ -816,6 +922,36 @@ Regenerar: `node app/build_data.js` (lê `Dados/*.csv` locais).
 18. ~~Estoque de ativação (Onboarding): reclassificar em "nunca vendeu" / "vendendo" /
     "ativos"~~ — **resolvido (03/08/2026)**, ver "Concluído 03/08" acima pro detalhe completo
     (definições, campos usados, o que ficou de fora de propósito no pill "Δ estoque").
+19. ~~Estoque de ativação (Onboarding) / "Carteira atual" segue inflado vs. a realidade~~ —
+    **resolvido (10/08/2026)**, ver "Concluído 10/08" acima pro detalhe completo (causa raiz
+    real, fix na query, resultado 550 vs 551). Investigação original (09/08/2026) preservada
+    abaixo pra contexto histórico — várias hipóteses testadas e descartadas no caminho. Amanda
+    Beraldo reportou no Slack (ver
+    prints) que a carteira REAL de onboarding é 505 clientes (fonte: relatório "Cobertura de
+    Carteira", 505 clientes / 423 com ≥1 entrega de valor = 84%) e o funil N6+ real é 38
+    clientes — nosso dashboard mostra 659 (estoque total) e 56 (N6+) na mesma semana, ~30%
+    acima. Causa raiz investigada (item 6/18 relacionados): a regra atual ("ativos não saem do
+    estoque, só accomplished/unaccomplished tira", de 03/08) deixa acumular indefinidamente
+    quem já ativou 10k mas nunca teve o registro formalmente fechado no Salesforce — validado
+    com um caso real da Liana (2 de 3 divergências dela eram exatamente isso, ativação de
+    abril/maio/2026 sem accomplished/unaccomplished). Testei vários cortes de tempo (dias desde
+    ativação, dias desde CW sem progresso) e NENHUM bate os dois números (total E N6+) ao mesmo
+    tempo. **Achado mais promissor:** o campo `last_onboarding_date` (existe no
+    `06_operacional_raw.csv`, nunca usado no pipeline) — filtrando o estoque por
+    `last_onboarding_date` dentro dos últimos 30 dias dá TOTAL=525 (vs 505 real) e N6+=40 (vs 38
+    real), bem mais perto que qualquer corte por data de ativação. Mediana desse campo pro
+    estoque atual é **-22 dias** (maioria no FUTURO em relação a hoje) — sugere que não é "última
+    atualização" e sim algo como data-alvo/prevista do próximo marco, o que precisa ser
+    confirmado com o time de Onboarding/Dados antes de virar regra oficial. Também investigado e
+    descartado: a medida DAX `Status_Onboarding` do Power BI do time (`f_sales_touched
+    [onboarding_stage]`) — essa tabela/campo não existe no Redshift com esse nome; o mais
+    provável é que seja um rename em Power Query da mesma `onboarding_status` que já usamos (os
+    valores batem: "Pre Onboarding"/"Ready for Activation"/"Activation & Monitoring"/etc.). Um
+    caso pontual (opp_id `006SG00000RbRMfYAN`) que a Amanda via como "Unaccomplished" no Power BI
+    checou 3x direto no Redshift (2 sessões, token renovado) e sempre voltou "Ready for
+    Activation", sem duplicidade de linha — segue sem explicação, possível dessincronia de
+    refresh do lado do Power BI. Gabriel pediu pra só registrar por enquanto, sem aplicar
+    mudança de regra.
 
 ## Convenções do projeto (não esquecer)
 
