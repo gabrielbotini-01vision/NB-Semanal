@@ -1168,7 +1168,11 @@ function renderAreaClosers(){
   // só closers com pelo menos 1 CW ou Opp in na janela de 5 semanas
   let listTbl=list.filter(r=>weeks5.some(w=>cwAt(r,w)>0||oppsAt(r,w)>0));
   if(estrF!=='all') listTbl=listTbl.filter(r=>r.estrategia===estrF);
-  const table=groupedTable({rows:listTbl,groupBy:r=>r.estrategia||'Sem estratégia',groupOrder:[...STR_ORDER,'Sem estratégia'],cols,kind:'closer',totals:true,sort:state.closerSort,hd:cardHd(KIC.users,'Closers · por pessoa','opps, C1, mix por nível e produtividade/BD')});
+  // agrupamento por nível (N2-N3/N4-N5/N6+), não mais por estratégia — a partir de 07/2026 o
+  // time de Closer passou a ser segmentado por nível de cliente (Dados/sales_goals.csv, ver
+  // build_data.js). Só o cabeçalho de agrupamento da tabela muda; filtro/KPIs/coortes da página
+  // continuam por estratégia, sem alteração (11/08/2026, a pedido do Gabriel).
+  const table=groupedTable({rows:listTbl,groupBy:r=>r.nivel||'Sem nível',groupOrder:[...NIV,'Sem nível'],cols,kind:'closer',totals:true,sort:state.closerSort,hd:cardHd(KIC.users,'Closers · por pessoa','opps, C1, mix por nível e produtividade/BD')});
   $('viewArea').innerHTML=`
     <div class="sec"><div class="sec-head"><h2>Resultado semanal</h2><span class="hint">${semanaLabel(week)}${filtF!=='all'?' · '+filtF:''}</span></div>
       <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d,cls,icon])=>`<div class="kpi ${cls||''}">${icon?`<span class="kpi-ic">${icon}</span>`:''}<span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div></div>
@@ -1331,7 +1335,10 @@ function renderAreaOnboarding(){
   if(estrF!=='all') listTbl=listTbl.filter(r=>r.estrategia===estrF);
   // sem quebra por Outbound/Inbound (07/08/2026, a pedido do Gabriel) — lista única, ordenável,
   // diferente de SDR/Closer que continuam agrupados por estratégia.
-  const table=groupedTable({rows:listTbl,cols,kind:'onb',totals:true,sort:state.onbSort,hd:cardHd(KIC.users,'Onboarding · por pessoa','CW recebido, coorte C1, mix por nível e produtividade/BD')});
+  // agrupamento por nível (N2-N3/N4-N5/N6+) — mesma mudança da tabela de Closer acima, mesma
+  // fonte (Dados/sales_goals.csv). Onboarding não tinha groupBy antes (removido em sessão
+  // anterior); volta a agrupar, agora por nível em vez de estratégia (11/08/2026).
+  const table=groupedTable({rows:listTbl,groupBy:r=>r.nivel||'Sem nível',groupOrder:[...NIV,'Sem nível'],cols,kind:'onb',totals:true,sort:state.onbSort,hd:cardHd(KIC.users,'Onboarding · por pessoa','CW recebido, coorte C1, mix por nível e produtividade/BD')});
   $('viewArea').innerHTML=`
     <div class="sec"><div class="sec-head"><h2>Resultado semanal</h2><span class="hint">${semanaLabel(week)}${filtF!=='all'?' · '+filtF:''}</span></div>
       <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d,cls,icon])=>`<div class="kpi ${cls||''}">${icon?`<span class="kpi-ic">${icon}</span>`:''}<span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div></div>

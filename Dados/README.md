@@ -86,6 +86,30 @@ Essas colunas também trazem meta por **pessoa** (SDR/Closer/Onboarding + `Perce
 não usado ainda no dashboard, mas disponível para uma meta individual real no futuro (hoje
 o 1:1 Gestor só compara com a mediana do squad, não com uma meta pessoal).
 
+## Metas por pessoa/mês (opcional — alimenta o nível de Closer/Onboarding na tabela "por pessoa")
+
+| Arquivo | Separador | Colunas usadas (por posição, não por nome — ver abaixo) |
+|---|---|---|
+| `sales_goals.csv` | `;` | `Data` (col. 3), `Função` (col. 4), `Email` (col. 7), `Estratégia completa` (col. 9) |
+
+Export do datasource Astrobox "Sales_goals" (`https://astrobox.hotmart.com/datasource/run/f1168442-e7ec-46d8-8ea0-d82d684ff916`,
+diferente do datasource padrão `DHI_DATA_PRODUCTION` usado nas queries acima — ainda não
+integrado ao `scripts/atualizar_dados.py`, exportar manualmente por enquanto). O cabeçalho sai
+com acentos corrompidos nesse export específico (encoding do datasource de origem), por isso
+`build_data.js` lê `sales_goals.csv` por **posição de coluna**, não por nome de cabeçalho.
+
+A partir de 07/2026 os times de Closer (`Função=CSR`) e Onboarding (`Função=ONB`) passaram a
+ser segmentados por **nível de cliente** (`N2-N3`/`N4-N5`/`N6+`) na coluna `Estratégia completa`,
+em vez de estratégia (`Outbound`/`Inbound`) — SDR continua só em Outbound/Inbound/Hunting, sem
+nível nessa planilha. `build_data.js` usa a linha de `Data` mais recente por e-mail (só o
+snapshot atual importa; guardamos só o mês mais recente no CSV, não o histórico) para atribuir
+o nível de cada Closer/Onboarder na tabela "por pessoa" da Semanal Área (11/08/2026, a pedido
+do Gabriel — troca o agrupamento visual dessas duas tabelas de estratégia para nível; o resto
+da página — filtro, KPIs, coortes, metas de budget — continua por estratégia, sem alteração).
+Opcional: se faltar o arquivo, ou se uma pessoa não tiver nível mapeado (ex.: quem está em
+offboarding na planilha, sem nível atribuído no mês mais recente), a linha cai no grupo
+"Sem nível" na tabela.
+
 ## Diretório de pessoas (opcional — alimenta nome + foto no dashboard)
 
 | Arquivo | Separador | Colunas usadas |

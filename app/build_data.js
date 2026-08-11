@@ -325,6 +325,38 @@ const isRealCloser = o => { o = (o || '').toLowerCase(); return !!o && rosterClo
 // (D.porPessoa.onboarding), que segue auditando todo mundo que já atuou como onboarder.
 const rosterOnboarding = new Set(fDiretorio.filter(r => (r.Cargo || '').trim() === 'Onboarding' && (r.Ativo || '').trim() === 'Sim').map(r => (r.Email || '').trim().toLowerCase()));
 const isRealOnboarder = o => { o = (o || '').toLowerCase(); return !!o && rosterOnboarding.has(o); };
+// Dados/sales_goals.csv (Astrobox, datasource "Sales_goals", separador ";") — planilha de metas
+// mensal por pessoa. A partir de 07/2026 o time de Closer (CSR) e Onboarding (ONB) passou a ser
+// segmentado por NÍVEL de cliente (N2-N3/N4-N5/N6+) em vez de estratégia (Outbound/Inbound) —
+// SDR continua só em Outbound/Inbound/Hunting, sem nível (11/08/2026, a pedido do Gabriel:
+// tabela "por pessoa" de Closer/Onboarding passa a agrupar por esse nível em vez de estratégia).
+// Guardamos só o mês mais recente (snapshot atual) — é tudo que a tabela "por pessoa" precisa;
+// histórico mensal completo não é usado em nenhuma outra feature ainda.
+function readSalesGoalsCsv() {
+  const filePath = DIR + 'sales_goals.csv';
+  if (!fs.existsSync(filePath)) return [];
+  const raw = fs.readFileSync(filePath, 'utf8').replace(/^﻿/, '');
+  return parseCsvRows(raw, ';').slice(1).map(cols => ({
+    data: (cols[2] || '').trim(),   // dd/mm/yyyy
+    funcao: (cols[3] || '').trim(), // SDR / CSR / ONB
+    email: (cols[6] || '').trim().toLowerCase(),
+    nivel: (cols[8] || '').trim(),  // "Estratégia completa": N2-N3/N4-N5/N6+ (CSR/ONB) ou Outbound/Inbound/... (SDR, legado)
+  }));
+}
+const NIVEIS_SET = new Set(NIVEIS);
+function nivelAtualPorFuncao(funcaoAlvo) {
+  const best = {};
+  readSalesGoalsCsv().forEach(r => {
+    if (r.funcao !== funcaoAlvo || !r.email || !NIVEIS_SET.has(r.nivel)) return;
+    const [dd, mm, yy] = r.data.split('/'); if (!dd || !mm || !yy) return;
+    const iso = `${yy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+    if (!best[r.email] || iso > best[r.email].iso) best[r.email] = { iso, nivel: r.nivel };
+  });
+  const out = {}; for (const e in best) out[e] = best[e].nivel;
+  return out;
+}
+const nivelPorCloser = nivelAtualPorFuncao('CSR');
+const nivelPorOnboarder = nivelAtualPorFuncao('ONB');
 // Filtro do Power BI (visual "Tamanho Carteira de Opps"): só opps válidas e dentro do funil
 // BR — mesmos campos de dhmv_sales_touched (is_opp_valid/is_opp_br_funnel), sem precisar de
 // join novo. Efeito pequeno sozinho (~99,7% das opps já passam), mas replicado por completude.
@@ -1152,7 +1184,7 @@ const sdrList = Object.values(porPessoaSdr).map(p => enrichPessoa({
 }, 'SDR')).sort((a, b) => b.opps - a.opps);
 
 const closerList = Object.values(porPessoaCloser).map(p => enrichPessoa({
-  email: p.email, estrategia: p.estrategia || null,
+  email: p.email, estrategia: p.estrategia || null, nivel: nivelPorCloser[p.email.toLowerCase()] || null,
   opps: Math.round(p.opps || 0), sql: Math.round(p.sql || 0), cw: Math.round(p.cw || 0),
   sqlRate: p.opps ? +(p.sql / p.opps).toFixed(3) : null,
   winRate: p.sql ? +(p.cw / p.sql).toFixed(3) : null,
@@ -1164,7 +1196,7 @@ const closerList = Object.values(porPessoaCloser).map(p => enrichPessoa({
 }, 'Closer')).sort((a, b) => b.cw - a.cw);
 
 const onbList = Object.values(porPessoaOnb).map(p => enrichPessoa({
-  email: p.email, estrategia: p.estrategia || null,
+  email: p.email, estrategia: p.estrategia || null, nivel: nivelPorOnboarder[p.email.toLowerCase()] || null,
   cwIn: Math.round(p.cwIn || 0), activated: Math.round(p.activated || 0),
   actRate: p.cwIn ? +(p.activated / p.cwIn).toFixed(3) : null,
   diasWonAtivacao: p._dWAn ? +(p._dWAsum / p._dWAn).toFixed(1) : null,

@@ -1,6 +1,30 @@
 # Pendências · New Business Cockpit
 
-Notas de handoff para quem continuar o desenvolvimento. Última atualização: 10/08/2026.
+Notas de handoff para quem continuar o desenvolvimento. Última atualização: 11/08/2026.
+
+## Concluído (11/08/2026)
+
+- **Tabela "por pessoa" de Closer e Onboarding: agrupamento por nível em vez de estratégia.**
+  A pedido do Gabriel, que trouxe a planilha de metas do Astrobox (datasource "Sales_goals",
+  `f1168442-e7ec-46d8-8ea0-d82d684ff916`, diferente do `DHI_DATA_PRODUCTION` usado nas outras
+  queries) mostrando que, a partir de 07/2026, os times de Closer e Onboarding passaram a ser
+  segmentados oficialmente por **nível de cliente** (N2-N3/N4-N5/N6+) em vez de estratégia
+  (Outbound/Inbound) — SDR continua só em Outbound/Inbound/Hunting, sem nível nessa planilha.
+  Novo `Dados/sales_goals.csv` (documentado em `Dados/README.md`; lido por posição de coluna,
+  não por nome, porque o cabeçalho desse export sai com acentos corrompidos) alimenta um novo
+  campo `nivel` por pessoa em `build_data.js` (`nivelPorCloser`/`nivelPorOnboarder`, pega a
+  linha de `Data` mais recente por e-mail). Só o `groupBy` das duas tabelas "por pessoa" mudou
+  (Closer: era `estrategia`/Outbound·Inbound·Hunting, agora `nivel`/N2-N3·N4-N5·N6+·"Sem
+  nível"; Onboarding: não tinha `groupBy`, agora tem o mesmo). **Escopo explicitamente
+  limitado** (avaliado e descartado um projeto maior de recalcular todo o pipeline de
+  coortes/metas por nível): o dropdown "Estratégia" da Semanal Área e todas as estruturas
+  pré-agregadas por estratégia (`D.sdrCohort`, `D.closerCohort`, `D.onbCohort`, budget
+  `porNivelEstrategia` etc.) continuam exatamente como estavam — mudança é só visual, no
+  cabeçalho de agrupamento das duas tabelas. Confirmado: `node app/build_data.js` roda limpo,
+  todos os campos não relacionados (SDR/Closer/Onboarding KPIs, coortes, funil mensal) batem
+  igual antes/depois; cobertura do mapeamento de nível — Onboarding 16/16 ativos com nível,
+  Closer 14/17 ativos com nível (os 3 sem nível estão marcados "Offboarding" na planilha de
+  metas do mês mais recente, caem no grupo "Sem nível").
 
 ## Concluído (10/08/2026)
 
