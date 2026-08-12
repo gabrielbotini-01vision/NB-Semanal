@@ -281,6 +281,8 @@
         <div class="controls" id="wsalesControls">
           <div class="ctl"><label>Semana</label><select id="selSemana" class="sel"></select></div>
           <div class="ctl"><label>Estratégia</label><select id="selEstr" class="sel"></select></div>
+          <div class="ctl"><label>Referência</label><select id="selRef" class="sel">
+            <option value="budget">Budget</option><option value="reforecast">Reforecast</option></select></div>
         </div>
         <div class="controls" id="wareaControls" style="display:none">
           <div class="ctl"><label>Mês</label><select id="selMesArea" class="sel"></select></div>
@@ -293,6 +295,8 @@
         <div class="controls" id="mensalControls" style="display:none">
           <div class="ctl"><label>Mês</label><select id="selMesMensal" class="sel"></select></div>
           <div class="ctl"><label>Estratégia</label><select id="selEstrMensal" class="sel"></select></div>
+          <div class="ctl"><label>Referência</label><select id="selRefMensal" class="sel">
+            <option value="budget">Budget</option><option value="reforecast">Reforecast</option></select></div>
         </div>
         <div class="controls" id="otherControls" style="display:none">
           <div class="ctl"><label>Mês</label><select id="selMesOneOne" class="sel"></select></div>
@@ -352,7 +356,7 @@ function avatarHTML(p,size){
 function median(arr){const a=[...arr].filter(v=>v!=null).sort((x,y)=>x-y);const n=a.length;if(!n)return 0;return n%2?a[(n-1)/2]:(a[n/2-1]+a[n/2])/2;}
 
 // ---- estado ----
-let state={meeting:'mensal',area:'sdr',mes:null,semana:null,estr:'all',ref:'budget',mesArea:null,semanaArea:null,refArea:'budget',estrArea:'all',nivelArea:'all',evolGran:'semana',onbStatusPct100:false,mesMensal:null,estrMensal:'all',pessoa:null,sdrSort:null,closerSort:null,onbSort:null,mesOneOne:null,semanaOneOne:null,areaOneOne:'sdr'};
+let state={meeting:'mensal',area:'sdr',mes:null,semana:null,estr:'all',ref:'budget',mesArea:null,semanaArea:null,refArea:'budget',estrArea:'all',nivelArea:'all',evolGran:'semana',onbStatusPct100:false,mesMensal:null,estrMensal:'all',refMensal:'budget',pessoa:null,sdrSort:null,closerSort:null,onbSort:null,mesOneOne:null,semanaOneOne:null,areaOneOne:'sdr'};
 // AREA_TABS usa as chaves da Semanal Área (sdr/closers/onboarding); o 1:1 Gestor guarda
 // pessoas com outra convenção (sdr/closer/onb, ver allPeople()) — mapa entre as duas.
 const AREA_TO_ONEONE_KIND={sdr:'sdr',closers:'closer',onboarding:'onb'};
@@ -467,14 +471,14 @@ const MENSAL_KPIS=[
   {k:'gmv',lbl:'GMV',cur:1,desc:'Volume bruto transacionado'},
   {k:'activation',lbl:'Ativação 10K',cur:0,desc:'Contas ativadas (10k GMV)'},
 ];
-function mensalKpiCard(c,act,bud,actPrev,mes,suffix){
+function mensalKpiCard(c,act,bud,actPrev,mes,suffix,refLabel){
   const a=act?.[c.k]||0, b=bud?.[c.k]||0, aprev=actPrev?.[c.k];
   const att=pct(a,b);
   const mom=aprev?Math.round((a-aprev)/aprev*100):null;
   return `<div class="kpi"><span class="rail"></span><div class="lbl">${c.lbl}</div>
     <div class="sub2">${c.desc||''}</div>
     <div class="num${c.cur?'':' n'}">${c.cur?fBRL(a):fN(a)}</div>
-    <div class="sub"><span>de ${c.cur?fBRL(b):fN(b)} budget${att!=null?` · <span class="attText ${attClass(att)}">${att}%</span>`:''}</span>${mom!=null?`<span class="att ${mom>=0?'hi':'lo'}">${mom>=0?'▲':'▼'} ${Math.abs(mom)}% ${suffix||'MoM'}</span>`:''}</div></div>`;
+    <div class="sub"><span>de ${c.cur?fBRL(b):fN(b)} ${(refLabel||'budget').toLowerCase()}${att!=null?` · <span class="attText ${attClass(att)}">${att}%</span>`:''}</span>${mom!=null?`<span class="att ${mom>=0?'hi':'lo'}">${mom>=0?'▲':'▼'} ${Math.abs(mom)}% ${suffix||'MoM'}</span>`:''}</div></div>`;
 }
 function metricsForMes(src,mes,estr){
   const m=D[src]?.mensal?.[mes]; if(!m) return null;
@@ -516,41 +520,43 @@ function initMensalControls(){
   $('selMesMensal').value=state.mesMensal;
   $('selEstrMensal').innerHTML=`<option value="all">Todas</option>`+STR_ORDER.map(s=>`<option value="${s}">${s}</option>`).join('');
   $('selEstrMensal').value=state.estrMensal;
+  $('selRefMensal').value=state.refMensal;
   $('selMesMensal').onchange=e=>{state.mesMensal=e.target.value;renderMensal();};
   $('selEstrMensal').onchange=e=>{state.estrMensal=e.target.value;renderMensal();};
+  $('selRefMensal').onchange=e=>{state.refMensal=e.target.value;renderMensal();};
 }
 function renderMensal(){
-  const mes=state.mesMensal, estr=state.estrMensal;
+  const mes=state.mesMensal, estr=state.estrMensal, ref=state.refMensal||'budget', refLabel=ref==='reforecast'?'Reforecast':'Budget';
   // subtítulo do topo ("Mês fechado · mmm/aaaa") só era atualizado no render() geral (troca de
   // aba) — ficava desatualizado ao trocar o mês no seletor, que chama só renderMensal() direto.
   if($('ctxLine')) $('ctxLine').textContent=CTX.mensal+(mes?(' · '+mesLabel(mes)):'');
   const idx=D.meses.indexOf(mes), prev=D.meses[idx-1];
-  const act=metricsForMes('actual',mes,estr), bud=metricsForMes('budget',mes,estr), actPrev=metricsForMes('actual',prev,estr);
+  const act=metricsForMes('actual',mes,estr), bud=metricsForMes(ref,mes,estr), actPrev=metricsForMes('actual',prev,estr);
   if(!mes||!act){ $('viewMensal').innerHTML='<div class="card"><span class="miss">Sem dado suficiente para este mês/estratégia — rode build_data.js com os CSVs atualizados.</span></div>'; return; }
 
-  const kpis=`<div class="grid g5">${MENSAL_KPIS.map(c=>mensalKpiCard(c,act,bud,actPrev,mes)).join('')}</div>`;
+  const kpis=`<div class="grid g5">${MENSAL_KPIS.map(c=>mensalKpiCard(c,act,bud,actPrev,mes,null,refLabel)).join('')}</div>`;
 
   const year=mes.slice(0,4);
   const ytdMonths=D.meses.filter(m=>m.startsWith(year)&&m<=mes).sort();
-  const yearVals=ytdMonths.map(m=>({m,a:metricsForMes('actual',m,estr)?.receita||0,b:metricsForMes('budget',m,estr)?.receita||0}));
-  // só a tabela (sem as barras) — Actual/Budget/Ating. por mês, colunas alinhadas ao cabeçalho.
+  const yearVals=ytdMonths.map(m=>({m,a:metricsForMes('actual',m,estr)?.receita||0,b:metricsForMes(ref,m,estr)?.receita||0}));
+  // só a tabela (sem as barras) — Actual/Budget ou Reforecast/Ating. por mês, colunas alinhadas ao cabeçalho.
   const chart=`
     <table class="tbl" style="box-shadow:none">
       <thead><tr><th></th>${yearVals.map(v=>`<th style="text-align:center">${mesLabel(v.m)}</th>`).join('')}</tr></thead>
       <tbody>
         <tr><td style="font-weight:600">Actual</td>${yearVals.map(v=>`<td class="mono" style="text-align:center">${fBRL(v.a)}</td>`).join('')}</tr>
-        <tr><td style="font-weight:600;color:var(--text-muted)">Budget</td>${yearVals.map(v=>`<td class="mono" style="text-align:center;color:var(--text-muted)">${fBRL(v.b)}</td>`).join('')}</tr>
+        <tr><td style="font-weight:600;color:var(--text-muted)">${refLabel}</td>${yearVals.map(v=>`<td class="mono" style="text-align:center;color:var(--text-muted)">${fBRL(v.b)}</td>`).join('')}</tr>
         <tr><td style="font-weight:600">Ating.</td>${yearVals.map(v=>{const p=pct(v.a,v.b);return `<td class="mono" style="text-align:center;font-weight:700">${p!=null?`<span class="att ${attClass(p)}">${p}%</span>`:'—'}</td>`;}).join('')}</tr>
       </tbody></table>`;
 
   $('viewMensal').innerHTML=`
-    <div class="sec"><div class="sec-head"><h2>Realização vs meta · mês fechado</h2><span class="hint">${mesLabel(mes)} · ${estr==='all'?'todas estratégias':estr}</span></div>${kpis}</div>
-    <div class="sec"><div class="sec-head"><h2>Net Revenue · ${year} (YTD)</h2><span class="hint">actual vs budget, jan → mês selecionado</span></div>
+    <div class="sec"><div class="sec-head"><h2>Realização vs meta · mês fechado</h2><span class="hint">${mesLabel(mes)} · ${estr==='all'?'todas estratégias':estr}${ref==='reforecast'?' · Reforecast':''}</span></div>${kpis}</div>
+    <div class="sec"><div class="sec-head"><h2>Net Revenue · ${year} (YTD)</h2><span class="hint">actual vs ${refLabel.toLowerCase()}, jan → mês selecionado</span></div>
       <div class="card" style="padding:24px;overflow-x:auto">${chart}</div></div>
-    <div class="sec"><div class="sec-head"><h2>Fechamento por nível de cliente</h2><span class="hint">realizado vs meta</span></div>
+    <div class="sec"><div class="sec-head"><h2>Fechamento por nível de cliente</h2><span class="hint">realizado vs meta${ref==='reforecast'?' (reforecast)':''}</span></div>
       <div class="grid g2">
-        <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Mês fechado — ${mesLabel(mes)}</div>${NIV.map(n=>nivelMiniTable(n,[mes],estr)).join('')}</div>
-        <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Year to date — ${year}</div>${NIV.map(n=>nivelMiniTable(n,ytdMonths,estr)).join('')}</div>
+        <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Mês fechado — ${mesLabel(mes)}</div>${NIV.map(n=>nivelMiniTable(n,[mes],estr,D.actual.mensal,D[ref].mensal)).join('')}</div>
+        <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Year to date — ${year}</div>${NIV.map(n=>nivelMiniTable(n,ytdMonths,estr,D.actual.mensal,D[ref].mensal)).join('')}</div>
       </div>
     </div>`;
 }
@@ -576,8 +582,10 @@ function initWsalesControls(){
   $('selEstr').innerHTML=`<option value="all">Todas</option>`+STR_ORDER.map(s=>`<option value="${s}">${s}</option>`).join('');
   state.estr=state.estr||'all';
   $('selEstr').value=state.estr;
+  $('selRef').value=state.ref;
   $('selSemana').onchange=e=>{state.semana=e.target.value;renderSemanal();};
   $('selEstr').onchange=e=>{state.estr=e.target.value;renderSemanal();};
+  $('selRef').onchange=e=>{state.ref=e.target.value;renderSemanal();};
 }
 const SEMANAL_KPIS=[
   {k:'receita',lbl:'Net Revenue',cur:1,desc:'Receita líquida na semana fechada'},
@@ -587,24 +595,24 @@ const SEMANAL_KPIS=[
   {k:'activation',lbl:'Ativação 10K',cur:0,desc:'Contas ativadas (10k GMV)'},
 ];
 function renderSemanal(){
-  const semana=state.semana, estr=state.estr;
+  const semana=state.semana, estr=state.estr, ref=state.ref||'budget', refLabel=ref==='reforecast'?'Reforecast':'Budget';
   // subtítulo do topo — mesma correção aplicada na Mensal Sales (30/07): sem isso, ficava
   // desatualizado ao trocar a semana no seletor, que chama renderSemanal() direto.
   if($('ctxLine')) $('ctxLine').textContent=CTX.wsales+(semana?(' · '+semanaLabel(semana)):'');
   const idx=D.semanas.indexOf(semana), prev=D.semanas[idx-1], prevPrev=D.semanas[idx-2];
-  const act=metricsForSemana('actual',semana,estr), bud=metricsForSemana('budget',semana,estr), actPrev=metricsForSemana('actual',prev,estr);
+  const act=metricsForSemana('actual',semana,estr), bud=metricsForSemana(ref,semana,estr), actPrev=metricsForSemana('actual',prev,estr);
   if(!semana||!act){ $('viewSemanal').innerHTML='<div class="card"><span class="miss">Sem dado suficiente para esta semana/estratégia — rode build_data.js com os CSVs atualizados.</span></div>'; return; }
 
-  const kpis=`<div class="grid g5">${SEMANAL_KPIS.map(c=>mensalKpiCard(c,act,bud,actPrev,semana,'WoW')).join('')}</div>`;
+  const kpis=`<div class="grid g5">${SEMANAL_KPIS.map(c=>mensalKpiCard(c,act,bud,actPrev,semana,'WoW',refLabel)).join('')}</div>`;
   // "Semana Anterior" (31/07/2026, a pedido do Gabriel): os mesmos 5 cards, uma semana antes da
   // selecionada (sempre relativo ao seletor, não fixo — se trocar a semana no topo, esta seção
   // acompanha). actPrev vira actPrevPrev aqui, pra manter o próprio WoW dessa seção também.
-  const actPrevWk=metricsForSemana('actual',prev,estr), budPrevWk=metricsForSemana('budget',prev,estr), actPrevPrevWk=metricsForSemana('actual',prevPrev,estr);
-  const kpisPrev=`<div class="grid g5">${SEMANAL_KPIS.map(c=>mensalKpiCard(c,actPrevWk,budPrevWk,actPrevPrevWk,prev,'WoW')).join('')}</div>`;
+  const actPrevWk=metricsForSemana('actual',prev,estr), budPrevWk=metricsForSemana(ref,prev,estr), actPrevPrevWk=metricsForSemana('actual',prevPrev,estr);
+  const kpisPrev=`<div class="grid g5">${SEMANAL_KPIS.map(c=>mensalKpiCard(c,actPrevWk,budPrevWk,actPrevPrevWk,prev,'WoW',refLabel)).join('')}</div>`;
 
   const year=semana.slice(0,4);
   const ytdWeeks=D.semanas.filter(w=>w.startsWith(year)&&w<=semana).sort();
-  const yearVals=ytdWeeks.map(w=>({w,a:metricsForSemana('actual',w,estr)?.receita||0,b:metricsForSemana('budget',w,estr)?.receita||0}));
+  const yearVals=ytdWeeks.map(w=>({w,a:metricsForSemana('actual',w,estr)?.receita||0,b:metricsForSemana(ref,w,estr)?.receita||0}));
   // "Fechamento por nível de cliente" (05/08/2026, a pedido do Gabriel): a coluna da direita é
   // MTD (mês da semana fechada), não YTD — YTD nessa tabela de nível fica só na Mensal Sales.
   const mesDaSemana=D.semanaMes[semana];
@@ -614,19 +622,19 @@ function renderSemanal(){
       <thead><tr><th></th>${yearVals.map(v=>`<th style="text-align:center">${semanaLabel(v.w)}</th>`).join('')}</tr></thead>
       <tbody>
         <tr><td style="font-weight:600">Actual</td>${yearVals.map(v=>`<td class="mono" style="text-align:center">${fBRL(v.a)}</td>`).join('')}</tr>
-        <tr><td style="font-weight:600;color:var(--text-muted)">Budget</td>${yearVals.map(v=>`<td class="mono" style="text-align:center;color:var(--text-muted)">${fBRL(v.b)}</td>`).join('')}</tr>
+        <tr><td style="font-weight:600;color:var(--text-muted)">${refLabel}</td>${yearVals.map(v=>`<td class="mono" style="text-align:center;color:var(--text-muted)">${fBRL(v.b)}</td>`).join('')}</tr>
         <tr><td style="font-weight:600">Ating.</td>${yearVals.map(v=>{const p=pct(v.a,v.b);return `<td class="mono" style="text-align:center;font-weight:700">${p!=null?`<span class="att ${attClass(p)}">${p}%</span>`:'—'}</td>`;}).join('')}</tr>
       </tbody></table>`;
 
   $('viewSemanal').innerHTML=`
-    <div class="sec"><div class="sec-head"><h2>Realização vs meta · semana fechada</h2><span class="hint">${semanaLabel(semana)} · ${estr==='all'?'todas estratégias':estr}</span></div>${kpis}</div>
-    <div class="sec"><div class="sec-head"><h2>Realização vs meta · Semana Anterior</h2><span class="hint">${semanaLabel(prev)} · ${estr==='all'?'todas estratégias':estr}</span></div>${kpisPrev}</div>
-    <div class="sec"><div class="sec-head"><h2>Net Revenue · ${year} (YTD)</h2><span class="hint">actual vs budget, semana 1 → semana selecionada</span></div>
+    <div class="sec"><div class="sec-head"><h2>Realização vs meta · semana fechada</h2><span class="hint">${semanaLabel(semana)} · ${estr==='all'?'todas estratégias':estr}${ref==='reforecast'?' · Reforecast':''}</span></div>${kpis}</div>
+    <div class="sec"><div class="sec-head"><h2>Realização vs meta · Semana Anterior</h2><span class="hint">${semanaLabel(prev)} · ${estr==='all'?'todas estratégias':estr}${ref==='reforecast'?' · Reforecast':''}</span></div>${kpisPrev}</div>
+    <div class="sec"><div class="sec-head"><h2>Net Revenue · ${year} (YTD)</h2><span class="hint">actual vs ${refLabel.toLowerCase()}, semana 1 → semana selecionada</span></div>
       <div class="card" style="padding:24px;overflow-x:auto">${chart}</div></div>
-    <div class="sec"><div class="sec-head"><h2>Fechamento por nível de cliente</h2><span class="hint">realizado vs meta</span></div>
+    <div class="sec"><div class="sec-head"><h2>Fechamento por nível de cliente</h2><span class="hint">realizado vs meta${ref==='reforecast'?' (reforecast)':''}</span></div>
       <div class="grid g2">
-        <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Semana fechada — ${semanaLabel(semana)}</div>${NIV.map(n=>nivelMiniTable(n,[semana],estr,D.actual.semanal,D.budget.semanal)).join('')}</div>
-        <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Month to date — ${mesLabel(mesDaSemana)}</div>${NIV.map(n=>nivelMiniTable(n,mtdWeeks,estr,D.actual.semanal,D.budget.semanal)).join('')}</div>
+        <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Semana fechada — ${semanaLabel(semana)}</div>${NIV.map(n=>nivelMiniTable(n,[semana],estr,D.actual.semanal,D[ref].semanal)).join('')}</div>
+        <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Month to date — ${mesLabel(mesDaSemana)}</div>${NIV.map(n=>nivelMiniTable(n,mtdWeeks,estr,D.actual.semanal,D[ref].semanal)).join('')}</div>
       </div>
     </div>`;
 }

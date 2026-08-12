@@ -39,9 +39,11 @@ Pré-requisito: [Node.js](https://nodejs.org) instalado (versão LTS).
      "Como renovar o token do Astrobox" abaixo).
    - **Manual:** rode as queries no Redshift e exporte substituindo os arquivos com o mesmo
      nome, separador `;` (ver `Dados/README.md` para o contrato exato de cada arquivo).
-   Atualize também `budget_oficial.csv`/`reforecast_oficial.csv` (meta mensal) e
-   `f_budget_daily.csv`/`f_reforecast_daily.csv` (meta diária, alimenta a meta por semana)
-   quando houver revisão de meta — essas continuam sendo planilhas mantidas à mão.
+   Atualize também `budget_oficial.csv`/`reforecast_oficial.csv` (meta mensal, `reforecast_oficial.csv`
+   pode ser puxado do datasource "Reforecast" do Astrobox) e `f_budget_daily.csv` (meta diária do
+   budget, alimenta a meta semanal — `f_reforecast_daily.csv` não é mais usado, a meta semanal de
+   reforecast é reconstruída a partir de `reforecast_oficial.csv`, ver `Dados/README.md`) quando
+   houver revisão de meta — essas continuam sendo planilhas mantidas à mão.
 2. Duplo clique em `update.bat` (ou rode `node app/build_data.js` no terminal, a partir da
    raiz do projeto) — isso regenera `app/app_data.js`.
 3. Abra `app/index.html` e confira as 4 abas.

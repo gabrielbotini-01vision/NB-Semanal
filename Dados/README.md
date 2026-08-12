@@ -65,12 +65,11 @@ reescrever a query no Redshift.
   fechado). A meta por **semana** (aba Semanal Sales) vem dos arquivos daily abaixo, não
   destas.
 
-## Budget/reforecast diário (obrigatório — meta real por semana)
+## Budget diário (obrigatório — meta real por semana do BUDGET)
 
 | Arquivo | Separador | Granularidade |
 |---|---|---|
 | `f_budget_daily.csv` | `;` | 1 linha por dia × nível × estratégia × pessoa (SDR/Closer/Onboarding), com rateio |
-| `f_reforecast_daily.csv` | `;` | idem |
 
 Data vem por extenso em português (`"sexta-feira, 13 de março de 2026"`), mas `build_data.js`
 **não precisa parsear isso** — usa direto as colunas `Ano` + `Semana_Ano` (já seguem a mesma
@@ -85,6 +84,21 @@ por arredondamento).
 Essas colunas também trazem meta por **pessoa** (SDR/Closer/Onboarding + `Percent_Rateio`) —
 não usado ainda no dashboard, mas disponível para uma meta individual real no futuro (hoje
 o 1:1 Gestor só compara com a mediana do squad, não com uma meta pessoal).
+
+**`f_reforecast_daily.csv` não é mais usado** (12/08/2026, a pedido do Gabriel — pode até
+apagar o arquivo se ele estiver aqui). Esse export manual, feito no mesmo lote que o de budget,
+ficou desatualizado sem ninguém perceber (reforecast é revisado bem mais vezes que budget) e
+gerava meta semanal errada. `build_data.js` agora **reconstrói** a meta semanal de reforecast a
+partir de `reforecast_oficial.csv` (mensal, ver seção acima) direto em JS
+(`buildSemanalDeMensal()`), replicando a fórmula do editor avançado (Power Query/M) do Power BI
+que gerava aquele arquivo: meta do mês ÷ dias úteis do mês (Contacted/Connected/Opps/SQL/CW, só
+em dia útil) ou ÷ dias corridos do mês (Activation/SAP/GMV/Net Revenue, todo dia). O rateio por
+PESSOA daquele Power Query (tabela `f_rateio_budget`, a mesma usada tanto pro budget quanto pro
+reforecast) soma 100% dentro de cada nível×estratégia e por isso cancela nessa reconstrução — só
+importa pra uma meta individual por pessoa, que o dashboard ainda não usa (ver parágrafo acima).
+Validado contra `f_budget_daily.csv` real: a reconstrução bate exato ou dentro de ~0,01% da soma
+real. Se um dia o dashboard precisar de meta de reforecast por pessoa, aí sim vale reexportar um
+`f_reforecast_daily.csv` novo (ou pedir o `f_rateio_budget` como CSV à parte).
 
 ## Metas por pessoa/mês (opcional — alimenta o nível de Closer/Onboarding na tabela "por pessoa")
 

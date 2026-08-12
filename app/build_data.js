@@ -10,7 +10,8 @@ const REQUIRED = {
   'budget_oficial.csv': null,
   'reforecast_oficial.csv': null,
   'f_budget_daily.csv': null,
-  'f_reforecast_daily.csv': null,
+  // f_reforecast_daily.csv NÃO é mais lido (12/08/2026) — a meta semanal de reforecast é
+  // reconstruída a partir de reforecast_oficial.csv, ver buildSemanalDeMensal() mais abaixo.
 };
 const missing = Object.keys(REQUIRED).filter(f => !fs.existsSync(DIR + f));
 if (missing.length) {
@@ -793,7 +794,8 @@ function buildDailySemanal(name) {
   return buildMensal(cells); // genérico o bastante pra reaproveitar (chave semana em vez de mês)
 }
 const budgetSemanal = buildDailySemanal('f_budget_daily.csv');
-const reforecastSemanal = buildDailySemanal('f_reforecast_daily.csv');
+// reforecastSemanal NÃO vem mais de Dados/f_reforecast_daily.csv — ver reconstrução logo após
+// weekEndUTC() mais abaixo (precisa dessas duas funções, por isso fica depois).
 
 // actual.semanal — mesma estrutura {total,porNivel,porEstrategia} do actual.mensal, só que
 // por semana (reaproveita buildMensal, que não sabe/não liga se a chave é mês ou semana).
@@ -806,7 +808,10 @@ for (const w in actualSemanal) {
   for (const b in actualSemanal[w].porNivel) roundM(actualSemanal[w].porNivel[b]);
   for (const e in actualSemanal[w].porEstrategia) roundM(actualSemanal[w].porEstrategia[e]);
 }
-const semanas = [...new Set([...Object.keys(actualSemanal), ...Object.keys(budgetSemanal), ...Object.keys(reforecastSemanal)])].sort();
+// semanas: budgetSemanal (f_budget_daily.csv) já cobre o ano inteiro (mesma cobertura que
+// f_reforecast_daily.csv tinha), então não precisa mais do reforecastSemanal aqui pra não
+// perder semana nenhuma — reforecastSemanal é construído logo abaixo, DEPOIS desta lista.
+const semanas = [...new Set([...Object.keys(actualSemanal), ...Object.keys(budgetSemanal)])].sort();
 
 // semana -> mês (chave 'YYYY-MM'), usado pelo filtro em cascata Mês → Semana no dashboard.
 // Mês de uma semana = mês da SEGUNDA-FEIRA que abre a semana (ou 01/jan pra semana 1 parcial).
@@ -843,6 +848,71 @@ function weekEndUTC(weekKey) {
   if (w === 1) { const d = firstMondayUTC(year); d.setUTCDate(d.getUTCDate() - 1); return d; } // véspera da 1ª segunda
   const d = weekStartUTC(weekKey); d.setUTCDate(d.getUTCDate() + 6); return d;                  // domingo
 }
+// reforecastSemanal (12/08/2026, a pedido do Gabriel): reconstruído a partir do reforecastMensal
+// (planilha reforecast_oficial.csv) em vez de lido de Dados/f_reforecast_daily.csv — esse arquivo
+// era um export manual separado, feito no mesmo lote que o de budget, e ficou desatualizado sem
+// ninguém perceber (reforecast é revisado bem mais vezes que budget ao longo do trimestre). O
+// Gabriel mandou o editor avançado do Power BI (Power Query/M) que gera aquele arquivo lá — a
+// fórmula é: meta do MÊS (f_goals) rateada por PESSOA (tabela f_rateio_budget, a MESMA usada
+// tanto pro budget quanto pro reforecast) e depois por DIA. Rateio por pessoa soma 100% dentro
+// de cada nível×estratégia — como D.budget/D.reforecast só expõem total/porNivel/porEstrategia
+// (nunca por pessoa), o rateio por pessoa CANCELA na soma e não precisa ser reproduzido; só a
+// divisão por dia importa:
+//   • Contacted/Connected/Opps/SQL/CW → meta do mês ÷ dias ÚTEIS do mês, só conta em dia útil
+//     (mesma regra do Dia_Util do Power Query: seg-sex, sem feriado).
+//   • Activation/SAP/GMV/Net Revenue → meta do mês ÷ dias CORRIDOS do mês, todo dia (inclui
+//     fim de semana) — confirmado batendo com o rateio real (Net_Revenue_Dia idêntico
+//     sábado/domingo/dia útil no f_budget_daily.csv).
+// Validado contra f_budget_daily.csv real (esse sim ainda lido normalmente, ver budgetSemanal
+// acima — sabemos que bate com o Power BI): reconstruir a mesma semana com esta fórmula bateu
+// exato (Opps: 65 reconstruído = 65 real) ou dentro de ~0,01% (Net Revenue: R$466.952
+// reconstruído vs R$466.993 real) — mesma margem de arredondamento que já existia no rateio.
+// Ganho: reforecastSemanal agora segue automaticamente qualquer atualização de
+// reforecast_oficial.csv, sem precisar reexportar um 2º arquivo diário à parte.
+function diasUteisNoMesUTC(ano, mes0) { // mes0 = 0-indexado (0=jan)
+  const n = new Date(Date.UTC(ano, mes0 + 1, 0)).getUTCDate();
+  let c = 0;
+  for (let d = 1; d <= n; d++) { const dow = new Date(Date.UTC(ano, mes0, d)).getUTCDay(); if (dow >= 1 && dow <= 5) c++; }
+  return c;
+}
+const RATEIO_DIA_UTIL = ['contacted', 'connected', 'opps', 'sql', 'cw'];
+const RATEIO_DIA_CORRIDO = ['activation', 'sap', 'gmv', 'receita'];
+function buildSemanalDeMensal(mensalObj, semanasAlvo) {
+  const out = {};
+  for (const w of semanasAlvo) {
+    const start = weekStartUTC(w), end = weekEndUTC(w);
+    const acc = { total: blankM(), porNivel: {}, porEstrategia: {}, porNivelEstrategia: {} };
+    const addDia = (dst, src, diaUtil, diasUteisMes, diasCorridosMes) => {
+      if (!src) return;
+      if (diaUtil && diasUteisMes) RATEIO_DIA_UTIL.forEach(m => dst[m] = (dst[m] || 0) + (src[m] || 0) / diasUteisMes);
+      if (diasCorridosMes) RATEIO_DIA_CORRIDO.forEach(m => dst[m] = (dst[m] || 0) + (src[m] || 0) / diasCorridosMes);
+    };
+    for (const d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+      const ano = d.getUTCFullYear(), mes0 = d.getUTCMonth();
+      const mk = ano + '-' + String(mes0 + 1).padStart(2, '0');
+      const mCell = mensalObj[mk]; if (!mCell) continue;
+      const dow = d.getUTCDay(), diaUtil = dow >= 1 && dow <= 5;
+      const diasUteisMes = diasUteisNoMesUTC(ano, mes0), diasCorridosMes = new Date(Date.UTC(ano, mes0 + 1, 0)).getUTCDate();
+      addDia(acc.total, mCell.total, diaUtil, diasUteisMes, diasCorridosMes);
+      for (const niv in mCell.porNivel) { acc.porNivel[niv] = acc.porNivel[niv] || blankM(); addDia(acc.porNivel[niv], mCell.porNivel[niv], diaUtil, diasUteisMes, diasCorridosMes); }
+      for (const es in mCell.porEstrategia) { acc.porEstrategia[es] = acc.porEstrategia[es] || blankM(); addDia(acc.porEstrategia[es], mCell.porEstrategia[es], diaUtil, diasUteisMes, diasCorridosMes); }
+      for (const niv in mCell.porNivelEstrategia) {
+        acc.porNivelEstrategia[niv] = acc.porNivelEstrategia[niv] || {};
+        for (const es in mCell.porNivelEstrategia[niv]) {
+          acc.porNivelEstrategia[niv][es] = acc.porNivelEstrategia[niv][es] || blankM();
+          addDia(acc.porNivelEstrategia[niv][es], mCell.porNivelEstrategia[niv][es], diaUtil, diasUteisMes, diasCorridosMes);
+        }
+      }
+    }
+    roundM(acc.total);
+    for (const b in acc.porNivel) roundM(acc.porNivel[b]);
+    for (const e in acc.porEstrategia) roundM(acc.porEstrategia[e]);
+    for (const b in acc.porNivelEstrategia) for (const e in acc.porNivelEstrategia[b]) roundM(acc.porNivelEstrategia[b][e]);
+    out[w] = acc;
+  }
+  return out;
+}
+const reforecastSemanal = buildSemanalDeMensal(reforecastMensal, Object.keys(budgetSemanal));
 const sdrLeads = fop.filter(r => isRealSdr(cleanEmail(r.owner_email)) && leadFlowOk(r) && leadBrOk(r)).map(r => ({
   estr: estr(r.sales_strategy), owner: cleanEmail(r.owner_email),
   contacted: cleanDate(r.contacted_date), connected: cleanDate(r.connected_date),
