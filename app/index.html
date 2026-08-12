@@ -538,21 +538,9 @@ function renderMensal(){
 
   const year=mes.slice(0,4);
   const ytdMonths=D.meses.filter(m=>m.startsWith(year)&&m<=mes).sort();
-  const yearVals=ytdMonths.map(m=>({m,a:metricsForMes('actual',m,estr)?.receita||0,b:metricsForMes(ref,m,estr)?.receita||0}));
-  // só a tabela (sem as barras) — Actual/Budget ou Reforecast/Ating. por mês, colunas alinhadas ao cabeçalho.
-  const chart=`
-    <table class="tbl" style="box-shadow:none">
-      <thead><tr><th></th>${yearVals.map(v=>`<th style="text-align:center">${mesLabel(v.m)}</th>`).join('')}</tr></thead>
-      <tbody>
-        <tr><td style="font-weight:600">Actual</td>${yearVals.map(v=>`<td class="mono" style="text-align:center">${fBRL(v.a)}</td>`).join('')}</tr>
-        <tr><td style="font-weight:600;color:var(--text-muted)">${refLabel}</td>${yearVals.map(v=>`<td class="mono" style="text-align:center;color:var(--text-muted)">${fBRL(v.b)}</td>`).join('')}</tr>
-        <tr><td style="font-weight:600">Ating.</td>${yearVals.map(v=>{const p=pct(v.a,v.b);return `<td class="mono" style="text-align:center;font-weight:700">${p!=null?`<span class="att ${attClass(p)}">${p}%</span>`:'—'}</td>`;}).join('')}</tr>
-      </tbody></table>`;
 
   $('viewMensal').innerHTML=`
     <div class="sec"><div class="sec-head"><h2>Realização vs meta · mês fechado</h2><span class="hint">${mesLabel(mes)} · ${estr==='all'?'todas estratégias':estr}${ref==='reforecast'?' · Reforecast':''}</span></div>${kpis}</div>
-    <div class="sec"><div class="sec-head"><h2>Net Revenue · ${year} (YTD)</h2><span class="hint">actual vs ${refLabel.toLowerCase()}, jan → mês selecionado</span></div>
-      <div class="card" style="padding:24px;overflow-x:auto">${chart}</div></div>
     <div class="sec"><div class="sec-head"><h2>Fechamento por nível de cliente</h2><span class="hint">realizado vs meta${ref==='reforecast'?' (reforecast)':''}</span></div>
       <div class="grid g2">
         <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Mês fechado — ${mesLabel(mes)}</div>${NIV.map(n=>nivelMiniTable(n,[mes],estr,D.actual.mensal,D[ref].mensal)).join('')}</div>
@@ -610,27 +598,14 @@ function renderSemanal(){
   const actPrevWk=metricsForSemana('actual',prev,estr), budPrevWk=metricsForSemana(ref,prev,estr), actPrevPrevWk=metricsForSemana('actual',prevPrev,estr);
   const kpisPrev=`<div class="grid g5">${SEMANAL_KPIS.map(c=>mensalKpiCard(c,actPrevWk,budPrevWk,actPrevPrevWk,prev,'WoW',refLabel)).join('')}</div>`;
 
-  const year=semana.slice(0,4);
-  const ytdWeeks=D.semanas.filter(w=>w.startsWith(year)&&w<=semana).sort();
-  const yearVals=ytdWeeks.map(w=>({w,a:metricsForSemana('actual',w,estr)?.receita||0,b:metricsForSemana(ref,w,estr)?.receita||0}));
   // "Fechamento por nível de cliente" (05/08/2026, a pedido do Gabriel): a coluna da direita é
   // MTD (mês da semana fechada), não YTD — YTD nessa tabela de nível fica só na Mensal Sales.
   const mesDaSemana=D.semanaMes[semana];
   const mtdWeeks=D.semanas.filter(w=>D.semanaMes[w]===mesDaSemana&&w<=semana).sort();
-  const chart=`
-    <table class="tbl" style="box-shadow:none">
-      <thead><tr><th></th>${yearVals.map(v=>`<th style="text-align:center">${semanaLabel(v.w)}</th>`).join('')}</tr></thead>
-      <tbody>
-        <tr><td style="font-weight:600">Actual</td>${yearVals.map(v=>`<td class="mono" style="text-align:center">${fBRL(v.a)}</td>`).join('')}</tr>
-        <tr><td style="font-weight:600;color:var(--text-muted)">${refLabel}</td>${yearVals.map(v=>`<td class="mono" style="text-align:center;color:var(--text-muted)">${fBRL(v.b)}</td>`).join('')}</tr>
-        <tr><td style="font-weight:600">Ating.</td>${yearVals.map(v=>{const p=pct(v.a,v.b);return `<td class="mono" style="text-align:center;font-weight:700">${p!=null?`<span class="att ${attClass(p)}">${p}%</span>`:'—'}</td>`;}).join('')}</tr>
-      </tbody></table>`;
 
   $('viewSemanal').innerHTML=`
     <div class="sec"><div class="sec-head"><h2>Realização vs meta · semana fechada</h2><span class="hint">${semanaLabel(semana)} · ${estr==='all'?'todas estratégias':estr}${ref==='reforecast'?' · Reforecast':''}</span></div>${kpis}</div>
     <div class="sec"><div class="sec-head"><h2>Realização vs meta · Semana Anterior</h2><span class="hint">${semanaLabel(prev)} · ${estr==='all'?'todas estratégias':estr}${ref==='reforecast'?' · Reforecast':''}</span></div>${kpisPrev}</div>
-    <div class="sec"><div class="sec-head"><h2>Net Revenue · ${year} (YTD)</h2><span class="hint">actual vs ${refLabel.toLowerCase()}, semana 1 → semana selecionada</span></div>
-      <div class="card" style="padding:24px;overflow-x:auto">${chart}</div></div>
     <div class="sec"><div class="sec-head"><h2>Fechamento por nível de cliente</h2><span class="hint">realizado vs meta${ref==='reforecast'?' (reforecast)':''}</span></div>
       <div class="grid g2">
         <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Semana fechada — ${semanaLabel(semana)}</div>${NIV.map(n=>nivelMiniTable(n,[semana],estr,D.actual.semanal,D[ref].semanal)).join('')}</div>
@@ -797,10 +772,13 @@ function closerEstoqueBars(all){
   return `${legend}<div class="estoque">${cols}</div>
     <div class="edata-lbl">Variação do estoque · ${gran==='mes'?'MoM':'WoW'}</div><div class="edata">${data}</div>`;
 }
-// estoque de ativação (Onboarding): barras empilhadas (Nunca vendeu/Vendendo/Ativos) por
+// estoque de ativação (Onboarding): barras empilhadas (Inativo/Ativando <10K/Ativo >10K) por
 // semana — reclassificado em 01-03/08/2026 a pedido do Gabriel (antes era CW/1k+/5k+, saía do
 // estoque ao ativar 10k; agora "ativo" fica no estoque, só sai por accomplished/unaccomplished
-// — ver comentário em onbEstoque no build_data.js).
+// — ver comentário em onbEstoque no build_data.js). Rótulos "Inativo"/"Ativando <10K"/"Ativo
+// >10K" (12/08/2026, a pedido do Gabriel — já tinham passado por "Nunca vendeu"/"Vendendo"/
+// "Ativos" antes disso); as chaves internas continuam nuncaVendeu/vendendo/ativo (D.onbEstoque,
+// build_data.js), só o texto exibido mudou.
 function onbEstoqueHTML(estrF){ return onbEstoqueBars((D.onbEstoque&&D.onbEstoque[estrF||'all'])||[]); }
 // núcleo do gráfico de Estoque Onboarding — extraído (05/08/2026), ver sdrEstoqueBars acima.
 function onbEstoqueBars(all){
@@ -815,11 +793,11 @@ function onbEstoqueBars(all){
     const tot=tots[i];
     const rotulo=gran==='mes'?mesLabel(r.semana):semanaLabel(r.semana);
     const segs=ES.map(([k,c,lc])=>{const hh=h(r[k]);return `<div class="eseg" style="height:${hh}px;background:${c}">${hh>=13?`<span class="eseglbl" style="color:${lc}">${fN(r[k])}</span>`:''}</div>`;}).join('');
-    return `<div class="ecol" title="${rotulo} · total ${fN(tot)} — Nunca vendeu ${fN(r.nuncaVendeu)} · Vendendo ${fN(r.vendendo)} · Ativos ${fN(r.ativo)}">
+    return `<div class="ecol" title="${rotulo} · total ${fN(tot)} — Inativo ${fN(r.nuncaVendeu)} · Ativando &lt;10K ${fN(r.vendendo)} · Ativo &gt;10K ${fN(r.ativo)}">
       <div class="etot">${fN(tot)}</div>${segs}
       <div class="ecap">${gran==='mes'?mesLabelShort(r.semana):r.semana.replace('2025-','25').replace('2026-','26')}</div></div>`;
   }).join('');
-  const legend=`<div class="legend" style="margin:0 0 10px"><span><i class="sw" style="background:#98A2B3"></i>Nunca vendeu</span><span><i class="sw" style="background:#344054"></i>Vendendo</span><span><i class="sw" style="background:var(--accent)"></i>Ativos</span></div>`;
+  const legend=`<div class="legend" style="margin:0 0 10px"><span><i class="sw" style="background:#98A2B3"></i>Inativo</span><span><i class="sw" style="background:#344054"></i>Ativando &lt;10K</span><span><i class="sw" style="background:var(--accent)"></i>Ativo &gt;10K</span></div>`;
   const data=rows.map((r,i)=>{const d=i>0?tots[i]-tots[i-1]:null;const col=d==null?'':(d>0?'var(--success)':d<0?'var(--danger)':'var(--text-faint)');return `<div class="edcell" style="${col?'color:'+col+';font-weight:700':''}">${d==null?'—':(d>0?'+':d<0?'−':'')+fN(Math.abs(d))}</div>`;}).join('');
   return `${legend}<div class="estoque">${cols}</div>
     <div class="edata-lbl">Variação do estoque · ${gran==='mes'?'MoM':'WoW'}</div><div class="edata">${data}</div>`;
@@ -1352,7 +1330,7 @@ function renderAreaOnboarding(){
       <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d,cls,icon])=>`<div class="kpi ${cls||''}">${icon?`<span class="kpi-ic">${icon}</span>`:''}<span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div></div>
     <div class="sec"><div class="sec-head"><h2>Evolução do resultado</h2>${granToggleHTML()}</div>
       <div class="grid g2">
-        <div class="card">${cardHd(KIC.estoque,'Estoque de ativação','snapshot no fim de cada semana · últ. 16 · Nunca vendeu → Vendendo → Ativos')}${onbEstoqueHTML(filtF)}</div>
+        <div class="card">${cardHd(KIC.estoque,'Estoque de ativação','últimas 16 semanas - Inativos = Nunca vendeu, Ativando &lt;10K, Ativos &gt; 10K')}${onbEstoqueHTML(filtF)}</div>
         <div class="card">${cardHd(KIC.check,'Status atual por semana de entrada (CW)','fechou × situação hoje · últ. 16')}${onbStatusHTML(filtF)}</div>
       </div></div>
     <div class="sec"><div class="sec-head"><h2>Ativação por nível de cliente</h2><span class="hint">ativações 10k por semana · últimas 8 semanas</span></div>
