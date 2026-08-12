@@ -523,7 +523,7 @@ function initMensalControls(){
   $('selRefMensal').value=state.refMensal;
   $('selMesMensal').onchange=e=>{state.mesMensal=e.target.value;renderMensal();};
   $('selEstrMensal').onchange=e=>{state.estrMensal=e.target.value;renderMensal();};
-  $('selRefMensal').onchange=e=>{state.refMensal=e.target.value;renderMensal();};
+  $('selRefMensal').onchange=e=>setRef(e.target.value);
 }
 function renderMensal(){
   const mes=state.mesMensal, estr=state.estrMensal, ref=state.refMensal||'budget', refLabel=ref==='reforecast'?'Reforecast':'Budget';
@@ -585,7 +585,7 @@ function initWsalesControls(){
   $('selRef').value=state.ref;
   $('selSemana').onchange=e=>{state.semana=e.target.value;renderSemanal();};
   $('selEstr').onchange=e=>{state.estr=e.target.value;renderSemanal();};
-  $('selRef').onchange=e=>{state.ref=e.target.value;renderSemanal();};
+  $('selRef').onchange=e=>setRef(e.target.value);
 }
 const SEMANAL_KPIS=[
   {k:'receita',lbl:'Net Revenue',cur:1,desc:'Receita líquida na semana fechada'},
@@ -1405,7 +1405,22 @@ function initWareaControls(){
   $('selNivelArea').value=state.nivelArea;
   $('selNivelArea').onchange=e=>{state.nivelArea=e.target.value; if(e.target.value!=='all') state.estrArea='all'; $('selEstrArea').value='all'; renderArea();};
   $('selRefArea').value=state.refArea;
-  $('selRefArea').onchange=e=>{state.refArea=e.target.value;renderArea();};
+  $('selRefArea').onchange=e=>setRef(e.target.value);
+}
+// Referência (Budget/Reforecast) sincronizada entre Mensal Sales/Semanal Sales/Semanal Área
+// (12/08/2026, a pedido do Gabriel) — trocar em qualquer uma das 3 telas troca nas outras duas
+// também, não é preciso repetir a escolha ao mudar de aba. Continuam sendo 3 campos de estado
+// separados (ref/refMensal/refArea, cada render() lê o seu) só porque cada página já lia o seu
+// próprio antes disso — mais simples manter os 3 sempre iguais aqui do que unificar num só campo
+// e caçar todo lugar que lê state.ref/refMensal/refArea espalhado pelo arquivo.
+function setRef(v){
+  state.ref=v; state.refMensal=v; state.refArea=v;
+  if($('selRef')) $('selRef').value=v;
+  if($('selRefMensal')) $('selRefMensal').value=v;
+  if($('selRefArea')) $('selRefArea').value=v;
+  if(state.meeting==='mensal') renderMensal();
+  else if(state.meeting==='wsales') renderSemanal();
+  else if(state.meeting==='warea') renderArea();
 }
 // mesmo modelo de cascata Mês → Semana das outras abas, com estado próprio (mesOneOne/
 // semanaOneOne) — o 1:1 Gestor passou a mostrar o resultado DAQUELA semana em vez do
