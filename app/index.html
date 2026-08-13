@@ -160,7 +160,7 @@
   .estoque{display:flex;align-items:flex-end;gap:4px;min-height:236px;padding-top:8px;padding-bottom:2px}
   .ecol{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center}
   .etot{font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text-muted);margin-bottom:4px;white-space:nowrap}
-  .eseg{width:100%;max-width:30px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .eseg{width:100%;max-width:46px;display:flex;align-items:center;justify-content:center;overflow:hidden}
   .eseglbl{font-size:8.5px;font-weight:700;color:#101828;line-height:1}
   .eseg:first-of-type{border-radius:5px 5px 0 0}
   .ecap{font-size:8.5px;color:var(--text-faint);font-family:var(--font-mono);white-space:nowrap;transform:rotate(-45deg);transform-origin:center;margin-top:8px}
@@ -356,7 +356,7 @@ function avatarHTML(p,size){
 function median(arr){const a=[...arr].filter(v=>v!=null).sort((x,y)=>x-y);const n=a.length;if(!n)return 0;return n%2?a[(n-1)/2]:(a[n/2-1]+a[n/2])/2;}
 
 // ---- estado ----
-let state={meeting:'mensal',area:'sdr',mes:null,semana:null,estr:'all',ref:'budget',mesArea:null,semanaArea:null,refArea:'budget',estrArea:'all',nivelArea:'all',evolGran:'semana',onbStatusPct100:false,mesMensal:null,estrMensal:'all',refMensal:'budget',pessoa:null,sdrSort:null,closerSort:null,onbSort:null,mesOneOne:null,semanaOneOne:null,areaOneOne:'sdr'};
+let state={meeting:'mensal',area:'sdr',mes:null,semana:null,estr:'all',ref:'budget',mesArea:null,semanaArea:null,refArea:'budget',estrArea:'all',nivelArea:'all',evolGran:'semana',onbStatusPct100:false,mesMensal:null,estrMensal:'all',refMensal:'budget',pessoa:null,sdrSort:null,closerSort:null,onbSort:null,mesOneOne:null,semanaOneOne:null,areaOneOne:'sdr',cohortTab:'all'};
 // AREA_TABS usa as chaves da Semanal Área (sdr/closers/onboarding); o 1:1 Gestor guarda
 // pessoas com outra convenção (sdr/closer/onb, ver allPeople()) — mapa entre as duas.
 const AREA_TO_ONEONE_KIND={sdr:'sdr',closers:'closer',onboarding:'onb'};
@@ -556,6 +556,13 @@ function renderMensal(){
 // layout bem diferente (funil/KPIs/ritmo por estratégia); ficava escondida da navegação desde
 // 28/07 e foi totalmente substituída por este novo formato.
 function semanaLabel(w){ if(!w)return '—'; const [y,ww]=w.split('-W'); return 'semana '+(+ww)+'/'+y; }
+// data (DD/MM) da segunda-feira que abre a semana — mesma regra de semana 1 parcial/2ª feira em
+// diante já usada em build_data.js (weekStartUTC/firstMondayUTC), reimplementada aqui só pra
+// legenda do gráfico da Visão Cohort (13/08/2026, a pedido do Gabriel — "DD/MM (semana NN)",
+// igual o relatório de referência, em vez de "26-W27").
+function firstMondayUTC(year){ const jan1=new Date(Date.UTC(year,0,1)); const add=(8-jan1.getUTCDay())%7; const d=new Date(jan1); d.setUTCDate(d.getUTCDate()+add); return d; }
+function weekStartDateUTC(w){ const [ys,ws]=w.split('-W'); const year=+ys, wn=+ws; if(wn===1) return new Date(Date.UTC(year,0,1)); const fm=firstMondayUTC(year); const d=new Date(fm); d.setUTCDate(d.getUTCDate()+(wn-2)*7); return d; }
+function weekStartLabel(w){ const d=weekStartDateUTC(w); return String(d.getUTCDate()).padStart(2,'0')+'/'+String(d.getUTCMonth()+1).padStart(2,'0'); }
 function weeksInMonth(mes,pool){ return pool.filter(w=>D.semanaMes[w]===mes); }
 function metricsForSemana(src,semana,estr){
   const m=D[src]?.semanal?.[semana]; if(!m)return null;
@@ -599,7 +606,10 @@ function renderSemanal(){
   const kpisPrev=`<div class="grid g5">${SEMANAL_KPIS.map(c=>mensalKpiCard(c,actPrevWk,budPrevWk,actPrevPrevWk,prev,'WoW',refLabel)).join('')}</div>`;
 
   // "Fechamento por nível de cliente" (05/08/2026, a pedido do Gabriel): a coluna da direita é
-  // MTD (mês da semana fechada), não YTD — YTD nessa tabela de nível fica só na Mensal Sales.
+  // MTD (mês da semana selecionada), não YTD — YTD nessa tabela de nível fica só na Mensal
+  // Sales. Acompanha o seletor de semana do topo (11/08/2026, a pedido do Gabriel): se a semana
+  // selecionada é de julho, o MTD é o de julho até aquela semana — não fica travado no mês
+  // fechado real.
   const mesDaSemana=D.semanaMes[semana];
   const mtdWeeks=D.semanas.filter(w=>D.semanaMes[w]===mesDaSemana&&w<=semana).sort();
 
@@ -742,6 +752,157 @@ function closerStatusBars(srcRaw){
   const data=weeks.map(w=>{const s=src[w],d=sqlOuAlem(s);const c=d?Math.round(s.closed_won/d*100):null;return `<div class="edcell">${c!=null?c+'%':'—'}</div>`;}).join('');
   return `${legend}<div class="estoque">${cols}</div>
     <div class="edata-lbl">Conversão da safra · closed won / SQL (chegou em SQL ou além)</div><div class="edata">${data}</div>`;
+}
+// ---- Visão Cohort do Closer (11-12/08/2026, a pedido do Gabriel) ----
+// Substitui o card "Status atual por semana de entrada (opp)" acima: mesma fonte de dado
+// (D.closerCohortStatus — cada opp contada na semana em que ENTROU no funil, com o status ATUAL
+// dela), só que lida como safra amadurecendo, no visual que o Gabriel mandou de referência (um
+// relatório separado, "Closer Analytics", que NÃO usamos como fonte de dado — só como inspiração
+// de layout). Tem 4 abas PRÓPRIAS (Funil Total/N2-N3/N4-N5/N6+, ver COHORT_TABS/state.cohortTab)
+// — de propósito INDEPENDENTES do filtro de Estratégia/Nível lá em cima da página (Semanal Área,
+// state.estrArea/state.nivelArea): mudar aquele filtro não altera este card, é preciso usar as
+// abas do próprio card. Confirmado com o Gabriel em 12/08/2026 depois de ele achar que os dados
+// estavam "mocados" porque o card não reagia ao filtro do topo — não é mock, é dado real
+// (D.closerCohortStatus), só não está ligado a esse filtro específico. Gráfico empilhado
+// (Issues/SQL·Lost·Offer+Contract·Closed Won) com uma linha de OPPs recebidas (preta, sólida,
+// SVG) e meta de opps (cinza, tracejada) sobrepostas — ver cohortLineHTML — e uma tabela única
+// abaixo com os 3 grupos (Volume opps/Conversão/Meta CW) empilhados verticalmente (rótulo do
+// grupo em vertical, writing-mode), com GAP (recebido−meta, não %) colorido via .att hi/lo — não
+// replica a escalada de meta por maturidade (37%/45%/55%) do relatório de referência, decisão do
+// Gabriel de usar só a meta (budget/reforecast) que já é validada e usada em todo o resto do
+// dashboard. N6+ usa safra MENSAL em vez de semanal — ciclo de venda longo demais pra leitura
+// semanal, mesmo critério do relatório de referência. Só agregados — sem nome de cliente/valor/
+// link de Salesforce (mesma política de PII de Dados/README.md; decisão explícita do Gabriel
+// também pra este card, ao contrário do relatório de referência, que tem um popup com nome real
+// do cliente).
+const COHORT_TABS=[['all','Funil Total'],['N2-N3','N2-N3'],['N4-N5','N4-N5'],['N6+','N6+']];
+function setCohortTab(v){state.cohortTab=v;renderArea();}
+function cohortPeriods(key){
+  const mensal=key==='N6+';
+  const raw0=(D.closerCohortStatus&&D.closerCohortStatus[key])||{};
+  const raw=mensal?statusParaMes(raw0):raw0;
+  const keys=Object.keys(raw).sort().slice(mensal?-4:-6);
+  return keys.map(p=>{
+    const s=raw[p]||{opp:0,sql:0,offer:0,contract:0,closed_won:0,lost_deal:0};
+    const total=s.opp+s.sql+s.offer+s.contract+s.closed_won+s.lost_deal;
+    const sqlOuAlem=s.sql+s.offer+s.contract+s.closed_won+s.lost_deal;
+    const aberto=s.opp+s.sql+s.offer+s.contract;
+    const b=mensal?D.budget?.mensal?.[p]:D.budget?.semanal?.[p];
+    const cell=key==='all'?b?.total:b?.porNivel?.[key];
+    return {
+      periodo:p, cap:mensal?mesLabelShort(p):p.replace('2025-','25').replace('2026-','26'),
+      // capChart: legenda de 2 linhas embaixo do gráfico ("DD/MM" + "(semana NN)"), igual o
+      // relatório de referência — só no gráfico; o cabeçalho da tabela usa o "cap" curto acima.
+      capChart:mensal?mesLabelShort(p):`${weekStartLabel(p)}<br><span style="font-size:7.5px">(semana ${p.split('-W')[1].replace(/^0/,'')})</span>`,
+      titulo:mensal?mesLabel(p):semanaLabel(p),
+      issuesSql:s.opp+s.sql, offerContract:s.offer+s.contract, closedWon:s.closed_won, lost:s.lost_deal,
+      total, sqlOuAlem, aberto, metaOpps:(cell&&cell.opps)||null, metaCw:(cell&&cell.cw)||null,
+    };
+  });
+}
+// linha de OPPs recebidas (sólida, preta) + meta opps (tracejada) por cima das barras — mesmo
+// visual do relatório de referência (12/08/2026, a pedido do Gabriel). A linha usa SVG (pontos
+// conectados por polyline) porque a barra empilhada em div/CSS não dá pra "conectar" entre
+// colunas; os pontos/rótulos em si são <div> absolutos (não SVG <text>) pra não distorcer o texto
+// com o preserveAspectRatio="none" do SVG (que só serve pra esticar as LINHAS na largura certa).
+function cohortLineHTML(periods,LH){
+  const n=periods.length;
+  const maxV=Math.max(...periods.map(p=>Math.max(p.total,p.metaOpps||0)),1);
+  const yOf=v=>95-(v/maxV)*78; // % de cima pra baixo dentro da faixa (topo 17%, base 95%)
+  const xOf=i=>(i+0.5)/n*100;
+  const actualPts=periods.map((p,i)=>`${xOf(i)},${yOf(p.total)}`).join(' ');
+  const metaPeriods=periods.filter(p=>p.metaOpps!=null);
+  const metaPts=metaPeriods.map(p=>`${xOf(periods.indexOf(p))},${yOf(p.metaOpps)}`).join(' ');
+  const dots=periods.map((p,i)=>{
+    const x=xOf(i), y=yOf(p.total);
+    return `<div style="position:absolute;left:${x}%;top:${y}%;transform:translate(-50%,-50%);width:7px;height:7px;border-radius:50%;background:#101828;box-shadow:0 0 0 2px var(--surface)"></div>
+      <div style="position:absolute;left:${x}%;top:${y}%;transform:translate(-50%,-190%);background:#101828;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:9px;white-space:nowrap">${fN(p.total)}</div>`;
+  }).join('');
+  // rótulo "Meta opps: N" perto do início da linha tracejada — mesmo visual do relatório de
+  // referência (13/08/2026, a pedido do Gabriel). Usa a meta do 1º período com meta (a linha
+  // tracejada pode variar mês a mês, diferente do relatório de referência que é sempre plana).
+  const metaLbl=metaPeriods.length?`<div style="position:absolute;left:${xOf(periods.indexOf(metaPeriods[0]))}%;top:${yOf(metaPeriods[0].metaOpps)}%;transform:translate(-8%,-230%);color:var(--text-faint);font-size:10px;font-weight:700;white-space:nowrap">Meta opps: ${fN(metaPeriods[0].metaOpps)}</div>`:'';
+  return `<div style="position:relative;height:${LH}px;margin-bottom:2px">
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;overflow:visible">
+      ${metaPts?`<polyline points="${metaPts}" fill="none" stroke="#98A2B3" stroke-width="1.4" stroke-dasharray="3,2.4" vector-effect="non-scaling-stroke"/>`:''}
+      <polyline points="${actualPts}" fill="none" stroke="#101828" stroke-width="1.8" vector-effect="non-scaling-stroke"/>
+    </svg>${metaLbl}${dots}</div>`;
+}
+// cores dos segmentos (13/08/2026, ajustado pra bater com o relatório de referência que o
+// Gabriel mandou: lá Closed Won é vermelho/laranja forte — não verde — e Lost Deals é cinza
+// sólido, não rosa claro). Issues/SQL fica quase branco (contorno), Offer/Contract laranja claro.
+const COHORT_SEG=[['closedWon','var(--accent)'],['offerContract','#FEC6A1'],['lost','#98A2B3'],['issuesSql','#E4E7EC']];
+// grade única (13/08/2026, a pedido do Gabriel — "alinha a semana embaixo do gráfico com a
+// semana da tabela"): gráfico e tabela viraram peças de UM SÓ CSS grid, com a MESMA definição
+// de colunas (mesmas 2 colunas de rótulo à esquerda + N colunas de período) — assim a coluna da
+// semana 32 no gráfico cai exatamente em cima da coluna da semana 32 na tabela, garantido pelo
+// grid (não dava pra garantir isso com <table> pra tabela e flex pro gráfico, larguras de coluna
+// calculadas por sistemas diferentes). GUTTER1 = coluna do rótulo vertical (VOLUME OPPS/
+// CONVERSÃO/META CW, só usada nas linhas da tabela); GUTTER2 = coluna do rótulo da linha (Meta
+// opps, Opps recebidas etc.) — nas linhas do gráfico ficam vazias, reservando o mesmo espaço.
+const COHORT_GUTTER1=26, COHORT_GUTTER2=150;
+function cohortUnifiedHTML(periods,headerHtml){
+  if(!periods.length) return `<div class="card">${headerHtml||''}<span class="miss">Sem dado.</span></div>`;
+  const n=periods.length, lastIdx=n-1;
+  const max=Math.max(...periods.map(p=>Math.max(p.total,p.metaOpps||0)),1), H=170, LH=90, h=v=>v>0?Math.max(2,(v/max)*H):0;
+  const legend=`<div class="legend" style="margin:0 0 10px;justify-content:center"><span><i class="sw" style="background:#E4E7EC;border:1px solid var(--border)"></i>Issues/SQL</span><span><i class="sw" style="background:#FEC6A1"></i>Offer/Contract</span><span><i class="sw" style="background:var(--accent)"></i>Closed Won</span><span><i class="sw" style="background:#98A2B3"></i>Lost Deals</span><span style="display:flex;align-items:center;gap:5px"><i style="width:8px;height:8px;border-radius:50%;background:#101828;display:inline-block"></i>OPPs (linha)</span><span style="display:flex;align-items:center;gap:5px"><i style="width:14px;height:0;border-top:2px dashed #98A2B3;display:inline-block"></i>Meta opps</span></div>`;
+  // linha (14/OPPs + meta) — spanea as N colunas de período (col 3 até a última), mesma matemática
+  // de cohortLineHTML (percentual relativo à LARGURA DO PRÓPRIO DIV, que aqui é exatamente a
+  // largura das N colunas do grid, já que o div fica posicionado ali dentro via grid-column).
+  const lineHTML=`<div style="grid-column:3 / span ${n};grid-row:1">${cohortLineHTML(periods,LH)}</div>`;
+  // ordem do array de segmentos = ordem de empilhamento (1º=topo, último=base): Closed Won no
+  // topo, Issues/SQL na base — mesma leitura "funil de baixo pra cima" do relatório de referência.
+  const barsRow=periods.map((p,i)=>{
+    const segs=COHORT_SEG.map(([k,c])=>{const hh=h(p[k]);return `<div class="eseg" style="height:${hh}px;background:${c}">${hh>=13?`<span class="eseglbl">${fN(p[k])}</span>`:''}</div>`;}).join('');
+    return `<div style="grid-column:${3+i};grid-row:2;position:relative;height:${H}px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center" title="${p.titulo} · ${fN(p.total)} viraram opp — closed won ${fN(p.closedWon)} · offer/contract ${fN(p.offerContract)} · lost ${fN(p.lost)} · issues/SQL ${fN(p.issuesSql)}${p.metaOpps?' · meta opps '+fN(p.metaOpps):''}">${segs}</div>`;
+  }).join('');
+  const capRow=periods.map((p,i)=>`<div style="grid-column:${3+i};grid-row:3;text-align:center;font-size:8.5px;font-family:var(--font-sans);color:var(--text-faint);padding-top:8px">${p.capChart}</div>`).join('');
+
+  // ---- linhas da tabela (mesma grade, a partir da linha 4) ----
+  const gcell=(label,r)=>`<div style="grid-column:1;grid-row:${r} / span 3;writing-mode:vertical-rl;transform:rotate(180deg);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-faint);background:var(--surface-2);border-top:1px solid var(--border)">${label}</div>`;
+  const lbl=(html,r,bold)=>`<div style="grid-column:2;grid-row:${r};padding:9px 12px;font-size:12.5px;white-space:nowrap;border-top:1px solid var(--border);display:flex;align-items:center;${bold?'font-weight:700':''}">${html}</div>`;
+  const val=(html,r,i,muted)=>`<div style="grid-column:${3+i};grid-row:${r};padding:9px 6px;font-size:12.5px;text-align:center;font-family:var(--font-mono);border-top:1px solid var(--border);${muted?'color:var(--text-muted)':''}">${html}</div>`;
+  const gapRow=(vals,metas)=>{
+    const gaps=periods.map((p,i)=>(i===lastIdx||metas[i]==null)?null:Math.round(vals[i]-metas[i]));
+    const mature=gaps.filter((g,i)=>i!==lastIdx&&g!=null);
+    const sum=mature.reduce((s,g)=>s+g,0);
+    return {sum,hasAny:mature.length>0,gaps};
+  };
+  const valGap=(g,r,i)=>val(g==null?'—':`<span class="att ${g>=0?'hi':'lo'}" style="font-weight:700">${g>=0?'+':''}${fN(g)}</span>`,r,i);
+  const gOpps=gapRow(periods.map(p=>p.total),periods.map(p=>p.metaOpps));
+  const gCw=gapRow(periods.map(p=>p.closedWon),periods.map(p=>p.metaCw));
+  const abertoSum=periods.reduce((s,p)=>s+p.aberto,0);
+  // cor verde/vermelho nas 2 taxas de conversão (13/08/2026, a pedido do Gabriel, pra bater
+  // visualmente com o relatório de referência) — é só indicação de leitura rápida (sem meta
+  // validada por trás, ver decisão anterior de não replicar a escalada por maturidade do
+  // relatório), corte em 80% pra Opp→SQL e 50% pra SQL→CW (mesma faixa aproximada do relatório).
+  const valPct=(v,r,i,corte)=>val(v==null?'—':(i>=lastIdx-1?`<span style="color:var(--text-faint)">${v}%</span>`:`<span style="font-weight:700;color:${v>=corte?'var(--success)':'var(--danger)'}">${v}%</span>`),r,i);
+  const rows=[
+    gcell('VOLUME OPPS',4)+lbl('Meta opps',4)+periods.map((p,i)=>val(p.metaOpps!=null?fN(p.metaOpps):'—',4,i,true)).join(''),
+    lbl('Opps recebidas',5)+periods.map((p,i)=>val(fN(p.total),5,i)).join(''),
+    lbl(`GAP opps${gOpps.hasAny?` <span class="att ${gOpps.sum>=0?'hi':'lo'}" style="margin-left:6px">${gOpps.sum>=0?'+':''}${fN(gOpps.sum)} opps</span>`:''}`,6,true)+gOpps.gaps.map((g,i)=>valGap(g,6,i)).join(''),
+    gcell('CONVERSÃO',7)+lbl('% Opp → SQL',7)+periods.map((p,i)=>valPct(p.total?Math.round(p.sqlOuAlem/p.total*100):null,7,i,80)).join(''),
+    lbl('% SQL → CW',8)+periods.map((p,i)=>valPct(p.sqlOuAlem?Math.round(p.closedWon/p.sqlOuAlem*100):null,8,i,50)).join(''),
+    lbl(`Opps em aberto <span style="margin-left:6px;font-weight:700;padding:3px 9px;border-radius:var(--r-pill);background:var(--surface-2);color:var(--text-muted)">${fN(abertoSum)}</span>`,9,true)+periods.map((p,i)=>val(fN(p.aberto),9,i)).join(''),
+    gcell('META CW',10)+lbl('Meta CW',10)+periods.map((p,i)=>val(p.metaCw!=null?fN(p.metaCw):'—',10,i,true)).join(''),
+    lbl('CW realizado',11)+periods.map((p,i)=>val(fN(p.closedWon),11,i)).join(''),
+    lbl(`GAP CW${gCw.hasAny?` <span class="att ${gCw.sum>=0?'hi':'lo'}" style="margin-left:6px">${gCw.sum>=0?'+':''}${fN(gCw.sum)} CWs</span>`:''}`,12,true)+gCw.gaps.map((g,i)=>valGap(g,12,i)).join(''),
+  ].join('');
+  return `<div class="card" style="overflow-x:auto">${headerHtml||''}${legend}
+    <div style="display:grid;grid-template-columns:${COHORT_GUTTER1}px ${COHORT_GUTTER2}px repeat(${n},minmax(50px,1fr));column-gap:4px;min-width:${COHORT_GUTTER1+COHORT_GUTTER2+n*70}px">
+      ${lineHTML}${barsRow}${capRow}${rows}
+    </div>
+  </div>`;
+}
+function closerCohortSectionHTML(){
+  const tab=COHORT_TABS.some(([k])=>k===state.cohortTab)?state.cohortTab:'all';
+  const tabs=`<div class="gtoggle">${COHORT_TABS.map(([k,l])=>`<button class="${tab===k?'on':''}" onclick="setCohortTab('${k}')">${l}</button>`).join('')}</div>`;
+  const periods=cohortPeriods(tab);
+  const gran=tab==='N6+'?'safra mensal · últimas 4':'safra semanal · últimas 6';
+  const header=cardHd(KIC.check,'Situação atual das opps por safra de entrada','safra = quando virou opp · '+gran+' · situação de hoje');
+  return `<div class="sec"><div class="sec-head"><h2>Visão Cohort <span class="hint" style="font-weight:400;text-transform:none;margin-left:6px">independe do filtro de Estratégia/Nível do topo — use as abas acima</span></h2>${tabs}</div>
+    ${cohortUnifiedHTML(periods,header)}
+  </div>`;
 }
 // estoque do funil de negociação do Closer: barras empilhadas (Opp/SQL/Offer/Contract) por
 // semana — mesmo padrão visual do estoque de SDR (legenda antes do gráfico, rótulo do valor
@@ -1000,8 +1161,11 @@ function renderAreaSdr(){
     return p ? {...p, email:o} : {email:o, nome:null, foto:null, ativo:false, estrategia:null, porSemana:{}, oppNivel:[0,0,0]}; });
   if(estrF!=='all') rowsOwner=rowsOwner.filter(r=>r.estrategia===estrF); // filtro de estratégia: só SDRs atribuídos
   // tira o grupo "Outros" (contas de time/cadência tipo bubr_bizops/bkf-team e quem não tem
-  // estratégia atribuída) — a pedido do Gabriel, a tabela mostra só SDRs de verdade.
-  rowsOwner=rowsOwner.filter(r=>!ehNaoSdr(r.email)&&r.estrategia);
+  // estratégia atribuída) — a pedido do Gabriel, a tabela mostra só SDRs de verdade. r.ativo
+  // (13/08/2026, a pedido do Gabriel) exige Cargo atual = SDR (Sales_goals) + Ativo = Sim
+  // (Sales_Infos) — tira quem tocou em algum contato por engano/erro manual no SF mas não é
+  // SDR hoje (ex.: Fabio Santana aparecendo na tabela de Closer por 1 opp com o campo errado).
+  rowsOwner=rowsOwner.filter(r=>!ehNaoSdr(r.email)&&r.estrategia&&r.ativo);
   rowsOwner.sort((a,b)=>contOwnerAt(b,week)-contOwnerAt(a,week));
   const table=groupedTable({rows:rowsOwner,groupBy:r=>r.estrategia,groupOrder:STR_ORDER,cols,kind:'sdr',totals:true,sort:state.sdrSort,hd:cardHd(KIC.users,'SDR · por pessoa','opps, C1, mix por nível e produtividade/BD')});
   $('viewArea').innerHTML=`
@@ -1151,8 +1315,11 @@ function renderAreaClosers(){
     {key:'diasOppSql',label:'Ciclo Opp→SQL',align:'c',render:r=>`<span class="mono">${r.diasOppSql!=null?r.diasOppSql+'d':'—'}</span>`},
     {key:'diasSqlWon',label:'Ciclo SQL→CW',align:'c',render:r=>`<span class="mono">${r.diasSqlWon!=null?r.diasSqlWon+'d':'—'}</span>`},
   ];
-  // só closers com pelo menos 1 CW ou Opp in na janela de 5 semanas
-  let listTbl=list.filter(r=>weeks5.some(w=>cwAt(r,w)>0||oppsAt(r,w)>0));
+  // só closers com pelo menos 1 CW ou Opp in na janela de 5 semanas, e que sejam Closer de
+  // verdade hoje (r.ativo — Cargo atual via Sales_goals + Ativo via Sales_Infos, 13/08/2026, a
+  // pedido do Gabriel): tira quem aparece aqui só por erro manual no SF (campo closer_email_sf
+  // preenchido errado numa opp pontual) sem ser Closer de fato — ex.: Fabio Santana (SDR).
+  let listTbl=list.filter(r=>r.ativo&&weeks5.some(w=>cwAt(r,w)>0||oppsAt(r,w)>0));
   if(estrF!=='all') listTbl=listTbl.filter(r=>r.estrategia===estrF);
   // agrupamento por nível (N2-N3/N4-N5/N6+), não mais por estratégia — a partir de 07/2026 o
   // time de Closer passou a ser segmentado por nível de cliente (Dados/sales_goals.csv, ver
@@ -1163,10 +1330,10 @@ function renderAreaClosers(){
     <div class="sec"><div class="sec-head"><h2>Resultado semanal</h2><span class="hint">${semanaLabel(week)}${filtF!=='all'?' · '+filtF:''}</span></div>
       <div class="grid g${kpis.length}">${kpis.map(([l,v,s,d,cls,icon])=>`<div class="kpi ${cls||''}">${icon?`<span class="kpi-ic">${icon}</span>`:''}<span class="rail"></span><div class="lbl">${l}</div><div class="sub2">${d||''}</div><div class="num n">${v}</div><div class="sub"><span>${s}</span></div></div>`).join('')}</div></div>
     <div class="sec"><div class="sec-head"><h2>Evolução do resultado</h2>${granToggleHTML()}</div>
-      <div class="grid g2">
+      <div class="grid">
         <div class="card">${cardHd(KIC.estoque,'Estoque do funil Closer','snapshot no fim de cada semana · últ. 16 · Opp (inclui Issues) → SQL → Offer → Contract')}${closerEstoqueHTML(filtF)}</div>
-        <div class="card">${cardHd(KIC.check,'Status atual por semana de entrada (opp)','virou opp × situação hoje · últ. 16')}${closerStatusHTML(filtF)}</div>
       </div></div>
+    ${closerCohortSectionHTML()}
     <div class="sec"><div class="sec-head"><h2>CW por nível de cliente</h2><span class="hint">fechamentos por semana · últimas 8 semanas</span></div>
       <div class="grid g3">${wt}</div></div>
     <div class="sec"><div class="sec-head"><h2>Detalhamento</h2><span class="hint">${semanaLabel(week)}</span></div>
@@ -1316,8 +1483,12 @@ function renderAreaOnboarding(){
     {key:'cwAct10k5',label:'CW→10K · 5s',align:'c',icon:TI.opp,group:'Hist. 5 semanas',render:r=>`<span class="mono">${cwAct10kRate5(r)!=null?cwAct10kRate5(r)+'%':'—'}</span>`,agg:rows=>{const c=sumBy(rows,cw5Sum),a=sumBy(rows,cwAct10k5Sum);return c?Math.round(a/c*100)+'%':'—';},sort:cwAct10kRate5},
     {key:'diasWonAtivacao',label:'Ciclo CW→Ativação',align:'c',render:r=>`<span class="mono">${r.diasWonAtivacao!=null?r.diasWonAtivacao+'d':'—'}</span>`},
   ];
-  // só onboarders com pelo menos 1 CW ou Ativação na janela de 5 semanas
-  let listTbl=list.filter(r=>weeks5.some(w=>cwAt(r,w)>0||actAt(r,w)>0));
+  // só onboarders com pelo menos 1 CW ou Ativação na janela de 5 semanas, e que sejam Onboarder
+  // de verdade hoje (r.ativo — Cargo atual via Sales_goals + Ativo via Sales_Infos, 13/08/2026, a
+  // pedido do Gabriel): tira quem aparece aqui só por erro manual no SF (campo
+  // onboarding_email_sf preenchido errado numa opp pontual) sem ser Onboarder de fato — ex.:
+  // Camila Harumi (Closer).
+  let listTbl=list.filter(r=>r.ativo&&weeks5.some(w=>cwAt(r,w)>0||actAt(r,w)>0));
   if(estrF!=='all') listTbl=listTbl.filter(r=>r.estrategia===estrF);
   // sem quebra por Outbound/Inbound (07/08/2026, a pedido do Gabriel) — lista única, ordenável,
   // diferente de SDR/Closer que continuam agrupados por estratégia.

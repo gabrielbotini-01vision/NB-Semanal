@@ -269,6 +269,54 @@ function pushCiclo(key, dateA, dateB) {
   return d;
 }
 
+// Cargo/Ativo/Nome/Foto por pessoa (12/08/2026, a pedido do Gabriel) — DUAS fontes com escopos
+// DIFERENTES, de propósito:
+// 1) rosterSdr/rosterCloser/rosterOnboarding (isRealSdr/isRealCloser/isRealOnboarder logo
+//    abaixo) — quem é "real" pros KPIs/Estoque/coortes (números já validados contra o Power BI,
+//    ver comentários originais mantidos abaixo) — CONTINUAM em Dados/Imagens Sales.csv, sem
+//    mudança. Testado trocar pra Sales_goals+Sales_Infos (12/08/2026) e o Gabriel pediu pra
+//    reverter só essa parte: a fonte nova é mais atual, mas mexia em números já fechados
+//    (Estoque de SDR caiu ~10% por gente que a planilha antiga ainda marcava ativa).
+// 2) cargoPorEmail/infoPorEmail (Sales_goals + Sales_Infos, novo) — só pra Cargo/Ativo/Nome/Foto
+//    exibidos por pessoa (diretorio/enrichPessoa mais abaixo), que alimenta a tabela "por
+//    pessoa" da Semanal Área E a lista de pessoas do 1:1 Gestor (mesmo dado, os dois
+//    consumidores) — aqui sim vale a pena ser mais atual, e não mexe em nenhum KPI/Estoque/
+//    coorte porque enrichPessoa só seta nome/foto/ativo/cargo em cima de pessoas que já existem
+//    (D.porPessoa.*, calculado à parte, sem depender de rosterSdr/Closer/Onboarding).
+function cargoAtualPorEmail() {
+  const best = {};
+  readSalesGoalsCsv().forEach(r => {
+    if (!r.email || !r.funcao) return;
+    const [dd, mm, yy] = r.data.split('/'); if (!dd || !mm || !yy) return;
+    const iso = `${yy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+    const atual = best[r.email];
+    // Desempate mesma-data: a coluna "concat" (nº|Função|email) NÃO garante 1 linha por pessoa —
+    // quem foi promovido no meio do mês aparece com 2 linhas na MESMA Data (função antiga, que
+    // ainda conta meta pro gestor anterior, e a nova). A ordem do arquivo é por BLOCO de Função
+    // (todo SDR primeiro, depois CSR, depois ONB), não cronológica — não dá pra usar "linha de
+    // baixo vence". O sinal certo é "Fase do analista" (fase): a função que está saindo vem
+    // marcada "Offboarding"; a nova vem "Ramping up"/"Onboarded"/"Guardrail" — em empate de
+    // data, "Offboarding" perde pra qualquer outra.
+    if (!atual || iso > atual.iso || (iso === atual.iso && atual.fase === 'Offboarding' && r.fase !== 'Offboarding')) {
+      best[r.email] = { iso, funcao: r.funcao, fase: r.fase };
+    }
+  });
+  const CARGO_MAP = { SDR: 'SDR', CSR: 'Closer', ONB: 'Onboarding' }; // Função (Sales_goals) -> Cargo (nome usado no resto do código)
+  const out = {}; for (const e in best) out[e] = CARGO_MAP[best[e].funcao] || null;
+  return out;
+}
+const cargoPorEmail = cargoAtualPorEmail();
+const fSalesInfos = readCsvOptional('sales_infos.csv', ';'); // datasource Astrobox "Sales_Infos", f_pi:05233c55-735c-4829-b9c8-10a70108154d
+const infoPorEmail = {};
+for (const r of fSalesInfos) {
+  const email = cleanEmail(r.Email); if (!email) continue;
+  infoPorEmail[email.toLowerCase()] = {
+    nome: (r['Nome completo'] || '').trim() || null,
+    foto: (r.Imagem || '').trim() || null,
+    ativo: (r.Ativo || '').trim().toLowerCase() === 'sim',
+  };
+}
+
 // "SDR real" = quem a planilha de diretório (Dados/Imagens Sales.csv — mesmo datasource
 // Astrobox "Imagens Sales" usado pra nome/foto, ver seção DIRETÓRIO abaixo) marca com
 // Cargo=SDR e Ativo=Sim. Reconciliado com o roster oficial do Power BI (`6.1d_SDR`) em
@@ -342,6 +390,7 @@ function readSalesGoalsCsv() {
     funcao: (cols[3] || '').trim(), // SDR / CSR / ONB
     email: (cols[6] || '').trim().toLowerCase(),
     nivel: (cols[8] || '').trim(),  // "Estratégia completa": N2-N3/N4-N5/N6+ (CSR/ONB) ou Outbound/Inbound/... (SDR, legado)
+    fase: (cols[11] || '').trim(),  // "Fase do analista": Onboarded/Ramping up/Guardrail/Offboarding — ver cargoAtualPorEmail acima
   }));
 }
 const NIVEIS_SET = new Set(NIVEIS);
@@ -1158,19 +1207,16 @@ const ranking = {
 };
 
 // ---------- DIRETÓRIO DE PESSOAS (nome + foto, opcional) ----------
-// Planilha mantida à mão (Dados/Imagens Sales.csv, separador ",") — se faltar, nome/foto
-// ficam null e a interface cai de volta pro prefixo do e-mail (sem foto). Já lida acima
-// (fDiretorio) pra alimentar o roster de "SDR real".
+// Fontes já lidas acima (infoPorEmail/cargoPorEmail), pra alimentar o roster de "SDR/Closer/
+// Onboarding real" — reaproveitadas aqui pra montar nome/foto/cargo por pessoa. Se
+// sales_infos.csv faltar, nome/foto ficam null e a interface cai de volta pro prefixo do e-mail
+// (sem foto); cargo continua vindo de sales_goals.csv independente disso.
 const diretorio = {};
-for (const r of fDiretorio) {
-  const email = cleanEmail(r.Email); if (!email) continue;
-  diretorio[email.toLowerCase()] = {
-    nome: (r['Nome Completo'] || r.Nome || '').trim() || null,
-    foto: (r.Image || '').trim() || null,
-    ativo: (r.Ativo || '').trim().toLowerCase() === 'sim',
-    cargo: (r.Cargo || '').trim(),
-  };
-}
+const todosEmailsDiretorio = new Set([...Object.keys(cargoPorEmail), ...Object.keys(infoPorEmail)]);
+todosEmailsDiretorio.forEach(email => {
+  const info = infoPorEmail[email] || {};
+  diretorio[email] = { nome: info.nome || null, foto: info.foto || null, ativo: info.ativo === true, cargo: cargoPorEmail[email] || '' };
+});
 // cargoEsperado (opcional): além de Ativo=Sim, exige que o Cargo atual no diretório bata com o
 // papel da lista (SDR/Closer/Onboarding) — usado pelo 1:1 Gestor (30/07/2026) pra não mostrar,
 // por ex., o Olivio/Lucas Guerrero (incluídos manualmente no funil histórico de SDR via
@@ -1412,7 +1458,7 @@ console.log('mes fechado:', mesFechado.mes, '(anterior:', mesFechado.mesAnterior
 console.log('semana fechada:', semanaFechada.semana, '(anterior:', semanaFechada.semanaAnterior + ')');
 console.log('pessoas — sdr:', sdrList.length, '| closer:', closerList.length, '| onboarding:', onbList.length);
 const comFoto = [...sdrList, ...closerList, ...onbList].filter(p => p.foto).length;
-console.log('diretório (Imagens Sales.csv):', fDiretorio.length, 'linhas | pessoas com foto casada:', comFoto);
+console.log('diretório (sales_infos.csv):', fSalesInfos.length, 'linhas | pessoas com foto casada:', comFoto);
 console.log('exemplo 2026-06 total:', JSON.stringify(actualMensal['2026-06']?.total));
 console.log('budget 2026-06 total:', JSON.stringify(budgetMensal['2026-06']?.total));
 console.log('ciclo:', JSON.stringify(ciclo));
