@@ -130,14 +130,55 @@ vem como `26W01 (01/01)` (ano curto + semana + primeiro dia, mesma regra de sema
 projeto) — `build_data.js` lê só o prefixo `26W01`, ignora a data entre parênteses.
 
 Os 4 arquivos são independentes entre si, mas **reconciliam exatamente**: `n2n3 + n4n5 +
-n6mais = total`, em toda semana e métrica (validado no build). Só tem quebra por **Nível**, não
-por Estratégia — por isso, na Semanal Sales, escolher Referência=Reforecast trava o filtro de
-Estratégia em "Todas" (`index.html`, `renderSemanal()`).
+n6mais = total`, em toda semana e métrica (validado no build). Só tem quebra por **Nível** —
+não vem nenhuma quebra por Estratégia nesses arquivos.
+
+**Estratégia (14/08/2026) é DERIVADA, não vem nesses arquivos**: `build_data.js` calcula a
+proporção real entre o total semanal oficial e o total mensal (`reforecast_oficial.csv`, que
+já tinha Estratégia) e aplica essa mesma proporção em cima do valor mensal por Estratégia —
+garantia matemática de que a soma das estratégias numa semana bate exato com o total oficial
+daquela semana (não é estimativa solta, é repartição proporcional de um número já correto).
+Assume que a distribuição de dias úteis no mês é igual pra todas as estratégias (razoável —
+feriado é da empresa inteira). Com isso, o filtro de Estratégia na Semanal Sales **não trava
+mais** quando Referência=Reforecast (travava entre 13/08 e 14/08, enquanto só existia a
+quebra por Nível).
 
 **Opcional** (se faltar, a aba Semanal Sales mostra "sem dado"/meta zerada quando
 Referência=Reforecast — a Semanal Área não é afetada). **Atualização**: reexportar os 4 só
 quando o reforecast oficial for revisado — segundo o Gabriel isso muda no máximo 1x/ano, bem
 mais raro que a atualização semanal de dados.
+
+## Budget semanal oficial (calendário útil real — só Semanal Sales)
+
+| Arquivo | Colunas esperadas |
+|---|---|
+| `budget_semanal_total.csv` | `Semana;Contacted;Connected;Opps;SQL;CW;Activation;SAP;GMV;Net Revenue` |
+| `budget_semanal_n2n3.csv` | mesmas colunas, só clientes N2-N3 |
+| `budget_semanal_n4n5.csv` | mesmas colunas, só clientes N4-N5 |
+| `budget_semanal_n6mais.csv` | mesmas colunas, só clientes N6+ |
+
+Mesmo padrão e mesmo tratamento do "Reforecast semanal oficial" acima (ver seção anterior pra
+detalhe do formato/parser) — só que pro Budget, export manual dos datasources Astrobox "NB
+Calendário Semanal [budget]" (total) e "NB BU Brasil | Calendário_Semanal Final N2-N3/N4-N5/N6+
+[Budget]" (por nível). 14/08/2026, a pedido do Gabriel: substitui, **só na aba Semanal Sales**,
+`D.budget.semanal` (`f_budget_daily.csv`) por essa base — a Semanal Área continua usando
+`f_budget_daily.csv` (decisão de escopo mantida, mesma da vez do reforecast). Estratégia
+também é **derivada por proporção** em cima de `budget_oficial.csv`, mesmo mecanismo do
+reforecast (`build_data.js`, função `buildSemanalOficialComEstrategia`, reaproveitada pros
+dois).
+
+⚠️ **Antes de adotar esta base, validamos contra `budget_oficial.csv` e achamos uma
+divergência de até 24% comparando SOMA DAS SEMANAS DE UM MÊS contra o mensal** — investigação
+completa em `Pendencias/README.md` (14/08/2026). Conclusão: não é problema no dado (a soma do
+ANO INTEIRO bate quase exato, diferença de poucos reais por arredondamento) — é um artefato de
+fronteira mês×semana ao AGRUPAR semanas num mês pra comparação, que também existia (e foi
+corrigido) no reforecast. Por isso a meta do "Month to date" (`renderSemanal()` em
+`index.html`) lê direto do arquivo MENSAL em vez de somar semanas — não depende de nenhuma
+convenção de fronteira.
+
+**Opcional** (se faltar, a aba Semanal Sales mostra "sem dado"/meta zerada quando
+Referência=Budget — a Semanal Área não é afetada). **Atualização**: reexportar os 4 quando o
+budget oficial for revisado (raro, budget muda menos que reforecast).
 
 ## Metas por pessoa/mês (opcional — alimenta o nível de Closer/Onboarding na tabela "por pessoa")
 

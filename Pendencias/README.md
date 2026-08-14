@@ -1,6 +1,130 @@
 # Pendências · New Business Cockpit
 
-Notas de handoff para quem continuar o desenvolvimento. Última atualização: 13/08/2026.
+Notas de handoff para quem continuar o desenvolvimento. Última atualização: 14/08/2026.
+
+## Concluído (14/08/2026) — filtro de Nível na Semanal Sales
+
+- **Novo seletor "Nível" na Semanal Sales, combinável com Estratégia** (ex.: "Outbound +
+  N2-N3" ao mesmo tempo) — a pedido do Gabriel, depois de perceber que já tínhamos o dado
+  cruzado pronto (`porNivelEstrategia`, derivado por proporção pro budget/reforecast na mesma
+  sessão). Diferente da Semanal Área, onde escolher Nível reseta Estratégia (e vice-versa) —
+  aqui os dois ficam ativos juntos.
+  - `index.html`: novo `state.nivel` (default `'all'`), select `#selNivel` em
+    `wsalesControls`. `metricsForSemana()` ganhou um 4º parâmetro (`nivel`) — usa
+    `porNivelEstrategia[nivel][estr]` quando os dois filtros estão ativos, `porNivel`/
+    `porEstrategia` quando só um, `total` quando nenhum.
+  - **Escopo consciente**: o filtro de Nível só afeta os 5 KPIs do topo (`Realização vs meta ·
+    semana fechada` e `· Semana Anterior`) — a tabela "Fechamento por nível de cliente"
+    continua mostrando as 3 faixas (N2-N3/N4-N5/N6+) lado a lado, filtrada só por Estratégia,
+    ignorando o filtro de Nível do topo (decisão explícita do Gabriel — mostrar só 1 faixa
+    repetida 3x seria redundante).
+  - Testado no navegador: Reforecast + Outbound + N2-N3 mostrando CW 19/19 (100%), Opp 41/40
+    (101%) — conferido campo a campo contra `D.reforecast.semanalOficial['2026-W32'].
+    porNivelEstrategia['N2-N3']['Outbound']` e `D.actual.semanal[...]`, bate exato. Tabela por
+    nível confirmada mostrando as 3 faixas mesmo com Nível=N2-N3 selecionado no topo. Zero
+    erro de console.
+
+## Concluído (14/08/2026) — investigação Budget + fix na meta MTD do reforecast
+
+- **Investigação: base de Budget semanal oficial (mesmo padrão do reforecast) trazida pelo
+  Gabriel pra validar contra `f_budget_daily.csv`.** 4 arquivos salvos em `Dados/` como
+  `budget_semanal_total.csv`/`_n2n3.csv`/`_n4n5.csv`/`_n6mais.csv` (mesmo formato dos arquivos
+  de reforecast) — **ainda não plugados no `build_data.js`**, só usados pra comparação. Achados:
+  - Reconciliação interna (N2-N3+N4-N5+N6+ = Total) bate exata em todas as semanas/métricas,
+    igual o reforecast.
+  - Comparando SOMA DAS SEMANAS DE UM MÊS contra o `budget_oficial.csv` (mensal): Jan/Fev
+    batem quase exato (~0,00%), mas de Março em diante aparecem divergências de 8-24%,
+    alternando sinal mês a mês (ex.: Dez sempre `-20,00%` exato — quase 1 semana inteira).
+  - **Hipótese descartada**: `budget_oficial.csv` desatualizado. O Gabriel reexportou a
+    planilha oficial (`https://astrobox.hotmart.com/datasource/run/4a27f060-d0f6-4726-bb91-43f90e53fdca`)
+    e as 84 linhas bateram **100% idênticas** com o arquivo local — não é staleness.
+  - **Causa real, confirmada testando o MESMO tipo de comparação no reforecast** (que já
+    estava em produção): o reforecast semanal oficial tem o **mesmo padrão** de divergência
+    mensal (Dez também `-20,00%` exato) — não é um problema específico do budget, é
+    estrutural nas duas bases "Calendário_Semanal" da Astrobox.
+  - **Prova de que o dado está certo**: soma da receita do reforecast pro ANO INTEIRO bate
+    entre mensal e semanal — R$93.789.210 (mensal, valor de referência confirmado pelo
+    Gabriel) vs R$93.789.208 (soma das 53 semanas), diferença de R$2 por arredondamento. A
+    divergência mês a mês é só a base semanal da Astrobox usando uma convenção de
+    fronteira mês×semana diferente da nossa `D.semanaMes` (mês da segunda-feira que abre a
+    semana) — o valor não se perde, fica só contado no mês vizinho em alguns pontos, e se
+    cancela ao longo do ano. Testada a hipótese de "mês por maioria de dias da semana" — melhorou
+    alguns meses mas não fechou todos, então a convenção exata da Astrobox continua
+    desconhecida (não é bloqueante, ver fix abaixo).
+  - **Atualização (mesmo dia): Budget adotado.** Depois do fix da meta MTD abaixo (que já
+    resolvia o problema de fronteira), o Gabriel pediu pra plugar os 4 arquivos — feito, ver
+    item seguinte.
+
+- **Fix (decorrente da investigação acima): meta do "Month to date" (Semanal Sales) passou a
+  vir direto do arquivo MENSAL, não mais somando as semanas do mês na base semanal oficial.**
+  A funcionalidade "meta MTD fixa no mês inteiro" (13/08) usava `weeksInMonth()` pra somar as
+  semanas do mês na base semanal oficial — e por causa do problema de fronteira acima, um mês
+  podia ficar com até ~1 semana a mais/a menos na meta mostrada (ex.: agosto mostrava meta de
+  336 opps pra N2-N3 quando o mensal real é 263). Corrigido em `renderSemanal()`
+  (`app/index.html`): a chamada de `nivelMiniTable` pro MTD agora passa `D.reforecast.mensal`/
+  `D.budget.mensal` como fonte da meta, com `[mesDaSemana]` (um único mês) no lugar da lista de
+  semanas — `nivelTotal()` já era genérico o bastante pra aceitar isso sem mudança. Elimina o
+  problema por completo (não depende de nenhuma convenção de fronteira, lê o número mensal
+  direto). Testado no navegador: N2-N3 Opps em agosto foi de 336 (errado, soma de semanas) pra
+  263 (correto, bate exato com `D.reforecast.mensal['2026-08'].porNivel['N2-N3'].opps`), zero
+  erro de console.
+
+- **Budget semanal oficial adotado na Semanal Sales — mesmo tratamento do reforecast.** Depois
+  do fix acima (que já eliminava o problema de fronteira mês×semana), o Gabriel pediu pra
+  plugar os 4 arquivos de Budget já salvos em `Dados/` (ver `Dados/README.md`, seção "Budget
+  semanal oficial").
+  - `build_data.js`: a lógica de montar `{total,porNivel,porEstrategia,porNivelEstrategia}` +
+    derivar Estratégia por proporção foi extraída da seção do reforecast pra uma função
+    genérica, `buildSemanalOficialComEstrategia(prefixo, mensalObj)` — chamada uma vez pra
+    reforecast (`'reforecast_semanal'`, `reforecastMensal`) e uma vez pro budget
+    (`'budget_semanal'`, `budgetMensal`). Novo `D.budget.semanalOficial` (paralelo ao
+    `D.budget.semanal` de sempre, que continua alimentando só a Semanal Área, sem mudança).
+  - `index.html`: `refSemanalSrc` em `renderSemanal()` agora é sempre `D[ref].semanalOficial`
+    (funciona igual pra `'budget'` e `'reforecast'`, não precisa mais de `if/else`). O filtro
+    de Estratégia não trava em nenhum dos dois casos.
+  - ⚠️ **Bug pego no meio do caminho**: ao generalizar `metricsForSemana()` pra usar
+    `D[src]?.semanalOficial` sempre, quebrei o caminho de `src==='actual'` (que só tem
+    `D.actual.semanal`, nunca teve `semanalOficial`) — a Semanal Sales parava de mostrar
+    qualquer dado ("sem dado suficiente para esta semana/estratégia"). Pego no teste no
+    navegador (não só no build, que não acusa esse tipo de erro) e corrigido: `metricsForSemana`
+    usa `D.actual.semanal` quando `src==='actual'`, `D[src].semanalOficial` nos outros dois casos.
+  - Validado: reconciliação interna do `budgetSemanalOficial` (Nível, Estratégia,
+    Nível×Estratégia, todas somam certo — só GMV/Net Revenue têm diferença de até R$1 por
+    arredondamento independente em cada um dos 4 arquivos, irrelevante). Testado no navegador:
+    Semanal Sales com Budget+Inbound e Reforecast+Inbound mostrando números coerentes, filtro
+    de Estratégia funcionando nos dois, zero erro de console. Semanal Área e Mensal Sales
+    conferidas sem nenhuma mudança.
+
+## Concluído (13/08/2026)
+
+- **Reforecast semanal oficial (Semanal Sales) ganhou quebra por Estratégia, derivada por
+  proporção — filtro de Estratégia não trava mais com Reforecast selecionado.** A pedido do
+  Gabriel: os 4 arquivos oficiais (`reforecast_semanal_*.csv`) só têm quebra por Nível — a
+  Estratégia não vem neles. Em vez de pedir um export novo pro time de Ops (que replicaria uma
+  fórmula de calendário útil que não conhecemos em detalhe), a solução foi usar a proporção
+  REAL já validada entre semana e mês (temos os dois lados: `reforecastSemanalOficial`
+  semanal + `reforecastMensal` de `reforecast_oficial.csv`, que já tem Estratégia) e aplicar
+  essa mesma proporção em cima do valor mensal por Estratégia/Nível×Estratégia.
+  - **Garantia matemática, não estimativa solta**: como `porEstrategia` soma pro total dentro
+    do mês (por construção de `buildMensal`), a soma das estratégias×proporção também soma
+    pro total semanal oficial — validado no build: reconciliação exata nas 53 semanas × 3
+    níveis × 9 métricas (`porEstrategia` soma pro `total`, `porNivelEstrategia` soma pro
+    `porNivel`).
+  - **Premissa assumida**: a distribuição de dias úteis no mês é igual pra todas as
+    estratégias (razoável — feriado é da empresa inteira, não varia por segmento de cliente
+    ou motor de aquisição). Se um dia isso se provar falso (ex.: Ops confirma que Outbound e
+    Inbound têm calendários diferentes por algum motivo), essa premissa precisa ser revisada.
+  - Implementado em `build_data.js`, logo após a montagem de `reforecastSemanalOficial` —
+    novo bloco calcula `ratioTot`/`ratioNiv` por semana e popula `wCell.porEstrategia`/
+    `wCell.porNivelEstrategia`.
+  - `index.html` (`renderSemanal()`): removida a trava do filtro de Estratégia (existia desde
+    13/08, quando a base só tinha Nível) — volta a funcionar normal em Budget e Reforecast.
+  - Testado no navegador: Semanal Sales com Reforecast + Estratégia=Outbound mostra os 5 KPIs
+    e a tabela "Fechamento por nível de cliente" (Semana fechada e Month to date) com valores
+    coerentes, filtro não trava, zero erro de console. Semanal Área não foi tocada (continua
+    com a reconstrução antiga, decisão de escopo de 13/08 mantida).
+  - `Dados/reforecast_oficial.csv` (mensal) já tinha Estratégia desde sempre — só nunca tinha
+    sido usado na visão semanal. Nenhum arquivo novo foi necessário.
 
 ## Concluído (13/08/2026)
 

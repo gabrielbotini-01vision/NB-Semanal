@@ -994,18 +994,77 @@ function readCalendarioSemanal(name) {
   }
   return out;
 }
-const reforecastCalTotal = readCalendarioSemanal('reforecast_semanal_total.csv');
-const reforecastCalPorNivel = {
-  'N2-N3': readCalendarioSemanal('reforecast_semanal_n2n3.csv'),
-  'N4-N5': readCalendarioSemanal('reforecast_semanal_n4n5.csv'),
-  'N6+': readCalendarioSemanal('reforecast_semanal_n6mais.csv'),
-};
-const reforecastSemanalOficial = {}; // week -> {total, porNivel} — sem porEstrategia/porNivelEstrategia (base não tem essa quebra)
-for (const w in reforecastCalTotal) {
-  const cell = { total: reforecastCalTotal[w], porNivel: {} };
-  for (const niv of NIVEIS) if (reforecastCalPorNivel[niv][w]) cell.porNivel[niv] = reforecastCalPorNivel[niv][w];
-  reforecastSemanalOficial[w] = cell;
+// porEstrategia/porNivelEstrategia por PROPORÇÃO (14/08/2026, a pedido do Gabriel) — a base
+// oficial da Astrobox só tem Total/Nível, não Estratégia. Em vez de tentar adivinhar a fórmula
+// exata de calendário útil da Ops (pode ter alguma regra de feriado não documentada), uso a
+// proporção REAL já validada entre semana e mês — que já temos dos dois lados (semanal vem da
+// Astrobox, mensal vem de reforecast_oficial.csv/budget_oficial.csv, ambos já carregados) — e
+// aplico essa mesma proporção em cima do valor mensal por Estratégia/Nível×Estratégia (o
+// mensal já tem essa quebra, só nunca tinha sido usada na visão semanal). Garantia
+// matemática: como porEstrategia soma pro total dentro do mês (por construção de
+// buildMensal), a soma das estratégias×proporção também soma pro total semanal oficial — não
+// é uma estimativa solta, é uma repartição proporcional de um número que já bate. Assume que
+// a distribuição de dias úteis no mês é igual pra todas as estratégias/níveis (razoável —
+// feriado é da empresa inteira, não varia por segmento de cliente ou motor de aquisição).
+//
+// Função genérica (14/08/2026) — reaproveitada pra reforecast E budget, mesmo tratamento nos
+// dois: lê os 4 CSVs de calendário semanal (total + 3 níveis), monta {total,porNivel} por
+// semana e deriva porEstrategia/porNivelEstrategia por proporção em cima do mensal oficial
+// correspondente (reforecastMensal ou budgetMensal).
+const safeDiv = (a, b) => b ? a / b : 0;
+function buildSemanalOficialComEstrategia(prefixo, mensalObj) {
+  const calTotal = readCalendarioSemanal(prefixo + '_total.csv');
+  const calPorNivel = {
+    'N2-N3': readCalendarioSemanal(prefixo + '_n2n3.csv'),
+    'N4-N5': readCalendarioSemanal(prefixo + '_n4n5.csv'),
+    'N6+': readCalendarioSemanal(prefixo + '_n6mais.csv'),
+  };
+  const out = {}; // week -> {total, porNivel, porEstrategia, porNivelEstrategia}
+  for (const w in calTotal) {
+    const cell = { total: calTotal[w], porNivel: {} };
+    for (const niv of NIVEIS) if (calPorNivel[niv][w]) cell.porNivel[niv] = calPorNivel[niv][w];
+    out[w] = cell;
+  }
+  for (const w in out) {
+    const mk = semanaMes[w], mCell = mensalObj[mk], wCell = out[w];
+    if (!mCell) continue;
+    const ratioTot = {}; METRICS.forEach(m => ratioTot[m] = safeDiv(wCell.total[m], mCell.total[m]));
+    wCell.porEstrategia = {};
+    for (const es of ESTRS) {
+      const mEst = mCell.porEstrategia[es]; if (!mEst) continue;
+      const cellOut = {}; METRICS.forEach(m => cellOut[m] = mEst[m] * ratioTot[m]);
+      wCell.porEstrategia[es] = cellOut;
+    }
+    wCell.porNivelEstrategia = {};
+    for (const niv of NIVEIS) {
+      const mNiv = mCell.porNivel[niv], wNiv = wCell.porNivel[niv];
+      if (!mNiv || !wNiv) continue;
+      const ratioNiv = {}; METRICS.forEach(m => ratioNiv[m] = safeDiv(wNiv[m], mNiv[m]));
+      const mCellNivEst = mCell.porNivelEstrategia[niv] || {};
+      wCell.porNivelEstrategia[niv] = {};
+      for (const es of ESTRS) {
+        const mNE = mCellNivEst[es]; if (!mNE) continue;
+        const cellOut = {}; METRICS.forEach(m => cellOut[m] = mNE[m] * ratioNiv[m]);
+        wCell.porNivelEstrategia[niv][es] = cellOut;
+      }
+    }
+  }
+  return out;
 }
+const reforecastSemanalOficial = buildSemanalOficialComEstrategia('reforecast_semanal', reforecastMensal);
+// 14/08/2026, a pedido do Gabriel: mesmo tratamento pro Budget — base oficial de calendário
+// útil real (Astrobox "NB BU Brasil | Calendário_Semanal [budget]" + 3 recortes por nível),
+// substituindo a comparação seg-sex só na Semanal Sales. Diferente do reforecast, o Budget
+// semanal JÁ tinha uma fonte real por dia (f_budget_daily.csv/budgetSemanal) — essa nova base
+// não substitui `budgetSemanal` (que continua alimentando a Semanal Área, sem mudança), é uma
+// fonte PARALELA usada só pela Semanal Sales. Investigação (ver Pendencias/README.md
+// 14/08/2026): a comparação mês a mês entre as duas fontes semanais de budget mostrava
+// divergência de até 24%, mas era um artefato de fronteira mês×semana na hora de AGRUPAR
+// semanas num mês pra validação — não um problema no dado (a soma do ano inteiro bate). Esse
+// mesmo artefato existia no reforecast e foi corrigido de vez trocando a fonte da meta do MTD
+// pra vir direto do mensal (ver renderSemanal() em index.html) — não depende de nenhuma
+// convenção de fronteira específica da Astrobox.
+const budgetSemanalOficial = buildSemanalOficialComEstrategia('budget_semanal', budgetMensal);
 
 const sdrLeads = fop.filter(r => isRealSdr(cleanEmail(r.owner_email)) && leadFlowOk(r) && leadBrOk(r)).map(r => ({
   estr: estr(r.sales_strategy), owner: cleanEmail(r.owner_email),
@@ -1473,7 +1532,7 @@ const DATA = {
   dataMax,
   meses, semanas, semanaMes, niveis: NIVEIS, estrategias: ESTRS,
   actual: { mensal: actualMensal, semanal: actualSemanal },
-  budget: { mensal: budgetMensal, semanal: budgetSemanal },
+  budget: { mensal: budgetMensal, semanal: budgetSemanal, semanalOficial: budgetSemanalOficial },
   reforecast: { mensal: reforecastMensal, semanal: reforecastSemanal, semanalOficial: reforecastSemanalOficial },
   ciclo, ranking,
   porPessoa: { sdr: sdrList, closer: closerList, onboarding: onbList },
