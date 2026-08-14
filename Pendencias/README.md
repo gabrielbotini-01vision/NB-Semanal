@@ -1,6 +1,43 @@
 # Pendências · New Business Cockpit
 
-Notas de handoff para quem continuar o desenvolvimento. Última atualização: 11/08/2026.
+Notas de handoff para quem continuar o desenvolvimento. Última atualização: 13/08/2026.
+
+## Concluído (13/08/2026)
+
+- **Reforecast semanal da Semanal Sales passa a usar o calendário útil real** (feriados
+  excluídos), em vez da reconstrução seg-sex ingênua. A pedido do Gabriel — a reconstrução
+  existente (`buildSemanalDeMensal`, 12/08) tratava todo dia de semana como dia útil, sem
+  excluir feriado nenhum. O time de Ops já tem uma base oficial pronta (datasource Astrobox "NB
+  Calendário_Semanal" + 3 recortes por nível N2-N3/N4-N5/N6+, ver `Dados/README.md` seção
+  "Reforecast semanal oficial") que reparte a meta mensal pelo calendário útil de verdade.
+  - **Escopo explicitamente limitado à Semanal Sales** — a Semanal Área continua com a
+    reconstrução antiga (`D.reforecast.semanal`), decisão do Gabriel pra não expandir o escopo
+    agora. Nova estrutura `D.reforecast.semanalOficial` (`build_data.js`) alimenta só
+    `renderSemanal()`; nada mudou em `renderAreaSdr/Closers/Onboarding`.
+  - **Só tem quebra por Nível, não por Estratégia** (a base oficial não traz esse corte) — por
+    isso, na Semanal Sales, escolher Referência=Reforecast trava o filtro de Estratégia em
+    "Todas" (desabilitado + tooltip explicando por quê) até voltar pra Budget. Budget não muda
+    em nada, continua vindo de `f_budget_daily.csv` (rateio real por dia).
+  - Validado: os 4 arquivos reconciliam exatamente (`N2-N3 + N4-N5 + N6+ = Total`, todas as 53
+    semanas e 9 métricas). Testado no navegador (`playwright-cli` + servidor local) nos dois
+    sentidos — Reforecast trava/mostra a meta oficial por nível, Budget destrava normal; Semanal
+    Área e Mensal Sales seguem idênticas a antes; zero erro de console.
+  - Export manual, sem integração com `scripts/atualizar_dados.py` (mesmo padrão de
+    `sales_goals.csv`/`sales_infos.csv`) — reexportar os 4 arquivos só quando o reforecast
+    oficial for revisado (segundo o Gabriel, no máximo 1x/ano).
+- **Tabela "Fechamento por nível de cliente" · Month to date (Semanal Sales): meta vira fixa no
+  mês inteiro, não acumula mais semana a semana junto com o Actual.** A pedido do Gabriel, no
+  mesmo dia: antes, a meta do MTD somava só as semanas do mês até a selecionada (ex.: 2 semanas
+  de agosto), ficando artificialmente baixa/o % de atingimento artificialmente alto logo no
+  início do mês. Agora a meta soma **todas** as semanas do mês (via `weeksInMonth`, já
+  existente), enquanto o Actual continua acumulando só até a semana selecionada — o %
+  atingimento passa a refletir "quanto já fiz do mês inteiro", não "quanto fiz das poucas
+  semanas que já se passaram". `nivelMiniTable()` ganhou um 6º parâmetro opcional
+  (`metaMesesList`) só pra isso — sem ele, meta e actual continuam usando a mesma lista de
+  períodos (comportamento de sempre, inclusive nas tabelas "Semana fechada"/"Mês fechado"/YTD,
+  não tocadas). Testado no navegador: N2-N3 Opps foi de 102/125 (81%, errado) pra 102/336 (30%,
+  meta = mês inteiro), CW de 52/59 (88%) pra 52/154 (34%), Net Revenue de R$655mil/R$1,4mi (47%)
+  pra R$655mil/R$2,3mi (28%) — Actual idêntico nos dois casos, só a meta mudou.
 
 ## Concluído (11/08/2026)
 

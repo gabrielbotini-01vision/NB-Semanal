@@ -100,6 +100,45 @@ Validado contra `f_budget_daily.csv` real: a reconstrução bate exato ou dentro
 real. Se um dia o dashboard precisar de meta de reforecast por pessoa, aí sim vale reexportar um
 `f_reforecast_daily.csv` novo (ou pedir o `f_rateio_budget` como CSV à parte).
 
+## Reforecast semanal oficial (calendário útil real — só Semanal Sales)
+
+| Arquivo | Colunas esperadas |
+|---|---|
+| `reforecast_semanal_total.csv` | `Semana;Contacted;Connected;Opps;SQL;CW;Activation;SAP;GMV;Net Revenue` |
+| `reforecast_semanal_n2n3.csv` | mesmas colunas, só clientes N2-N3 |
+| `reforecast_semanal_n4n5.csv` | mesmas colunas, só clientes N4-N5 |
+| `reforecast_semanal_n6mais.csv` | mesmas colunas, só clientes N6+ |
+
+Export manual (mesmo padrão de `sales_goals.csv`/`sales_infos.csv`, sem integração com
+`scripts/atualizar_dados.py`) dos datasources Astrobox "NB Calendário_Semanal" (total,
+`https://astrobox.hotmart.com/datasource/run/4c0986b1-6057-49c0-91d2-4ad36c5225d3`) e "NB BU
+Brasil | Calendário_Semanal Final" por nível (N2-N3
+`.../02067f3e-12cd-4dc0-beab-cd68c4a93b37`, N4-N5 `.../4edc6248-8cea-4dfe-9173-cb67b7544252`,
+N6+ `.../88d6f826-309b-4559-9b37-9a16a524e1aa`).
+
+13/08/2026, a pedido do Gabriel: substitui, **só na aba Semanal Sales**, a antiga reconstrução
+seg-sex do reforecast semanal (`buildSemanalDeMensal` em `build_data.js`, que tratava todo dia
+de semana como dia útil, sem excluir feriado) por uma base já repartida pelo calendário útil
+real do time de Ops. A **Semanal Área continua usando a reconstrução antiga** (decisão
+explícita do Gabriel — escopo menor por enquanto), então `f_reforecast_daily.csv` continua
+irrelevante e `reforecast_oficial.csv` (mensal) continua alimentando as duas coisas.
+
+**Formato misto, confirmado linha a linha na amostra do Gabriel**: `Contacted` a `SAP` vêm em
+decimal com vírgula (`numBr()`, ex. `193,57` — é meta fracionária por semana, normal), `GMV` e
+`Net Revenue` vêm em `R$ X.XXX.XXX` (`money()`, mesmo formato das planilhas mensais). `Semana`
+vem como `26W01 (01/01)` (ano curto + semana + primeiro dia, mesma regra de semana do resto do
+projeto) — `build_data.js` lê só o prefixo `26W01`, ignora a data entre parênteses.
+
+Os 4 arquivos são independentes entre si, mas **reconciliam exatamente**: `n2n3 + n4n5 +
+n6mais = total`, em toda semana e métrica (validado no build). Só tem quebra por **Nível**, não
+por Estratégia — por isso, na Semanal Sales, escolher Referência=Reforecast trava o filtro de
+Estratégia em "Todas" (`index.html`, `renderSemanal()`).
+
+**Opcional** (se faltar, a aba Semanal Sales mostra "sem dado"/meta zerada quando
+Referência=Reforecast — a Semanal Área não é afetada). **Atualização**: reexportar os 4 só
+quando o reforecast oficial for revisado — segundo o Gabriel isso muda no máximo 1x/ano, bem
+mais raro que a atualização semanal de dados.
+
 ## Metas por pessoa/mês (opcional — alimenta o nível de Closer/Onboarding na tabela "por pessoa")
 
 | Arquivo | Separador | Colunas usadas (por posição, não por nome — ver abaixo) |

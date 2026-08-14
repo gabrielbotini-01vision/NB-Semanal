@@ -494,10 +494,17 @@ function nivelTotal(mesesList,dataset,nivel,metric,estr){
   },0);
 }
 const NIVEL_ROWS=[['Opps','opps',0],['CW','cw',0],['Ativação','activation',0],['Net Revenue','receita',1]];
-function nivelMiniTable(nivel,mesesList,estr,actualSrc,budgetSrc){
+// metaMesesList (13/08/2026, a pedido do Gabriel): opcional — quando informado, a META usa essa
+// lista de períodos em vez de `mesesList` (que continua servendo o ACTUAL). Serve pra tabelas
+// tipo "Month to date", onde o Actual acumula só até a semana selecionada mas a Meta deve ser a
+// do MÊS INTEIRO desde o início (fixa, não vai crescendo semana a semana junto com o Actual) —
+// ver uso em renderSemanal(). Sem esse parâmetro, meta e actual usam a mesma lista (comportamento
+// de sempre, usado em Mês fechado/YTD da Mensal Sales e Semana fechada da Semanal Sales).
+function nivelMiniTable(nivel,mesesList,estr,actualSrc,budgetSrc,metaMesesList){
   actualSrc=actualSrc||D.actual.mensal; budgetSrc=budgetSrc||D.budget.mensal;
+  metaMesesList=metaMesesList||mesesList;
   const trs=NIVEL_ROWS.map(([label,key,cur])=>{
-    const a=nivelTotal(mesesList,actualSrc,nivel,key,estr), b=nivelTotal(mesesList,budgetSrc,nivel,key,estr);
+    const a=nivelTotal(mesesList,actualSrc,nivel,key,estr), b=nivelTotal(metaMesesList,budgetSrc,nivel,key,estr);
     const p=pct(a,b);
     return `<tr><td style="font-weight:600">${label}</td>
       <td class="r mono">${cur?fBRL(a):fN(a)}</td>
@@ -568,8 +575,14 @@ function firstMondayUTC(year){ const jan1=new Date(Date.UTC(year,0,1)); const ad
 function weekStartDateUTC(w){ const [ys,ws]=w.split('-W'); const year=+ys, wn=+ws; if(wn===1) return new Date(Date.UTC(year,0,1)); const fm=firstMondayUTC(year); const d=new Date(fm); d.setUTCDate(d.getUTCDate()+(wn-2)*7); return d; }
 function weekStartLabel(w){ const d=weekStartDateUTC(w); return String(d.getUTCDate()).padStart(2,'0')+'/'+String(d.getUTCMonth()+1).padStart(2,'0'); }
 function weeksInMonth(mes,pool){ return pool.filter(w=>D.semanaMes[w]===mes); }
+// 13/08/2026, a pedido do Gabriel: Referência=Reforecast na Semanal Sales passou a usar a base
+// oficial de calendário útil real (D.reforecast.semanalOficial, ver build_data.js) em vez da
+// reconstrução seg-sex (D.reforecast.semanal, que continua servindo só a Semanal Área). A base
+// oficial só tem quebra por Nível — por isso renderSemanal() trava o filtro de Estratégia em
+// "Todas" enquanto Reforecast estiver selecionado (senão cairia no `|| null` abaixo e mostraria
+// meta zerada sem explicação).
 function metricsForSemana(src,semana,estr){
-  const m=D[src]?.semanal?.[semana]; if(!m)return null;
+  const m=(src==='reforecast'?D.reforecast?.semanalOficial:D[src]?.semanal)?.[semana]; if(!m)return null;
   if(estr==='all')return m.total;
   return m.porEstrategia?.[estr]||null;
 }
@@ -594,7 +607,19 @@ const SEMANAL_KPIS=[
   {k:'activation',lbl:'Ativação 10K',cur:0,desc:'Contas ativadas (10k GMV)'},
 ];
 function renderSemanal(){
-  const semana=state.semana, estr=state.estr, ref=state.ref||'budget', refLabel=ref==='reforecast'?'Reforecast':'Budget';
+  const semana=state.semana, ref=state.ref||'budget', refLabel=ref==='reforecast'?'Reforecast':'Budget';
+  // Reforecast oficial (13/08/2026) só tem quebra por Nível, não por Estratégia — trava o
+  // filtro de Estratégia em "Todas" enquanto Reforecast estiver selecionado, pra não comparar
+  // o realizado filtrado contra uma meta que não existe nesse recorte (a pedido do Gabriel).
+  // Volta a funcionar normal assim que a Referência voltar pra Budget.
+  if(ref==='reforecast') state.estr='all';
+  const estr=state.estr;
+  if($('selEstr')){ $('selEstr').value=estr; $('selEstr').disabled=ref==='reforecast';
+    $('selEstr').title=ref==='reforecast'?'Reforecast só tem meta por Nível — troque pra Budget pra filtrar por Estratégia':''; }
+  // fonte da meta semanal por nível: Budget continua vindo do rateio diário real
+  // (D.budget.semanal); Reforecast usa a base oficial de calendário útil (D.reforecast.
+  // semanalOficial) em vez da reconstrução seg-sex (D.reforecast.semanal, só pra Semanal Área).
+  const refSemanalSrc=ref==='reforecast'?D.reforecast.semanalOficial:D.budget.semanal;
   // subtítulo do topo — mesma correção aplicada na Mensal Sales (30/07): sem isso, ficava
   // desatualizado ao trocar a semana no seletor, que chama renderSemanal() direto.
   if($('ctxLine')) $('ctxLine').textContent=CTX.wsales+(semana?(' · '+semanaLabel(semana)):'');
@@ -616,14 +641,19 @@ function renderSemanal(){
   // fechado real.
   const mesDaSemana=D.semanaMes[semana];
   const mtdWeeks=D.semanas.filter(w=>D.semanaMes[w]===mesDaSemana&&w<=semana).sort();
+  // meta do MTD (13/08/2026, a pedido do Gabriel): fixa no mês INTEIRO desde o início, não
+  // acumula semana a semana junto com o Actual — senão a meta parcial (só 1-2 semanas) fica
+  // artificialmente baixa logo no começo do mês. `weeksInMonth` já existia (usada em outro
+  // lugar) e pega TODAS as semanas do mês, independente da semana selecionada.
+  const mtdWeeksMeta=weeksInMonth(mesDaSemana,D.semanas);
 
   $('viewSemanal').innerHTML=`
     <div class="sec"><div class="sec-head"><h2>Realização vs meta · semana fechada</h2><span class="hint">${semanaLabel(semana)} · ${estr==='all'?'todas estratégias':estr}${ref==='reforecast'?' · Reforecast':''}</span></div>${kpis}</div>
     <div class="sec"><div class="sec-head"><h2>Realização vs meta · Semana Anterior</h2><span class="hint">${semanaLabel(prev)} · ${estr==='all'?'todas estratégias':estr}${ref==='reforecast'?' · Reforecast':''}</span></div>${kpisPrev}</div>
     <div class="sec"><div class="sec-head"><h2>Fechamento por nível de cliente</h2><span class="hint">realizado vs meta${ref==='reforecast'?' (reforecast)':''}</span></div>
       <div class="grid g2">
-        <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Semana fechada — ${semanaLabel(semana)}</div>${NIV.map(n=>nivelMiniTable(n,[semana],estr,D.actual.semanal,D[ref].semanal)).join('')}</div>
-        <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Month to date — ${mesLabel(mesDaSemana)}</div>${NIV.map(n=>nivelMiniTable(n,mtdWeeks,estr,D.actual.semanal,D[ref].semanal)).join('')}</div>
+        <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Semana fechada — ${semanaLabel(semana)}</div>${NIV.map(n=>nivelMiniTable(n,[semana],estr,D.actual.semanal,refSemanalSrc)).join('')}</div>
+        <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Month to date — ${mesLabel(mesDaSemana)}</div>${NIV.map(n=>nivelMiniTable(n,mtdWeeks,estr,D.actual.semanal,refSemanalSrc,mtdWeeksMeta)).join('')}</div>
       </div>
     </div>`;
 }

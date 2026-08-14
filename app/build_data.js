@@ -962,6 +962,51 @@ function buildSemanalDeMensal(mensalObj, semanasAlvo) {
   return out;
 }
 const reforecastSemanal = buildSemanalDeMensal(reforecastMensal, Object.keys(budgetSemanal));
+
+// ---------- REFORECAST SEMANAL OFICIAL (calendário útil real) — só Semanal Sales ----------
+// 13/08/2026, a pedido do Gabriel: a reconstrução acima (buildSemanalDeMensal/reforecastSemanal)
+// trata todo dia de semana (seg-sex) como dia útil, sem excluir feriado nenhum — o time de Ops
+// já tem uma base oficial que reparte a meta mensal pelo calendário útil real (datasource
+// Astrobox "NB Calendário_Semanal" + 3 recortes por nível: N2-N3/N4-N5/N6+). Usada SÓ na aba
+// Semanal Sales (decisão explícita do Gabriel, 13/08/2026) — a Semanal Área continua com
+// `reforecastSemanal` acima, sem mudança. Export manual, mesmo padrão de sales_goals.csv/
+// sales_infos.csv (sem integração com scripts/atualizar_dados.py) — reexportar os 4 arquivos
+// só quando o reforecast oficial for revisado (raro, ~1x/ano segundo o Gabriel); enquanto isso
+// não muda, os arquivos continuam valendo. Só tem quebra por NÍVEL, não por Estratégia — por
+// isso o index.html trava o filtro de Estratégia em "Todas" enquanto Referência=Reforecast
+// estiver selecionado na Semanal Sales.
+function parseSemanaCalendario(s) { // '26W01 (01/01)' -> '2026-W01' (mesma regra de semana do resto do projeto)
+  const m = /^(\d{2})W(\d{2})/.exec((s || '').trim());
+  return m ? ('20' + m[1] + '-W' + m[2]) : null;
+}
+function readCalendarioSemanal(name) {
+  const out = {};
+  for (const r of readCsvOptional(name)) {
+    const w = parseSemanaCalendario(r.Semana); if (!w) continue;
+    // Contacted..SAP vêm em decimal com vírgula (numBr, mesmo formato de f_budget_daily.csv);
+    // só GMV/Net Revenue vêm em "R$ X.XXX.XXX" (money, mesmo formato de budget_oficial.csv) —
+    // formato misto específico deste export, confirmado linha a linha na amostra que o Gabriel mandou.
+    out[w] = {
+      contacted: numBr(r.Contacted), connected: numBr(r.Connected), opps: numBr(r.Opps),
+      sql: numBr(r.SQL), cw: numBr(r.CW), activation: numBr(r.Activation),
+      sap: numBr(r.SAP), gmv: money(r.GMV), receita: money(r['Net Revenue']),
+    };
+  }
+  return out;
+}
+const reforecastCalTotal = readCalendarioSemanal('reforecast_semanal_total.csv');
+const reforecastCalPorNivel = {
+  'N2-N3': readCalendarioSemanal('reforecast_semanal_n2n3.csv'),
+  'N4-N5': readCalendarioSemanal('reforecast_semanal_n4n5.csv'),
+  'N6+': readCalendarioSemanal('reforecast_semanal_n6mais.csv'),
+};
+const reforecastSemanalOficial = {}; // week -> {total, porNivel} — sem porEstrategia/porNivelEstrategia (base não tem essa quebra)
+for (const w in reforecastCalTotal) {
+  const cell = { total: reforecastCalTotal[w], porNivel: {} };
+  for (const niv of NIVEIS) if (reforecastCalPorNivel[niv][w]) cell.porNivel[niv] = reforecastCalPorNivel[niv][w];
+  reforecastSemanalOficial[w] = cell;
+}
+
 const sdrLeads = fop.filter(r => isRealSdr(cleanEmail(r.owner_email)) && leadFlowOk(r) && leadBrOk(r)).map(r => ({
   estr: estr(r.sales_strategy), owner: cleanEmail(r.owner_email),
   contacted: cleanDate(r.contacted_date), connected: cleanDate(r.connected_date),
@@ -1429,7 +1474,7 @@ const DATA = {
   meses, semanas, semanaMes, niveis: NIVEIS, estrategias: ESTRS,
   actual: { mensal: actualMensal, semanal: actualSemanal },
   budget: { mensal: budgetMensal, semanal: budgetSemanal },
-  reforecast: { mensal: reforecastMensal, semanal: reforecastSemanal },
+  reforecast: { mensal: reforecastMensal, semanal: reforecastSemanal, semanalOficial: reforecastSemanalOficial },
   ciclo, ranking,
   porPessoa: { sdr: sdrList, closer: closerList, onboarding: onbList },
   semanalPorNivel,
