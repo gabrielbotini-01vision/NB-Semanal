@@ -555,7 +555,11 @@ function renderMensal(){
 // lugar de YTD por mês — a pedido do Gabriel (31/07/2026). Antes disso, esta aba tinha um
 // layout bem diferente (funil/KPIs/ritmo por estratégia); ficava escondida da navegação desde
 // 28/07 e foi totalmente substituída por este novo formato.
-function semanaLabel(w){ if(!w)return '—'; const [y,ww]=w.split('-W'); return 'semana '+(+ww)+'/'+y; }
+// rótulo padrão de semana em toda a página (13/08/2026, a pedido do Gabriel — o antigo "semana
+// 31/2026" não deixava claro a que dia aquilo correspondia): "S31/26 (28/07)" — sigla + ano
+// curto + data (DD/MM) da segunda-feira que abre a semana, via weekStartLabel (já usada na
+// Visão Cohort, mesma regra de semana do resto do projeto).
+function semanaLabel(w){ if(!w)return '—'; const [y,ww]=w.split('-W'); return 'S'+(+ww)+'/'+y.slice(2)+' ('+weekStartLabel(w)+')'; }
 // data (DD/MM) da segunda-feira que abre a semana — mesma regra de semana 1 parcial/2ª feira em
 // diante já usada em build_data.js (weekStartUTC/firstMondayUTC), reimplementada aqui só pra
 // legenda do gráfico da Visão Cohort (13/08/2026, a pedido do Gabriel — "DD/MM (semana NN)",
@@ -1785,7 +1789,7 @@ function renderOneOne(){
           <div><div class="eyebrow">${cfg.label} · ${sel.p.email}</div><div style="font-size:22px;font-weight:700;margin-top:2px">${displayName(sel.p)}</div></div>
         </div>
         <div class="statrow">
-          <div class="stat"><div class="eyebrow" style="color:var(--text-faint)">Resultado (${semanaLabel(week)})</div><div class="v">${fN(co.mine)}</div></div>
+          <div class="stat"><div class="eyebrow" style="color:var(--text-faint)">Resultado · ${semanaLabel(week)}</div><div class="v">${fN(co.mine)}</div></div>
           <div class="stat"><div class="eyebrow" style="color:var(--text-faint)">Mediana do squad</div><div class="v">${fN(Math.round(co.med))}</div></div>
           <div class="stat"><div class="eyebrow" style="color:var(--text-faint)">vs mediana</div><div class="v" style="color:${vsMed==null?'inherit':vsMed>=0?'var(--success)':'var(--danger)'}">${vsMed==null?'—':(vsMed>=0?'+':'')+vsMed+'%'}</div></div>
         </div>
