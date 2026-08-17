@@ -634,9 +634,9 @@ function renderSemanal(){
   // faixas, filtrada só por Estratégia — decisão explícita do Gabriel, senão ficaria
   // redundante mostrar 1 faixa só repetida 3x).
   if($('selNivel')) $('selNivel').value=nivel;
-  // fonte da meta semanal por nível: Semanal Sales usa SEMPRE a base oficial de calendário
-  // útil real (D.budget.semanalOficial/D.reforecast.semanalOficial) — a Semanal Área continua
-  // com as fontes antigas (D.budget.semanal/D.reforecast.semanal), sem mudança nenhuma lá.
+  // fonte da meta semanal por nível: base oficial de calendário útil real
+  // (D.budget.semanalOficial/D.reforecast.semanalOficial) — mesma base usada nos gráficos de
+  // meta por nível da Semanal Área (SDR/Closer/Onboarding, alinhado em 17/08/2026).
   const refSemanalSrc=D[ref].semanalOficial;
   // subtítulo do topo — mesma correção aplicada na Mensal Sales (30/07): sem isso, ficava
   // desatualizado ao trocar a semana no seletor, que chama renderSemanal() direto.
@@ -1123,8 +1123,10 @@ function renderAreaSdr(){
     ['Opps / FTE / BD',oppsFteDia!=null?oppsFteDia.toFixed(2):'—',oppBD,'Oportunidades por FTE / dia útil','kpi-accent',KIC.target],
   ];
   const oppsNivelSrc=D.sdrOppsNivel?.[estrF]||{};
-  // target line = meta de opps do budget diário (semanal), por nível×estratégia, só de jul/2026 em diante.
-  const tgtOpps=(w,n)=>{ if((D.semanaMes?.[w]||'')<'2026-07') return null; const b=D.budget?.semanal?.[w]; if(!b) return null;
+  // target line = meta de opps por nível×estratégia, só de jul/2026 em diante. Usa a base oficial
+  // de calendário útil e respeita o seletor Referência (Budget/Reforecast) — mesma fonte da
+  // Semanal Sales, alinhado a pedido do Gabriel (17/08/2026; antes ficava preso em budget.semanal).
+  const tgtOpps=(w,n)=>{ if((D.semanaMes?.[w]||'')<'2026-07') return null; const b=D[state.refArea]?.semanalOficial?.[w]; if(!b) return null;
     const cell=estrF==='all'?b.porNivel?.[n]:b.porNivelEstrategia?.[n]?.[estrF]; return cell?cell.opps:null; };
   const wt=NIV.map((n,i)=>{ const ser=weeklyByNivel(oppsNivelSrc,n).slice(-8); const tg=ser.map(s=>tgtOpps(s.semana,n));
     return `<div class="card">${weekTrendHTML({label:n,color:'#667085',series:ser,targets:tg,flat:true,accentLabel:true})}</div>`; }).join('');
@@ -1297,8 +1299,9 @@ function renderAreaClosers(){
     ['CW / FTE / BD',cwFteDia!=null?cwFteDia.toFixed(2):'—',cwBD,'Negócios fechados por FTE / dia útil','kpi-accent',KIC.target],
   ];
   const cwNivelSrc=D.semanalPorNivel?.cw||{};
-  // target line = meta de CW do budget diário (semanal), por nível×estratégia.
-  const tgtCw=(w,n)=>{ const b=D.budget?.semanal?.[w]; if(!b) return null;
+  // target line = meta de CW por nível×estratégia. Base oficial de calendário útil, respeitando
+  // Budget/Reforecast (17/08/2026, ver tgtOpps acima pro mesmo ajuste no SDR).
+  const tgtCw=(w,n)=>{ const b=D[state.refArea]?.semanalOficial?.[w]; if(!b) return null;
     const cell=estrF==='all'?b.porNivel?.[n]:b.porNivelEstrategia?.[n]?.[estrF]; return cell?cell.cw:null; };
   const wt=NIV.map((n,i)=>{ const ser=weeklyByNivel(cwNivelSrc,n).slice(-8); const tg=ser.map(s=>tgtCw(s.semana,n));
     return `<div class="card">${weekTrendHTML({label:n,color:'#667085',series:ser,targets:tg,flat:true,accentLabel:true})}</div>`; }).join('');
@@ -1446,8 +1449,9 @@ function renderAreaOnboarding(){
     ['Ativado / FTE / BD',actFteDia!=null?actFteDia.toFixed(2):'—',actBD,'Ativações 10k por FTE / dia útil','kpi-accent',KIC.target],
   ];
   const actNivelSrc=D.semanalPorNivel?.activation||{};
-  // target line = meta de ativação do budget diário (semanal), por nível×estratégia.
-  const tgtAct=(w,n)=>{ const b=D.budget?.semanal?.[w]; if(!b) return null;
+  // target line = meta de ativação por nível×estratégia. Base oficial de calendário útil,
+  // respeitando Budget/Reforecast (17/08/2026, ver tgtOpps acima pro mesmo ajuste no SDR).
+  const tgtAct=(w,n)=>{ const b=D[state.refArea]?.semanalOficial?.[w]; if(!b) return null;
     const cell=estrF==='all'?b.porNivel?.[n]:b.porNivelEstrategia?.[n]?.[estrF]; return cell?cell.activation:null; };
   const wt=NIV.map((n,i)=>{ const ser=weeklyByNivel(actNivelSrc,n).slice(-8); const tg=ser.map(s=>tgtAct(s.semana,n));
     return `<div class="card">${weekTrendHTML({label:n,color:'#667085',series:ser,targets:tg,flat:true,accentLabel:true})}</div>`; }).join('');
