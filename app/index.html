@@ -659,19 +659,11 @@ function renderSemanal(){
   // fechado real.
   const mesDaSemana=D.semanaMes[semana];
   const mtdWeeks=D.semanas.filter(w=>D.semanaMes[w]===mesDaSemana&&w<=semana).sort();
-  // meta do MTD (13/08/2026, a pedido do Gabriel): fixa no mês INTEIRO desde o início, não
-  // acumula semana a semana junto com o Actual — senão a meta parcial (só 1-2 semanas) fica
-  // artificialmente baixa logo no começo do mês.
-  // 14/08/2026: a meta passou a vir direto do arquivo MENSAL (D.reforecast.mensal/D.budget.
-  // mensal), não mais somando as semanas do mês na base semanal oficial — descobri que somar
-  // semana a semana pode contar até ~1 semana a mais/a menos num mês de fronteira (a base
-  // semanal da Astrobox parece usar uma convenção de mês×semana diferente da nossa
-  // `D.semanaMes`, ex.: dezembro/2026 saía -20,00% contra o mensal, quase 1 semana inteira
-  // faltando). Validado: a soma do ANO INTEIRO bate entre mensal e semanal (R$93.789.210 vs
-  // R$93.789.208, diferença de R$2 por arredondamento em 53 semanas) — o dado está certo, só
-  // a fronteira de agrupamento por mês que ficava errada. Lendo direto do mensal, elimina o
-  // problema por completo (não depende de nenhuma convenção de fronteira).
-  const refMensalSrc=ref==='reforecast'?D.reforecast.mensal:D.budget.mensal;
+  // meta do MTD (17/08/2026, a pedido do Gabriel: volta ao comportamento original de
+  // 05-11/08) — acumula só até a semana selecionada, igual o Actual, em vez de mostrar o mês
+  // inteiro fixo (testamos a versão "mês inteiro fixo" entre 13-14/08, mas o Gabriel preferiu
+  // voltar pra essa). `nivelMiniTable` sem o 6º parâmetro (`metaMesesList`) já usa a mesma
+  // lista (`mtdWeeks`) pra meta e actual — não precisa de fonte mensal separada aqui.
 
   const filtroHint=`${estr==='all'?'todas estratégias':estr}${nivel!=='all'?' · '+nivel:''}`;
   $('viewSemanal').innerHTML=`
@@ -680,7 +672,7 @@ function renderSemanal(){
     <div class="sec"><div class="sec-head"><h2>Fechamento por nível de cliente</h2><span class="hint">realizado vs meta${ref==='reforecast'?' (reforecast)':''}</span></div>
       <div class="grid g2">
         <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Semana fechada — ${semanaLabel(semana)}</div>${NIV.map(n=>nivelMiniTable(n,[semana],estr,D.actual.semanal,refSemanalSrc)).join('')}</div>
-        <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Month to date — ${mesLabel(mesDaSemana)}</div>${NIV.map(n=>nivelMiniTable(n,mtdWeeks,estr,D.actual.semanal,refMensalSrc,[mesDaSemana])).join('')}</div>
+        <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Month to date — ${mesLabel(mesDaSemana)}</div>${NIV.map(n=>nivelMiniTable(n,mtdWeeks,estr,D.actual.semanal,refSemanalSrc)).join('')}</div>
       </div>
     </div>`;
 }

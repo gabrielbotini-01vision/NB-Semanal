@@ -1,6 +1,28 @@
 # Pendências · New Business Cockpit
 
-Notas de handoff para quem continuar o desenvolvimento. Última atualização: 14/08/2026.
+Notas de handoff para quem continuar o desenvolvimento. Última atualização: 17/08/2026.
+
+## Concluído (17/08/2026) — MTD volta a acumular só até a semana selecionada
+
+- **Meta do "Month to date" (Semanal Sales) voltou a acumular só até a semana selecionada,
+  igual o Actual — reverte a mudança de 13-14/08 (meta fixa no mês inteiro).** A pedido do
+  Gabriel: testamos a versão "mês inteiro fixo" por alguns dias, mas ele preferiu voltar ao
+  comportamento original (05-11/08), onde a meta acompanha o Actual (soma só as semanas já
+  passadas do mês, não o mês inteiro).
+  - `renderSemanal()` (`app/index.html`): removida a variável `refMensalSrc` e o 6º parâmetro
+    (`metaMesesList`) na chamada de `nivelMiniTable` da tabela MTD — volta a usar
+    `refSemanalSrc` (a mesma base semanal oficial da tabela "Semana fechada") com `mtdWeeks`
+    (semanas do mês até a selecionada) pra meta E actual, igual era antes de 13/08.
+    `nivelMiniTable()` em si não mudou — o parâmetro `metaMesesList` continua existindo
+    (default = `mesesList` quando omitido), só não é mais usado aqui.
+  - O fix de 14/08 (ler a meta do mês inteiro direto do arquivo mensal, pra evitar o problema
+    de fronteira mês×semana) deixa de ser necessário aqui, já que voltamos a somar só as
+    semanas já fechadas do mês — mas o motivo por trás dele continua documentado nos itens de
+    14/08 abaixo, caso a meta "mês inteiro fixo" volte a ser pedida no futuro.
+  - Testado no navegador: N2-N3 Opps (Budget, semana fechada S33/26) foi de "274 fixo" pra
+    "130" (soma de W32+W33, as duas semanas de agosto até a selecionada) — conferido contra
+    `D.budget.semanalOficial` somado manualmente, bate exato (130,48 → 130). Testado também
+    com Reforecast selecionado, zero erro de console.
 
 ## Concluído (14/08/2026) — filtro de Nível na Semanal Sales
 
