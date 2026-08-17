@@ -14,3 +14,6 @@ __pycache__/
 
 # Artefatos do playwright-cli (snapshots da automação de refresh do token)
 .playwright-cli/
+
+# Logs da atualização diária automática (atualizar_diario.bat + Agendador de Tarefas)
+/logs/
