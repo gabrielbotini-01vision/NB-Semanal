@@ -906,7 +906,10 @@ function cohortUnifiedHTML(periods,headerHtml){
   // ordem do array de segmentos = ordem de empilhamento (1º=topo, último=base): Closed Won no
   // topo, Issues/SQL na base — mesma leitura "funil de baixo pra cima" do relatório de referência.
   const barsRow=periods.map((p,i)=>{
-    const segs=COHORT_SEG.map(([k,c])=>{const hh=h(p[k]);return `<div class="eseg" style="height:${hh}px;background:${c}">${hh>=13?`<span class="eseglbl">${fN(p[k])}</span>`:''}</div>`;}).join('');
+    // max-width sobrescreve o teto de 46px do .eseg compartilhado (17/08/2026, a pedido do
+    // Gabriel) — só nesta barra, mais larga que o padrão mas sem ocupar 100% da coluna (testado
+    // e ajustado pra 90px, ponto intermediário entre o antigo 46px e a largura cheia).
+    const segs=COHORT_SEG.map(([k,c])=>{const hh=h(p[k]);return `<div class="eseg" style="height:${hh}px;background:${c};max-width:90px">${hh>=13?`<span class="eseglbl">${fN(p[k])}</span>`:''}</div>`;}).join('');
     return `<div style="grid-column:${3+i};grid-row:2;position:relative;height:${H}px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center" title="${p.titulo} · ${fN(p.total)} viraram opp — closed won ${fN(p.closedWon)} · offer/contract ${fN(p.offerContract)} · lost ${fN(p.lost)} · issues/SQL ${fN(p.issuesSql)}${p.metaOpps?' · meta opps '+fN(p.metaOpps):''}">${segs}</div>`;
   }).join('');
   const capRow=periods.map((p,i)=>`<div style="grid-column:${3+i};grid-row:3;text-align:center;font-size:8.5px;font-family:var(--font-sans);color:var(--text-faint);padding-top:8px">${p.capChart}</div>`).join('');
@@ -941,8 +944,10 @@ function cohortUnifiedHTML(periods,headerHtml){
     lbl('CW realizado',11)+periods.map((p,i)=>val(fN(p.closedWon),11,i)).join(''),
     lbl(`GAP CW${gCw.hasAny?` <span class="att ${gCw.sum>=0?'hi':'lo'}" style="margin-left:6px">${gCw.sum>=0?'+':''}${fN(gCw.sum)} CWs</span>`:''}`,12,true)+gCw.gaps.map((g,i)=>valGap(g,12,i)).join(''),
   ].join('');
+  // column-gap 10px (17/08/2026, a pedido do Gabriel) — como as barras agora ocupam a coluna
+  // inteira (max-width:none acima), o gap do grid passou a ser o único espaçamento entre elas.
   return `<div class="card" style="overflow-x:auto">${headerHtml||''}${legend}
-    <div style="display:grid;grid-template-columns:${COHORT_GUTTER1}px ${COHORT_GUTTER2}px repeat(${n},minmax(50px,1fr));column-gap:4px;min-width:${COHORT_GUTTER1+COHORT_GUTTER2+n*70}px">
+    <div style="display:grid;grid-template-columns:${COHORT_GUTTER1}px ${COHORT_GUTTER2}px repeat(${n},minmax(50px,1fr));column-gap:10px;min-width:${COHORT_GUTTER1+COHORT_GUTTER2+n*70}px">
       ${lineHTML}${barsRow}${capRow}${rows}
     </div>
   </div>`;
@@ -1897,10 +1902,13 @@ function renderTabs(){
 }
 function updateBanner(){
   const dm=D.dataMax; const dmF=dm?dm.split('-').reverse().join('/'):'—';
+  // hora do build (17/08/2026, a pedido do Gabriel) — geradoEmHora só existe em dados gerados
+  // depois deste ajuste; em app_data.js antigo (sem o campo) some sem quebrar o texto.
+  const horaF=D.geradoEmHora?` (${D.geradoEmHora})`:'';
   if(D.funilCompleto===false){
-    $('bannerText').innerHTML=`Dados atualizados até <b>${dmF}</b>. <b class="miss" style="color:var(--danger);font-style:normal">Funil completo (Contatado/Conectado/SQL por mês) parcial</b> — falta reexportar <code>Dados/05_produtividade.csv</code> (ver Dados/README.md).`;
+    $('bannerText').innerHTML=`Dados atualizados até <b>${dmF}${horaF}</b>. <b class="miss" style="color:var(--danger);font-style:normal">Funil completo (Contatado/Conectado/SQL por mês) parcial</b> — falta reexportar <code>Dados/05_produtividade.csv</code> (ver Dados/README.md).`;
   } else {
-    $('bannerText').innerHTML=`Dados atualizados até <b>${dmF}</b>.`;
+    $('bannerText').innerHTML=`Dados atualizados até <b>${dmF}${horaF}</b>`;
   }
 }
 function render(){

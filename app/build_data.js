@@ -1527,8 +1527,18 @@ const semanaFechada = {
 
 // ---------- OUTPUT ----------
 const meses = [...new Set([...Object.keys(actualMensal), ...Object.keys(budgetMensal), ...Object.keys(reforecastMensal)])].sort();
+// hora local (não UTC) do build — toISOString() joga pra UTC e erra a hora exibida no banner
+// (17/08/2026, a pedido do Gabriel: "Dados atualizados até DD/MM (HH:MM)").
+const _agora = new Date();
+const _pad2 = n => String(n).padStart(2, '0');
+// geradoEmHora é o mtime de 06_operacional_raw.csv, não a hora deste script — o Gabriel corrigiu:
+// quer a hora em que scripts/atualizar_dados.py (que baixa os CSVs do Astrobox) rodou por último,
+// não a hora em que build_data.js foi disparado (podem ser bem diferentes: build_data.js às vezes
+// roda de novo manualmente sem buscar dado novo).
+const _fetchDt = fs.statSync(DIR + '06_operacional_raw.csv').mtime;
 const DATA = {
-  geradoEm: new Date().toISOString().slice(0, 10),
+  geradoEm: `${_agora.getFullYear()}-${_pad2(_agora.getMonth() + 1)}-${_pad2(_agora.getDate())}`,
+  geradoEmHora: `${_pad2(_fetchDt.getHours())}:${_pad2(_fetchDt.getMinutes())}`,
   dataMax,
   meses, semanas, semanaMes, niveis: NIVEIS, estrategias: ESTRS,
   actual: { mensal: actualMensal, semanal: actualSemanal },
