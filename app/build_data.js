@@ -488,6 +488,15 @@ for (const r of fop) {
   // conversão). ⚠️ current_office=BRAZIL foi testado no mesmo painel e afasta bem do Power BI
   // (48/62/102) — mesma armadilha já documentada no Estoque de Onboarding, não usar aqui.
   const lfOk = leadFlowOk(r);
+  // stOk/oppValidForCw (20/08/2026): filtros que a query oficial "Resultados Daily" do Power BI
+  // aplica no Actual (sales_type<>'PQL' pra Opp/CW/Ativação; is_opp_valid=TRUE só pro CW) e que
+  // faltavam aqui — achado investigando uma opp PQL (006SG00000hKQyWYAW, is_opp_valid=False)
+  // que inflava o Actual de agosto em +1 Opp/+1 CW vs o relatório oficial. Aplicado só na
+  // contagem do funil Actual (funCell/funCellSemanal, abaixo) — não mexe em ranking/FTE/coortes
+  // por pessoa de Closer/Onboarding, que usam outro critério de validade (oppValidOk, ver
+  // comentário de 30/07 acima) já validado à parte contra o Power BI.
+  const stOk = (r.sales_type || '').trim() !== 'PQL';
+  const oppValidForCw = (r.is_opp_valid || '').trim() === 'True';
   const ownerReal = isRealSdr(owner) && lfOk && leadOk; // este lead conta nas métricas SDR da página?
   // datas cruas normalizadas uma vez por lead (SELECT * pode trazer '', 'null' ou data real).
   // Campo vira null se !lfOk (qualquer objeto) OU se o objeto específico não for BR (leadOk/
@@ -653,12 +662,17 @@ for (const r of fop) {
     if (!dateStr || dateStr < CUTOFF) continue;
     const mk = dateStr.slice(0, 7), w = anoSemana(dateStr);
 
-    const ck = mk + '|' + b + '|' + e;
-    if (!funCell[ck]) funCell[ck] = { contacted: 0, connected: 0, opps: 0, sql: 0, cw: 0, activation: 0 };
-    funCell[ck][key] += 1;
-    const ckw = w + '|' + b + '|' + e;
-    if (!funCellSemanal[ckw]) funCellSemanal[ckw] = { contacted: 0, connected: 0, opps: 0, sql: 0, cw: 0, activation: 0 };
-    funCellSemanal[ckw][key] += 1;
+    // sales_type<>PQL (todas as etapas) + is_opp_valid=TRUE (só CW) — ver comentário de stOk/
+    // oppValidForCw acima. Só afeta o funil Actual (Mensal/Semanal Sales); o resto do loop
+    // abaixo (ranking/FTE/coortes por pessoa) continua sem esse filtro, sem mudança.
+    if (stOk && (key !== 'cw' || oppValidForCw)) {
+      const ck = mk + '|' + b + '|' + e;
+      if (!funCell[ck]) funCell[ck] = { contacted: 0, connected: 0, opps: 0, sql: 0, cw: 0, activation: 0 };
+      funCell[ck][key] += 1;
+      const ckw = w + '|' + b + '|' + e;
+      if (!funCellSemanal[ckw]) funCellSemanal[ckw] = { contacted: 0, connected: 0, opps: 0, sql: 0, cw: 0, activation: 0 };
+      funCellSemanal[ckw][key] += 1;
+    }
 
     if (key === 'contacted') {
       (semContactedNivel[w] = semContactedNivel[w] || {})[b] = (semContactedNivel[w][b] || 0) + 1;
