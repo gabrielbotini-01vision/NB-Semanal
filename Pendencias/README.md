@@ -1,6 +1,43 @@
 # Pendências · New Business Cockpit
 
-Notas de handoff para quem continuar o desenvolvimento. Última atualização: 17/08/2026.
+Notas de handoff para quem continuar o desenvolvimento. Última atualização: 20/08/2026.
+
+## Concluído (20/08/2026) — Actual do funil exclui opp PQL / is_opp_valid=false
+
+- **Achado investigando uma divergência de +1 Opp/+1 CW entre o Actual de agosto/2026 (Mensal/
+  Semanal Sales) e o relatório oficial "Resultados Daily - New Business" (Power BI) do Gabriel.**
+  A investigação começou em 18/08 comparando os dois lados dia após dia; os dois primeiros
+  candidatos encontrados (opp `006SG00000hiUPpYAM` e CW `006SG00000hIx8xYAC`, ambos de 17/08)
+  acabaram sendo só atraso de sincronização do lado do relatório oficial (confirmado com print
+  da própria Opportunity no Salesforce — Stage=Closed Won, Last Stage Change Date=17/08 — e
+  auto-resolvido em ~3 dias, sem mudança nossa). Mas a diferença voltou a aparecer em 20/08,
+  com um `opp_id` diferente — dessa vez a causa era real e permanente.
+- **Causa raiz**: a query oficial (mandada pelo Gabriel) filtra `sales_type <> 'PQL'` (em
+  Opp/CW/Ativação) e `is_opp_valid = TRUE` (só no CW) — dois filtros que o `build_data.js`
+  nunca implementou. A opp `006SG00000hKQyWYAW` (`sales_type='PQL'`, `is_opp_valid=False`,
+  criada 10/08, CW em 13/08) inflava o Actual de agosto em exatamente +1 Opp e +1 CW.
+- **Fix** (`build_data.js`): novo `stOk` (`sales_type !== 'PQL'`) e `oppValidForCw`
+  (`is_opp_valid === 'True'`), calculados por linha junto com `lfOk`. Aplicados **só na
+  contagem do funil Actual** (`funCell`/`funCellSemanal`, que alimenta `D.actual.mensal`/
+  `D.actual.semanal` — Mensal Sales e Semanal Sales): `stOk` em todas as etapas, `oppValidForCw`
+  só na etapa `cw`. **Escopo consciente**: ranking/FTE/coortes por pessoa de Closer/Onboarding
+  (resto do loop, mesmas variáveis `dates`) não foram tocados — usam outro critério de validade
+  (`oppValidOk`, já testado e documentado em 30/07 como *piorando* o Estoque de Closer se
+  `leadFlowOk` fosse aplicado lá) e não foi validado que esses 2 filtros novos também deveriam
+  valer pra essas estruturas.
+- **Validado**: agosto/2026 (Actual) passou de 220 Opp/124 CW para **219 Opp/123 CW — bate
+  exato com o relatório oficial**. Julho (mês fechado) ficou idêntico ao valor anterior à
+  correção (375 Opp/152 CW) — a opp PQL não afetava nenhum mês fechado, só agosto.
+- **Como investigar um caso parecido no futuro**: a fonte de verdade final é sempre a tela da
+  Opportunity no Salesforce (ou `dhaf_salesforce.opportunity` via Astrobox ad hoc, que tem
+  timestamp completo — `createddate`/`lastmodifieddate`/`systemmodstamp`/`laststagechangedate`,
+  diferente de `dhmv_sales_touched`/`06_operacional_raw.csv`, que só tem data). Rodar SQL ad hoc
+  via `py -c "import sys; sys.path.insert(0,'.'); from atualizar_dados import load_token,
+  run_query; ..."` dentro de `scripts/` (reaproveita `load_token()`/`run_query()` já existentes,
+  sem precisar de token novo além do `~/.env`). **Nem toda divergência é bug nosso** — os 2
+  primeiros candidatos eram atraso do lado do relatório oficial, não do nosso pipeline; só
+  investigar a fundo (print do Salesforce, `lastmodifieddate` nunca mudou) descartou essa
+  hipótese pro `hIx8xYAC` e permitiu achar o caso real (`hKQyWYAW`) depois.
 
 ## Concluído (17/08/2026) — MTD volta a acumular só até a semana selecionada
 
